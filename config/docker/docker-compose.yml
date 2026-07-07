@@ -1,0 +1,15 @@
+services:
+  turso-db:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    container_name: radix-turso-db
+    environment:
+      SQLD_NODE: primary
+    ports:
+      - "8080:8080"
+      - "5001:5001"
+    volumes:
+      - turso-data:/var/lib/sqld
+    restart: unless-stopped
+
+volumes:
+  turso-data:
