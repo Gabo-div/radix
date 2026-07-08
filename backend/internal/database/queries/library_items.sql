@@ -1,8 +1,12 @@
 -- name: GetLibraryItems :many
-SELECT * FROM library_items ORDER BY rowid;
+SELECT library_items.*, users.name AS uploaded_by_name FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+ORDER BY library_items.rowid;
 
 -- name: GetLibraryItem :one
-SELECT * FROM library_items WHERE id = ?;
+SELECT library_items.*, users.name AS uploaded_by_name FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+WHERE library_items.id = ?;
 
 -- name: AddLibraryItem :exec
 INSERT INTO library_items (
@@ -13,7 +17,7 @@ INSERT INTO library_items (
 -- name: UpdateLibraryItem :exec
 UPDATE library_items SET
     title = ?, category = ?, size_kb = ?, mime_type = ?, original_filename = ?,
-    duration = ?, resolution = ?, file_path = ?, uploaded_by = ?
+    duration = ?, resolution = ?, file_path = ?
 WHERE id = ?;
 
 -- name: TotalDiskKB :one

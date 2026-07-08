@@ -128,6 +128,20 @@ func (h *Handler) GetLibraryItem(c *echo.Context) error {
 	return httpx.OK(c, http.StatusOK, item)
 }
 
+// GetLibraryItemUsage lists lessons that embed this item via [[id]] — computed
+// live from lesson content on every call, so it's always in sync.
+func (h *Handler) GetLibraryItemUsage(c *echo.Context) error {
+	id := c.Param("id")
+	usage, err := h.Store.GetLessonsUsingLibraryItem(c.Request().Context(), id)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load usage")
+	}
+	if usage == nil {
+		usage = []models.LessonUsage{}
+	}
+	return httpx.OK(c, http.StatusOK, usage)
+}
+
 func (h *Handler) CreateLibraryItem(c *echo.Context) error {
 	ctx := c.Request().Context()
 	contentType := c.Request().Header.Get("Content-Type")
@@ -145,7 +159,7 @@ func (h *Handler) CreateLibraryItem(c *echo.Context) error {
 		return httpx.BadRequest(c, "invalid request")
 	}
 
-	userName, _ := c.Get("user_name").(string)
+	userID, _ := c.Get("user_id").(string)
 	now := time.Now().Format(time.RFC3339)
 
 	item := models.LibraryItem{
@@ -153,7 +167,7 @@ func (h *Handler) CreateLibraryItem(c *echo.Context) error {
 		Type:       req.Type,
 		Category:   req.Category,
 		SizeKB:     rand.Intn(90000) + 1000,
-		UploadedBy: userName,
+		UploadedBy: userID,
 		UploadedAt: now,
 		ModifiedAt: now,
 	}
@@ -161,9 +175,12 @@ func (h *Handler) CreateLibraryItem(c *echo.Context) error {
 	if err != nil {
 		return httpx.InternalError(c, "failed to create item")
 	}
-	item.ID = newID
-	h.Store.EnqueueSync(ctx, "ADD_LIBRARY_ITEM: "+item.Title)
-	return httpx.OK(c, http.StatusCreated, item)
+	stored, err := h.Store.GetLibraryItem(ctx, newID)
+	if err != nil {
+		return httpx.InternalError(c, "failed to create item")
+	}
+	h.Store.EnqueueSync(ctx, "ADD_LIBRARY_ITEM: "+stored.Title)
+	return httpx.OK(c, http.StatusCreated, stored)
 }
 
 func (h *Handler) uploadFile(c *echo.Context) error {
@@ -180,7 +197,7 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		title = header.Filename
 	}
 
-	userName, _ := c.Get("user_name").(string)
+	userID, _ := c.Get("user_id").(string)
 	now := time.Now().Format(time.RFC3339)
 
 	item := models.LibraryItem{
@@ -189,7 +206,7 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		Category:         category,
 		MimeType:         header.Header.Get("Content-Type"),
 		OriginalFilename: header.Filename,
-		UploadedBy:       userName,
+		UploadedBy:       userID,
 		UploadedAt:       now,
 		ModifiedAt:       now,
 	}

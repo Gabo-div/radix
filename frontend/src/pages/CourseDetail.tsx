@@ -60,8 +60,7 @@ export default function CourseDetail() {
                   <div>
                     <h3 className="text-sm font-medium text-white">{lesson.title}</h3>
                     <p className="text-xs text-slate-500">
-                      {lesson.libraryItemId ? "Con contenido multimedia" : "Solo texto"}
-                      {lesson.quizId ? " · Con evaluación" : ""}
+                      {lesson.quizId ? "Con evaluación" : "Solo texto"}
                     </p>
                   </div>
                 </div>

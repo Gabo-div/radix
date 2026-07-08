@@ -13,9 +13,11 @@ Los archivos se suben localmente al servidor de borde, los estudiantes consumen 
 - **Biblioteca Multimedia:** Upload real de archivos (video, audio, imagen, PDF, texto) con preview inline
 - **Wiki Syntax `[[id]]`:** Enlaza archivos dentro del contenido de las lecciones, se renderizan como media embebido
 - **Editor de Lecciones:** CodeMirror 6 con syntax highlight para `[[id]]`, hover tooltip con preview, y sidebar de archivos enlazados
-- **Monitor del Servidor:** Métricas en tiempo real (disco, usuarios activos, cola DTN) y logs estilo stdout de Go
+- **Monitor del Servidor:** Métricas en tiempo real (disco, usuarios activos, cola DTN)
+- **Observabilidad:** Página de Logs dedicada — tail en vivo, historial filtrable (nivel/fecha/texto libre vía full-text search) y estadísticas, con retención configurable
 - **Auto-detección de metadatos:** ffprobe extrae duración y resolución automáticamente al subir archivos
 - **Sincronización Oportunista:** Cola de consistencia eventual (CRDT/DTN) con botón forzar sync
+- **Autenticación real:** Login por email/contraseña (bcrypt) + acceso invitado sin credenciales
 
 ---
 
@@ -61,7 +63,21 @@ bun install
 bun run dev                  # SPA en :5173 (proxy automático al backend)
 ```
 
-Abrir [http://localhost:5173](http://localhost:5173) y seleccionar un rol en la pantalla de login.
+Abrir [http://localhost:5173](http://localhost:5173) e iniciar sesión (ver credenciales abajo) o entrar como invitado.
+
+---
+
+## 🔑 Credenciales de prueba
+
+Usuarios creados por `go run ./cmd/seed`. Todos comparten la misma contraseña, solo cambia el email:
+
+| Rol | Email | Password |
+|---|---|---|
+| Admin | `carlos.mendoza@radix.local` | `radix2024` |
+| Student | `sofia.ramirez@radix.local` | `radix2024` |
+| Student | `mateo.torres@radix.local` | `radix2024` |
+
+Invitado no requiere credenciales (botón "Entrar como invitado" en el login).
 
 ---
 
@@ -75,6 +91,7 @@ Abrir [http://localhost:5173](http://localhost:5173) y seleccionar un rol en la 
 | `LOG_BUFFER_SIZE` | `200` | Máximo de líneas en el ring buffer de logs |
 | `CORS_ORIGINS` | `*` | Orígenes CORS permitidos (separados por coma) |
 | `ENVIRONMENT` | `development` | Entorno (`development` / `production`) |
+| `LOG_RETENTION_DAYS` | `30` | Días de retención de logs en el historial buscable |
 
 ### Frontend (`.env`)
 
@@ -95,15 +112,18 @@ radix/
 │   │   ├── models/models.go         # Tipos de datos (User, Lesson, Quiz, LibraryItem...)
 │   │   ├── store/store.go           # DB en memoria thread-safe con sync.RWMutex
 │   │   ├── seed/seed.go             # Datos de prueba realistas (3 usuarios, 3 cursos, 6 lecciones...)
-│   │   ├── auth/auth.go             # Sesiones token + middleware RBAC
-│   │   ├── middleware/logger.go     # Ring buffer de logs + middleware estilo stdout
+│   │   ├── auth/auth.go             # Login email/password (bcrypt) + guest + sesiones + middleware RBAC
+│   │   ├── middleware/
+│   │   │   ├── logger.go            # Ring buffer en memoria + middleware de logging por request
+│   │   │   ├── observability_core.go # Core de zap que unifica stdout + tail en vivo + DB en un solo log call
+│   │   │   └── log_persister.go     # Batching async a server_logs + limpieza por retención
 │   │   └── handlers/               # Handlers REST por entidad
 │   │       ├── handlers.go          # Struct Handler + RegisterRoutes()
-│   │       ├── library.go           # Upload multipart + ffprobe + detail + file serve
-│   │       ├── courses.go           # CRUD de cursos y lecciones + linking
+│   │       ├── library.go           # Upload multipart + ffprobe + detail + file serve + usage
+│   │       ├── courses.go           # CRUD de cursos y lecciones
 │   │       ├── quizzes.go           # Creación y corrección de quizzes
 │   │       ├── monitor.go           # Métricas y cola DTN
-│   │       └── logs.go              # Endpoint de logs
+│   │       └── logs.go              # Tail en vivo + historial filtrable + stats
 │   ├── uploads/                     # Archivos subidos (gitignored)
 │   ├── .env / .env.example
 │   └── go.mod
@@ -124,7 +144,7 @@ radix/
 │   │   │   ├── InlineMedia.tsx     # Renderiza media embebido según tipo
 │   │   │   └── MarkdownEditor.tsx  # Editor CodeMirror 6 con toolbar
 │   │   └── pages/
-│   │       ├── Login.tsx            # 3 tarjetas de login (Admin/Student/Guest)
+│   │       ├── Login.tsx            # Form email/password + botón invitado
 │   │       ├── Library.tsx          # Grid con filtros + upload
 │   │       ├── LibraryDetail.tsx    # Preview + metadatos + editar
 │   │       ├── Courses.tsx          # Lista de cursos
@@ -133,7 +153,8 @@ radix/
 │   │       ├── LessonEditor.tsx     # Editor dedicado (crear/editar)
 │   │       ├── student/Dashboard.tsx # Progreso, XP, medallas
 │   │       ├── admin/AdminPanel.tsx # Crear cursos
-│   │       └── admin/Monitor.tsx    # Métricas + logs del servidor
+│   │       ├── admin/Monitor.tsx    # Disco, sesiones activas, cola DTN
+│   │       └── admin/Logs.tsx       # Tail en vivo + historial filtrable + stats
 │   ├── .env / .env.example
 │   └── package.json
 │
@@ -148,26 +169,29 @@ Todas las rutas bajo `/api/v1/`. Autenticación vía `Authorization: Bearer <tok
 
 | Método | Ruta | Rol | Descripción |
 |---|---|---|---|
-| `POST` | `/auth/login` | público | Login: `{"role": "admin" | "student" | "guest"}` → `{token, user}` |
+| `POST` | `/auth/login` | público | Login: `{"email", "password"}` → `{token, user}` |
+| `POST` | `/auth/guest` | público | Login invitado (sin credenciales) → `{token, user}` |
 | `POST` | `/auth/logout` | auth | Invalida sesión |
 | `GET` | `/library` | auth | Lista items (`?type=&category=` filtros) |
 | `GET` | `/library/:id` | auth | Detalle del item |
 | `PATCH` | `/library/:id` | admin | Editar título/categoría |
 | `GET` | `/library/:id/file` | auth | Servir archivo (soporta `?token=` para media) |
+| `GET` | `/library/:id/usage` | auth | Lecciones que enlazan este archivo vía `[[id]]` (calculado en vivo) |
 | `POST` | `/library` | admin | Subir archivo (`multipart/form-data`) |
 | `GET` | `/courses` | auth | Lista cursos |
 | `POST` | `/courses` | admin | Crear curso |
 | `GET` | `/courses/:id` | auth | Curso + lecciones |
 | `POST` | `/courses/:id/lessons` | admin | Crear lección |
-| `GET` | `/courses/:cId/lessons/:lId` | auth | Lección + media + quiz (oculto a guest) |
+| `GET` | `/courses/:cId/lessons/:lId` | auth | Lección + quiz (oculto a guest) |
 | `PUT` | `/lessons/:id` | admin | Editar lección (título + contenido) |
-| `PATCH` | `/lessons/:lId/link` | admin | Vincular archivo principal (`libraryItemId`) |
 | `POST` | `/quizzes` | admin | Crear quiz con preguntas |
 | `GET` | `/quizzes/:id` | auth† | Ver quiz (†no guest) |
 | `POST` | `/quizzes/:id/submit` | student | Responder → corrige, suma XP, encola sync |
 | `GET` | `/monitor` | admin | Métricas (disco, usuarios, cola DTN) |
 | `POST` | `/monitor/sync` | admin | Vaciar cola de transacciones |
-| `GET` | `/logs` | auth | Últimas N líneas del log del servidor |
+| `GET` | `/logs` | auth | Últimas N líneas del log del servidor (tail en vivo) |
+| `GET` | `/logs/history` | admin | Historial filtrable (`?level=&from=&to=&q=&limit=&offset=`) |
+| `GET` | `/logs/stats` | admin | Conteos por nivel + retención configurada (`?from=&to=`) |
 
 ---
 
@@ -184,7 +208,7 @@ Todas las rutas bajo `/api/v1/`. Autenticación vía `Authorization: Bearer <tok
 | Responder quizzes | — | ✅ | — |
 | Ganar XP y medallas | — | ✅ | — |
 | Monitor del servidor | ✅ | — | — |
-| Logs del servidor | ✅ (en Monitor) | ❌ | ❌ |
+| Logs (tail en vivo + historial + stats) | ✅ | ❌ | ❌ |
 
 ---
 
@@ -192,7 +216,8 @@ Todas las rutas bajo `/api/v1/`. Autenticación vía `Authorization: Bearer <tok
 
 ```go
 type User struct {
-    ID, Name string
+    ID, Name, Email string
+    PasswordHash string // no serializado
     Role     Role  // "admin" | "student" | "guest"
     Points   int
     CompletedLessons []string
@@ -209,7 +234,13 @@ type LibraryItem struct {
 
 type Lesson struct {
     ID, CourseID, Title, ContentText string
-    LibraryItemID, QuizID *string
+    QuizID *string
+}
+
+type ServerLog struct {
+    ID int64
+    Timestamp, Level, Message string
+    Fields string // JSON genérico — método/path/rol/status/duración para requests, lo que sea para otros logs
 }
 
 type Quiz struct {
@@ -233,7 +264,7 @@ type SyncQueue struct {
 
 | Ruta | Componente | Rol | Descripción |
 |---|---|---|---|
-| `/login` | Login | público | Pantalla de inicio con 3 roles |
+| `/login` | Login | público | Login email/password + acceso invitado |
 | `/dashboard` | StudentDashboard | student | Progreso, XP, medallas |
 | `/library` | Library | todos | Grid de archivos con filtros |
 | `/library/:id` | LibraryDetail | todos | Preview + metadatos + editar (admin) |
@@ -243,7 +274,8 @@ type SyncQueue struct {
 | `/courses/:id/lessons/:lid/edit` | LessonEditor | admin | Editar lección existente |
 | `/courses/:id/lessons/:lid` | LessonViewer | todos | Visor con media embebido + quiz |
 | `/admin` | AdminPanel | admin | Crear cursos |
-| `/admin/monitor` | Monitor | admin | Métricas + logs del servidor |
+| `/admin/monitor` | Monitor | admin | Disco, sesiones activas, cola DTN |
+| `/admin/logs` | Logs | admin | Tail en vivo + historial filtrable + stats |
 
 ---
 
@@ -271,6 +303,8 @@ Cada `[[id]]` se renderiza automáticamente como media embebido:
 | `document` | Card con icono + descarga |
 
 En el editor, los `[[id]]` se resaltan con syntax highlighting (CodeMirror) y al hacer hover se muestra un tooltip con los metadatos del archivo. La barra lateral derecha lista todos los archivos enlazados en tiempo real.
+
+La página de detalle de un archivo en la Biblioteca muestra en qué lecciones se usa — calculado en vivo buscando `[[id]]` en el contenido de las lecciones (sin tabla de relación separada), así que si editás o eliminás una lección se refleja automáticamente.
 
 ---
 

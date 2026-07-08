@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"github.com/labstack/echo/v5"
 	echomw "github.com/labstack/echo/v5/middleware"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	"radix-backend/internal/auth"
 	"radix-backend/internal/config"
@@ -40,15 +43,51 @@ func newSQLDB(db *database.DB) *sql.DB {
 	return db.DB
 }
 
+// newStore loads persisted sessions on start and saves them on stop, so a
+// dev hot-reload (air) or a redeploy doesn't silently log everyone out —
+// see store.SaveSessions/LoadSessions.
+func newStore(sqlDB *sql.DB, cfg *config.Config, logger *zap.Logger, lc fx.Lifecycle) *store.Store {
+	s := store.New(sqlDB)
+	sessionsPath := filepath.Join(filepath.Dir(cfg.DBPath), "sessions.json")
+	if err := s.LoadSessions(sessionsPath); err != nil {
+		logger.Error("failed to load sessions", zap.Error(err))
+	}
+	lc.Append(fx.Hook{
+		OnStop: func(context.Context) error {
+			return s.SaveSessions(sessionsPath)
+		},
+	})
+	return s
+}
+
 func newLogBuffer(cfg *config.Config) *middleware.LogBuffer {
 	return middleware.NewLogBuffer(cfg.LogBufferSize)
+}
+
+// newLogPersister flushes batched request logs to the durable server_logs
+// table and prunes rows older than cfg.LogRetentionDays — see
+// middleware.LogPersister for why this is async instead of a write per request.
+func newLogPersister(s *store.Store, cfg *config.Config, logger *zap.Logger, lc fx.Lifecycle) *middleware.LogPersister {
+	p := middleware.NewLogPersister(s, logger)
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			go p.Run(3*time.Second, 50, cfg.LogRetentionDays, 24*time.Hour)
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			p.Stop()
+			return nil
+		},
+	})
+	return p
 }
 
 // newEcho wires routes/middleware and serves them via a plain *http.Server —
 // echo/v5's own Echo.Start() has no graceful Shutdown in its public API, so
 // the http.Server (Echo implements http.Handler) is what fx's lifecycle manages.
-func newEcho(lc fx.Lifecycle, cfg *config.Config, a *auth.Auth, h *handlers.Handler, logBuf *middleware.LogBuffer) *echo.Echo {
+func newEcho(lc fx.Lifecycle, cfg *config.Config, a *auth.Auth, h *handlers.Handler, baseLogger *zap.Logger, logBuf *middleware.LogBuffer, persister *middleware.LogPersister) *echo.Echo {
 	e := echo.New()
+	logger := middleware.NewLogger(baseLogger, logBuf, persister)
 
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
 		AllowOrigins: cfg.CORSOrigins,
@@ -56,7 +95,7 @@ func newEcho(lc fx.Lifecycle, cfg *config.Config, a *auth.Auth, h *handlers.Hand
 		AllowHeaders: []string{"Content-Type", "Authorization"},
 	}))
 	e.Use(a.Middleware())
-	e.Use(middleware.GoServerLogger(logBuf))
+	e.Use(middleware.GoServerLogger(logger))
 
 	h.RegisterRoutes(e.Group("/api/v1"), a)
 
@@ -65,10 +104,10 @@ func newEcho(lc fx.Lifecycle, cfg *config.Config, a *auth.Auth, h *handlers.Hand
 		OnStart: func(context.Context) error {
 			go func() {
 				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					log.Printf("http server error: %v", err)
+					logger.Error("http server error", zap.Error(err))
 				}
 			}()
-			log.Printf("RADIX Backend (%s) iniciado en :%s", cfg.Environment, cfg.Port)
+			logger.Info("RADIX Backend iniciado", zap.String("environment", cfg.Environment), zap.String("port", cfg.Port))
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
@@ -83,10 +122,12 @@ func main() {
 	app := fx.New(
 		fx.Provide(
 			config.Load,
+			middleware.NewBaseLogger,
 			newDatabase,
 			newSQLDB,
-			fx.Annotate(store.New, fx.As(new(auth.Store)), fx.As(new(handlers.Store)), fx.As(fx.Self())),
+			fx.Annotate(newStore, fx.As(new(auth.Store)), fx.As(new(handlers.Store)), fx.As(fx.Self())),
 			newLogBuffer,
+			newLogPersister,
 			auth.New,
 			handlers.New,
 			newEcho,

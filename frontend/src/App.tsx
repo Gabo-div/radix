@@ -14,6 +14,7 @@ import LessonEditor from "./pages/LessonEditor";
 import LessonViewer from "./pages/LessonViewer";
 import AdminPanel from "./pages/admin/AdminPanel";
 import Monitor from "./pages/admin/Monitor";
+import Logs from "./pages/admin/Logs";
 import NotFound from "./pages/NotFound";
 
 function HomeRedirect() {
@@ -41,6 +42,7 @@ function AppRoutes() {
         <Route path="courses/:courseId/lessons/:lessonId" element={<LessonViewer />} />
         <Route path="admin" element={<ProtectedRoute role="admin"><AdminPanel /></ProtectedRoute>} />
         <Route path="admin/monitor" element={<ProtectedRoute role="admin"><Monitor /></ProtectedRoute>} />
+        <Route path="admin/logs" element={<ProtectedRoute role="admin"><Logs /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -9,13 +9,14 @@ import (
 )
 
 type Config struct {
-	Port           string
-	LogBufferSize  int
-	CORSOrigins    []string
-	Environment    string
-	DBPath         string
-	TursoURL       string
-	TursoAuthToken string
+	Port             string
+	LogBufferSize    int
+	LogRetentionDays int
+	CORSOrigins      []string
+	Environment      string
+	DBPath           string
+	TursoURL         string
+	TursoAuthToken   string
 }
 
 func Load() *Config {
@@ -32,13 +33,14 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:           port,
-		LogBufferSize:  bufSize,
-		CORSOrigins:    origins,
-		Environment:    env,
-		DBPath:         getEnv("DB_PATH", "./data/radix.db"),
-		TursoURL:       getEnv("TURSO_URL", ""),
-		TursoAuthToken: getEnv("TURSO_AUTH_TOKEN", ""),
+		Port:             port,
+		LogBufferSize:    bufSize,
+		LogRetentionDays: getEnvInt("LOG_RETENTION_DAYS", 30),
+		CORSOrigins:      origins,
+		Environment:      env,
+		DBPath:           getEnv("DB_PATH", "./data/radix.db"),
+		TursoURL:         getEnv("TURSO_URL", ""),
+		TursoAuthToken:   getEnv("TURSO_AUTH_TOKEN", ""),
 	}
 }
 

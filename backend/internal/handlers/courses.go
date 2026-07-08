@@ -108,13 +108,6 @@ func (h *Handler) GetLesson(c *echo.Context) error {
 		"lesson": lesson,
 	}
 
-	if lesson.LibraryItemID != nil {
-		libItem, err := h.Store.GetLibraryItem(ctx, *lesson.LibraryItemID)
-		if err == nil {
-			resp["libraryItem"] = libItem
-		}
-	}
-
 	if lesson.QuizID != nil && role != models.RoleGuest {
 		quiz, err := h.Store.GetQuiz(ctx, *lesson.QuizID)
 		if err == nil {
@@ -123,33 +116,6 @@ func (h *Handler) GetLesson(c *echo.Context) error {
 	}
 
 	return httpx.OK(c, http.StatusOK, resp)
-}
-
-func (h *Handler) LinkLibraryItem(c *echo.Context) error {
-	ctx := c.Request().Context()
-	lessonID := c.Param("lessonId")
-	lesson, err := h.Store.GetLesson(ctx, lessonID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return httpx.NotFound(c, "lesson not found")
-		}
-		return httpx.InternalError(c, "failed to load lesson")
-	}
-	var req struct {
-		LibraryItemID string `json:"libraryItemId"`
-	}
-	if err := c.Bind(&req); err != nil {
-		return httpx.BadRequest(c, "invalid request")
-	}
-	if _, err := h.Store.GetLibraryItem(ctx, req.LibraryItemID); err != nil {
-		return httpx.BadRequest(c, "library item not found")
-	}
-	lesson.LibraryItemID = &req.LibraryItemID
-	if err := h.Store.UpdateLesson(ctx, lesson); err != nil {
-		return httpx.InternalError(c, "failed to update lesson")
-	}
-	h.Store.EnqueueSync(ctx, "LINK_LIBRARY_ITEM: "+lessonID+" -> "+req.LibraryItemID)
-	return httpx.OK(c, http.StatusOK, lesson)
 }
 
 func (h *Handler) UpdateLesson(c *echo.Context) error {

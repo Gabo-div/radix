@@ -3,6 +3,7 @@ import type {
   LibraryItem,
   Quiz,
   Lesson,
+  LessonUsage,
   Course,
   LoginResponse,
   CourseDetailResponse,
@@ -10,6 +11,9 @@ import type {
   QuizSubmitResponse,
   MonitorData,
   ForceSyncResponse,
+  LogSearchFilters,
+  LogSearchResponse,
+  LogStatsResponse,
 } from "../types";
 
 let _token: string | null = localStorage.getItem("radix_token");
@@ -41,8 +45,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  login: (role: string) =>
-    request<LoginResponse>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ role }) }),
+  login: (email: string, password: string) =>
+    request<LoginResponse>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+
+  loginGuest: () => request<LoginResponse>("/api/v1/auth/guest", { method: "POST" }),
 
   logout: () => request<void>("/api/v1/auth/logout", { method: "POST" }),
 
@@ -93,8 +99,8 @@ export const api = {
   updateLesson: (id: string, title: string, contentText: string) =>
     request<Lesson>(`/api/v1/lessons/${id}`, { method: "PUT", body: JSON.stringify({ title, contentText }) }),
 
-  linkLibraryItem: (lessonId: string, libraryItemId: string) =>
-    request<Lesson>(`/api/v1/lessons/${lessonId}/link`, { method: "PATCH", body: JSON.stringify({ libraryItemId }) }),
+  getLibraryItemUsage: (id: string) =>
+    request<LessonUsage[]>(`/api/v1/library/${id}/usage`),
 
   createQuiz: (lessonId: string, questions: Quiz["questions"]) =>
     request<Quiz>("/api/v1/quizzes", { method: "POST", body: JSON.stringify({ lessonId, questions }) }),
@@ -109,4 +115,21 @@ export const api = {
   forceSync: () => request<ForceSyncResponse>("/api/v1/monitor/sync", { method: "POST" }),
 
   getLogs: () => request<string[]>("/api/v1/logs"),
+
+  searchLogs: (filters: LogSearchFilters) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    const qs = params.toString();
+    return request<LogSearchResponse>(`/api/v1/logs/history${qs ? "?" + qs : ""}`);
+  },
+
+  getLogStats: (from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const qs = params.toString();
+    return request<LogStatsResponse>(`/api/v1/logs/stats${qs ? "?" + qs : ""}`);
+  },
 };

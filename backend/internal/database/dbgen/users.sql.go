@@ -24,20 +24,24 @@ func (q *Queries) AddCompletedLesson(ctx context.Context, arg AddCompletedLesson
 }
 
 const addUser = `-- name: AddUser :exec
-INSERT INTO users (id, name, role, points) VALUES (?, ?, ?, ?)
+INSERT INTO users (id, name, email, password_hash, role, points) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type AddUserParams struct {
-	ID     string
-	Name   string
-	Role   string
-	Points int64
+	ID           string
+	Name         string
+	Email        string
+	PasswordHash string
+	Role         string
+	Points       int64
 }
 
 func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) error {
 	_, err := q.db.ExecContext(ctx, addUser,
 		arg.ID,
 		arg.Name,
+		arg.Email,
+		arg.PasswordHash,
 		arg.Role,
 		arg.Points,
 	)
@@ -81,7 +85,7 @@ func (q *Queries) GetCompletedLessonIDs(ctx context.Context, userID string) ([]s
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, role, points FROM users WHERE id = ?
+SELECT id, name, email, password_hash, role, points FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -90,6 +94,26 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Points,
+	)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, name, email, password_hash, role, points FROM users WHERE email = ?
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
 		&i.Role,
 		&i.Points,
 	)
@@ -97,7 +121,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByRole = `-- name: GetUserByRole :one
-SELECT id, name, role, points FROM users WHERE role = ? LIMIT 1
+SELECT id, name, email, password_hash, role, points FROM users WHERE role = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByRole(ctx context.Context, role string) (User, error) {
@@ -106,6 +130,8 @@ func (q *Queries) GetUserByRole(ctx context.Context, role string) (User, error) 
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
 		&i.Role,
 		&i.Points,
 	)

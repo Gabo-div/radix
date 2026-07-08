@@ -4,11 +4,14 @@
 -- block is real SQL and sqlc would execute the DROP TABLEs too).
 
 CREATE TABLE users (
-    id     TEXT PRIMARY KEY,
-    name   TEXT NOT NULL,
-    role   TEXT NOT NULL,
-    points INTEGER NOT NULL DEFAULT 0
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    email         TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL,
+    points        INTEGER NOT NULL DEFAULT 0
 );
+CREATE UNIQUE INDEX idx_users_email ON users(email);
 
 CREATE TABLE courses (
     id          TEXT PRIMARY KEY,
@@ -34,11 +37,10 @@ CREATE TABLE library_items (
 );
 
 CREATE TABLE lessons (
-    id              TEXT PRIMARY KEY,
-    course_id       TEXT NOT NULL REFERENCES courses(id),
-    title           TEXT NOT NULL,
-    content_text    TEXT NOT NULL,
-    library_item_id TEXT REFERENCES library_items(id)
+    id           TEXT PRIMARY KEY,
+    course_id    TEXT NOT NULL REFERENCES courses(id),
+    title        TEXT NOT NULL,
+    content_text TEXT NOT NULL
 );
 
 CREATE TABLE quizzes (
@@ -66,3 +68,15 @@ CREATE TABLE sync_log (
     action     TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE server_logs (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    level     TEXT NOT NULL,
+    message   TEXT NOT NULL,
+    fields    TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX idx_server_logs_timestamp ON server_logs(timestamp);
+CREATE INDEX idx_server_logs_level ON server_logs(level);
+
+CREATE VIRTUAL TABLE server_logs_fts USING fts5(message, content='server_logs', content_rowid='id');

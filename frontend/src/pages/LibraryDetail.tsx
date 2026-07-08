@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import type { LibraryItem } from "../types";
+import type { LibraryItem, LessonUsage } from "../types";
 import { Card, Badge, Button } from "../components/ui";
 import {
-  ArrowLeft, Download, FileVideo, FileAudio, FileImage, FileText, Edit, CheckCircle,
+  ArrowLeft, Download, FileVideo, FileAudio, FileImage, FileText, Edit, CheckCircle, BookOpen,
 } from "lucide-react";
 
 const typeIcon: Record<string, typeof FileVideo> = {
@@ -17,6 +17,7 @@ export default function LibraryDetail() {
   const { id } = useParams<{ id: string }>();
   const { currentUser } = useAuth();
   const [item, setItem] = useState<LibraryItem | null>(null);
+  const [usage, setUsage] = useState<LessonUsage[]>([]);
   const [content, setContent] = useState("");
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -26,6 +27,7 @@ export default function LibraryDetail() {
   useEffect(() => {
     if (!id) return;
     api.getLibraryItem(id).then(setItem).catch(() => { });
+    api.getLibraryItemUsage(id).then(setUsage).catch(() => { });
   }, [id]);
 
   useEffect(() => {
@@ -180,6 +182,27 @@ export default function LibraryDetail() {
           <span className="text-slate-400">ID del recurso</span>
           <span className="text-white font-mono text-xs">{item.id}</span>
         </div>
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-1.5">
+          <BookOpen size={16} /> Usado en estas lecciones
+        </h2>
+        {usage.length === 0 ? (
+          <p className="text-sm text-slate-500">Este archivo no está enlazado en ninguna lección.</p>
+        ) : (
+          <div className="space-y-2">
+            {usage.map((u) => (
+              <Link key={u.lessonId} to={`/courses/${u.courseId}/lessons/${u.lessonId}`}
+                className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors">
+                <div>
+                  <p className="text-sm text-white">{u.lessonTitle}</p>
+                  <p className="text-xs text-slate-500">{u.courseTitle}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

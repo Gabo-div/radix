@@ -1,14 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../../lib/api";
-import { getToken } from "../../lib/api";
 import { Card, Button, Badge } from "../../components/ui";
-import { HardDrive, Users, Radio, RefreshCw, CheckCircle, Terminal } from "lucide-react";
+import { HardDrive, Users, Radio, RefreshCw, CheckCircle } from "lucide-react";
 
 export default function Monitor() {
   const [data, setData] = useState<{ diskKB: number; activeUsers: number; syncQueue: { transactionCount: number; logs: string[] } } | null>(null);
   const [synced, setSynced] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -22,21 +19,6 @@ export default function Monitor() {
     const iv = setInterval(load, 3000);
     return () => clearInterval(iv);
   }, [load]);
-
-  useEffect(() => {
-    if (!getToken()) return;
-    const interval = setInterval(async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
-        const res = await fetch("/api/v1/logs", { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) setLogs(await res.json());
-      } catch { }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
 
   const handleSync = async () => {
     try {
@@ -106,23 +88,6 @@ export default function Monitor() {
         {data && (data.syncQueue.transactionCount ?? 0) > 0 && (
           <div className="mt-3"><Badge color="red">{data.syncQueue.transactionCount} pendientes</Badge></div>
         )}
-      </Card>
-
-      <Card>
-        <details className="group">
-          <summary className="flex items-center gap-2 text-sm font-medium text-slate-300 cursor-pointer list-none">
-            <Terminal size={16} className="text-emerald-400" />
-            Logs del Servidor GO
-            <span className="text-xs text-slate-500 ml-auto">{logs.length} líneas</span>
-          </summary>
-          <div className="mt-3 bg-black rounded-lg p-3 font-mono text-xs leading-relaxed max-h-64 overflow-y-auto">
-            {logs.length === 0 && <span className="text-slate-600">[GO-SERVER] Esperando logs...</span>}
-            {logs.map((line, i) => (
-              <div key={i} className="text-slate-300 whitespace-pre-wrap">{line}</div>
-            ))}
-            <div ref={logEndRef} />
-          </div>
-        </details>
       </Card>
 
       <Card>

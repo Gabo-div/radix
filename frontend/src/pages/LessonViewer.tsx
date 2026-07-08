@@ -30,7 +30,7 @@ export default function LessonViewer() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState<{ lesson: any; libraryItem?: any; quiz?: any } | null>(null);
+  const [data, setData] = useState<{ lesson: any; quiz?: any } | null>(null);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
@@ -100,15 +100,6 @@ export default function LessonViewer() {
 
         <div className="flex w-full gap-4">
           <div className="flex flex-col flex-1 gap-4">
-            {data.libraryItem && (
-              <Card>
-                <h2 className="text-sm font-medium text-slate-300 mb-2">Contenido Multimedia Vinculado</h2>
-                <Link to={`/library/${data.libraryItem.id}`} className="text-sm text-indigo-400 hover:text-indigo-300">
-                  {data.libraryItem.title} ({data.libraryItem.type})
-                </Link>
-              </Card>
-            )}
-
             <Card>
               <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed">
                 {segments.map((seg, i) =>

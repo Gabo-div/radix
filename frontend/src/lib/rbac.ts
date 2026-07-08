@@ -40,6 +40,7 @@ export function getSidebarItems(role: Role) {
   if (role === "admin") {
     items.push({ label: "Panel Admin", path: "/admin", icon: "Settings" });
     items.push({ label: "Monitor", path: "/admin/monitor", icon: "Monitor" });
+    items.push({ label: "Logs", path: "/admin/logs", icon: "ScrollText" });
   }
   return items;
 }

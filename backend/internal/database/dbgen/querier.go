@@ -15,23 +15,31 @@ type Querier interface {
 	AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) error
 	AddQuiz(ctx context.Context, arg AddQuizParams) error
 	AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams) error
+	AddServerLog(ctx context.Context, arg AddServerLogParams) error
 	AddSyncLog(ctx context.Context, arg AddSyncLogParams) error
 	AddUser(ctx context.Context, arg AddUserParams) error
 	ClearSyncLog(ctx context.Context) error
+	CountServerLogsByLevel(ctx context.Context, arg CountServerLogsByLevelParams) ([]CountServerLogsByLevelRow, error)
+	CountServerLogsTotal(ctx context.Context, arg CountServerLogsTotalParams) (int64, error)
 	CountSyncLog(ctx context.Context) (int64, error)
 	DeleteCompletedLessons(ctx context.Context, userID string) error
+	DeleteOldServerLogs(ctx context.Context, timestamp string) (int64, error)
 	GetCompletedLessonIDs(ctx context.Context, userID string) ([]string, error)
 	GetCourse(ctx context.Context, id string) (Course, error)
 	GetCourses(ctx context.Context) ([]Course, error)
 	GetLesson(ctx context.Context, id string) (GetLessonRow, error)
 	GetLessonsForCourse(ctx context.Context, courseID string) ([]GetLessonsForCourseRow, error)
-	GetLibraryItem(ctx context.Context, id string) (LibraryItem, error)
-	GetLibraryItems(ctx context.Context) ([]LibraryItem, error)
+	GetLessonsReferencingLibraryItem(ctx context.Context, contentText string) ([]GetLessonsReferencingLibraryItemRow, error)
+	GetLibraryItem(ctx context.Context, id string) (GetLibraryItemRow, error)
+	GetLibraryItems(ctx context.Context) ([]GetLibraryItemsRow, error)
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
 	GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error)
 	GetUser(ctx context.Context, id string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByRole(ctx context.Context, role string) (User, error)
+	ListServerLogs(ctx context.Context, arg ListServerLogsParams) ([]ServerLog, error)
 	ListSyncLog(ctx context.Context) ([]string, error)
+	SearchServerLogs(ctx context.Context, arg SearchServerLogsParams) ([]ServerLog, error)
 	TotalDiskKB(ctx context.Context) (interface{}, error)
 	UpdateLesson(ctx context.Context, arg UpdateLessonParams) error
 	UpdateLibraryItem(ctx context.Context, arg UpdateLibraryItemParams) error

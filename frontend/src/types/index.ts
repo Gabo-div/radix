@@ -3,6 +3,7 @@ export type Role = "admin" | "student" | "guest";
 export interface User {
   id: string;
   name: string;
+  email: string;
   role: Role;
   points: number;
   completedLessons: string[];
@@ -40,8 +41,14 @@ export interface Lesson {
   courseId: string;
   title: string;
   contentText: string;
-  libraryItemId: string | null;
   quizId: string | null;
+}
+
+export interface LessonUsage {
+  lessonId: string;
+  courseId: string;
+  lessonTitle: string;
+  courseTitle: string;
 }
 
 export interface Course {
@@ -68,7 +75,6 @@ export interface CourseDetailResponse {
 
 export interface LessonDetailResponse {
   lesson: Lesson;
-  libraryItem?: LibraryItem;
   quiz?: Quiz;
 }
 
@@ -90,4 +96,36 @@ export interface MonitorData {
 export interface ForceSyncResponse {
   synced: number;
   message: string;
+}
+
+export interface ServerLog {
+  id: number;
+  timestamp: string;
+  level: string;
+  message: string;
+  fields: string;
+}
+
+export interface LogSearchResponse {
+  logs: ServerLog[];
+  hasMore: boolean;
+}
+
+export interface LogSearchFilters {
+  level?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ServerLogStats {
+  total: number;
+  byLevel: Record<string, number>;
+}
+
+export interface LogStatsResponse {
+  stats: ServerLogStats;
+  retentionDays: number;
 }

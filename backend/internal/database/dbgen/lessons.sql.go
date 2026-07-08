@@ -11,15 +11,14 @@ import (
 )
 
 const addLesson = `-- name: AddLesson :exec
-INSERT INTO lessons (id, course_id, title, content_text, library_item_id) VALUES (?, ?, ?, ?, ?)
+INSERT INTO lessons (id, course_id, title, content_text) VALUES (?, ?, ?, ?)
 `
 
 type AddLessonParams struct {
-	ID            string
-	CourseID      string
-	Title         string
-	ContentText   string
-	LibraryItemID sql.NullString
+	ID          string
+	CourseID    string
+	Title       string
+	ContentText string
 }
 
 func (q *Queries) AddLesson(ctx context.Context, arg AddLessonParams) error {
@@ -28,25 +27,23 @@ func (q *Queries) AddLesson(ctx context.Context, arg AddLessonParams) error {
 		arg.CourseID,
 		arg.Title,
 		arg.ContentText,
-		arg.LibraryItemID,
 	)
 	return err
 }
 
 const getLesson = `-- name: GetLesson :one
-SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, lessons.library_item_id, quizzes.id AS quiz_id
+SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, quizzes.id AS quiz_id
 FROM lessons
 LEFT JOIN quizzes ON quizzes.lesson_id = lessons.id
 WHERE lessons.id = ?
 `
 
 type GetLessonRow struct {
-	ID            string
-	CourseID      string
-	Title         string
-	ContentText   string
-	LibraryItemID sql.NullString
-	QuizID        sql.NullString
+	ID          string
+	CourseID    string
+	Title       string
+	ContentText string
+	QuizID      sql.NullString
 }
 
 func (q *Queries) GetLesson(ctx context.Context, id string) (GetLessonRow, error) {
@@ -57,14 +54,13 @@ func (q *Queries) GetLesson(ctx context.Context, id string) (GetLessonRow, error
 		&i.CourseID,
 		&i.Title,
 		&i.ContentText,
-		&i.LibraryItemID,
 		&i.QuizID,
 	)
 	return i, err
 }
 
 const getLessonsForCourse = `-- name: GetLessonsForCourse :many
-SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, lessons.library_item_id, quizzes.id AS quiz_id
+SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, quizzes.id AS quiz_id
 FROM lessons
 LEFT JOIN quizzes ON quizzes.lesson_id = lessons.id
 WHERE lessons.course_id = ?
@@ -72,12 +68,11 @@ ORDER BY lessons.rowid
 `
 
 type GetLessonsForCourseRow struct {
-	ID            string
-	CourseID      string
-	Title         string
-	ContentText   string
-	LibraryItemID sql.NullString
-	QuizID        sql.NullString
+	ID          string
+	CourseID    string
+	Title       string
+	ContentText string
+	QuizID      sql.NullString
 }
 
 func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]GetLessonsForCourseRow, error) {
@@ -94,7 +89,6 @@ func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]G
 			&i.CourseID,
 			&i.Title,
 			&i.ContentText,
-			&i.LibraryItemID,
 			&i.QuizID,
 		); err != nil {
 			return nil, err
@@ -110,23 +104,60 @@ func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]G
 	return items, nil
 }
 
+const getLessonsReferencingLibraryItem = `-- name: GetLessonsReferencingLibraryItem :many
+SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title
+FROM lessons
+JOIN courses ON courses.id = lessons.course_id
+WHERE lessons.content_text LIKE ?
+ORDER BY lessons.rowid
+`
+
+type GetLessonsReferencingLibraryItemRow struct {
+	ID          string
+	CourseID    string
+	Title       string
+	CourseTitle string
+}
+
+func (q *Queries) GetLessonsReferencingLibraryItem(ctx context.Context, contentText string) ([]GetLessonsReferencingLibraryItemRow, error) {
+	rows, err := q.db.QueryContext(ctx, getLessonsReferencingLibraryItem, contentText)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLessonsReferencingLibraryItemRow
+	for rows.Next() {
+		var i GetLessonsReferencingLibraryItemRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Title,
+			&i.CourseTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateLesson = `-- name: UpdateLesson :exec
-UPDATE lessons SET title = ?, content_text = ?, library_item_id = ? WHERE id = ?
+UPDATE lessons SET title = ?, content_text = ? WHERE id = ?
 `
 
 type UpdateLessonParams struct {
-	Title         string
-	ContentText   string
-	LibraryItemID sql.NullString
-	ID            string
+	Title       string
+	ContentText string
+	ID          string
 }
 
 func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) error {
-	_, err := q.db.ExecContext(ctx, updateLesson,
-		arg.Title,
-		arg.ContentText,
-		arg.LibraryItemID,
-		arg.ID,
-	)
+	_, err := q.db.ExecContext(ctx, updateLesson, arg.Title, arg.ContentText, arg.ID)
 	return err
 }

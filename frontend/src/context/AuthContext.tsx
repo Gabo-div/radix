@@ -6,7 +6,8 @@ import { getRedirectPath } from "../lib/rbac";
 interface AuthContextType {
   currentUser: User | null;
   token: string | null;
-  login: (role: string) => Promise<string>;
+  login: (email: string, password: string) => Promise<string>;
+  loginGuest: () => Promise<string>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -20,8 +21,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const [token, setTokenState] = useState<string | null>(getToken());
 
-  const login = useCallback(async (role: string): Promise<string> => {
-    const res = await api.login(role);
+  const login = useCallback(async (email: string, password: string): Promise<string> => {
+    const res = await api.login(email, password);
+    setToken(res.token);
+    setTokenState(res.token);
+    setCurrentUser(res.user);
+    localStorage.setItem("radix_user", JSON.stringify(res.user));
+    return getRedirectPath(res.user.role);
+  }, []);
+
+  const loginGuest = useCallback(async (): Promise<string> => {
+    const res = await api.loginGuest();
     setToken(res.token);
     setTokenState(res.token);
     setCurrentUser(res.user);
@@ -38,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ currentUser, token, login, logout, isAuthenticated: !!currentUser }}>
+    <AuthContext.Provider value={{ currentUser, token, login, loginGuest, logout, isAuthenticated: !!currentUser }}>
       {children}
     </AuthContext.Provider>
   );

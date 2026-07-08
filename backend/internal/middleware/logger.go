@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"go.uber.org/zap"
 	"radix-backend/internal/models"
 )
 
@@ -40,10 +41,16 @@ func (lb *LogBuffer) Lines() []string {
 	return result
 }
 
-func GoServerLogger(logBuffer *LogBuffer) echo.MiddlewareFunc {
+// GoServerLogger logs one structured entry per request through logger — build
+// logger via NewLogger so that single call also feeds the live tail
+// (LogBuffer) and durable history (server_logs), see observability_core.go.
+func GoServerLogger(logger *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
+			start := time.Now()
 			err := next(c)
+			duration := time.Since(start)
+
 			role, _ := c.Get("user_role").(models.Role)
 			roleStr := "UNAUTHENTICATED"
 			if role != "" {
@@ -61,14 +68,20 @@ func GoServerLogger(logBuffer *LogBuffer) echo.MiddlewareFunc {
 
 			method := c.Request().Method
 			path := c.Request().URL.Path
-			ts := time.Now().Format("2006/01/02 15:04:05")
-			logLine := fmt.Sprintf("[GO-SERVER] %s - %s %s - Role: %s - Status: %d",
-				ts, method, path, strings.ToUpper(roleStr), status)
+			msg := fmt.Sprintf("%s %s → %d (%dms) role=%s", method, path, status, duration.Milliseconds(), strings.ToUpper(roleStr))
 
-			logBuffer.Write(logLine)
+			fields := []zap.Field{
+				zap.String("method", method),
+				zap.String("path", path),
+				zap.String("role", strings.ToUpper(roleStr)),
+				zap.Int("status", status),
+				zap.Int64("duration_ms", duration.Milliseconds()),
+			}
 
 			if err != nil {
-				logBuffer.Write(fmt.Sprintf("[GO-SERVER] %s - ERROR: %v", ts, err))
+				logger.Error(msg+" — "+err.Error(), fields...)
+			} else {
+				logger.Info(msg, fields...)
 			}
 			return err
 		}

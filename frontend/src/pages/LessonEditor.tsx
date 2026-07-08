@@ -19,7 +19,6 @@ export default function LessonEditor() {
   const [loadingLesson, setLoadingLesson] = useState(isEditing);
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
-  const [mainFileId, setMainFileId] = useState<string | null>(null);
   const [showQuizSection, setShowQuizSection] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
   const [existingQuiz, setExistingQuiz] = useState<{ id: string } | null>(null);
@@ -39,9 +38,6 @@ export default function LessonEditor() {
           setShowQuizSection(true);
           setExistingQuiz({ id: d.quiz.id });
         }
-        if (d.lesson.libraryItemId) {
-          setMainFileId(d.lesson.libraryItemId);
-        }
         setLoadingLesson(false);
       }).catch(() => setLoadingLesson(false));
     }
@@ -49,7 +45,6 @@ export default function LessonEditor() {
 
   const wikiRefs = useMemo(() => extractWikiRefs(content), [content]);
   const linkedItems = useMemo(() => library.filter((li) => wikiRefs.includes(li.id)), [wikiRefs, library]);
-  const mainItem = useMemo(() => library.find((li) => li.id === mainFileId), [mainFileId, library]);
 
   const showMsg = (text: string) => { setMsg(text); setTimeout(() => setMsg(""), 3000); };
 
@@ -68,9 +63,6 @@ export default function LessonEditor() {
         setTimeout(() => navigate(`/courses/${courseId}`), 1000);
       } else {
         const lesson = await api.addLesson(courseId, title, content);
-        if (mainFileId) {
-          await api.linkLibraryItem(lesson.id, mainFileId);
-        }
         if (showQuizSection && quizQuestions[0].text) {
           await api.createQuiz(lesson.id, quizQuestions);
         }
@@ -137,28 +129,6 @@ export default function LessonEditor() {
           </Card>
 
           <Card>
-            <h2 className="text-sm font-medium text-slate-300 mb-3">
-              <Paperclip size={16} className="inline mr-1.5" />
-              Archivo Principal de la Lección
-            </h2>
-            {mainItem ? (
-              <div className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
-                <div>
-                  <p className="text-sm text-white">{mainItem.title}</p>
-                  <p className="text-xs text-slate-500">{mainItem.type} · {mainItem.originalFilename}</p>
-                </div>
-                <button type="button" onClick={() => setMainFileId(null)}
-                  className="text-xs text-red-400 hover:text-red-300">Quitar</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setShowFilePicker(true)}
-                className="w-full p-3 border-2 border-dashed border-slate-600 rounded-lg text-sm text-slate-400 hover:text-indigo-400 hover:border-indigo-600 transition-colors">
-                + Adjuntar archivo principal (video, audio, etc.)
-              </button>
-            )}
-          </Card>
-
-          <Card>
             <button type="button" onClick={() => setShowQuizSection(!showQuizSection)}
               className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white transition-colors">
               <FileQuestion size={16} />
@@ -208,25 +178,14 @@ export default function LessonEditor() {
               </h3>
               <div className="space-y-2">
                 {linkedItems.map((item) => (
-                  <div key={item.id} className={`flex items-center gap-2 p-2 rounded-lg text-xs ${item.id === mainFileId ? "bg-indigo-900/20 border border-indigo-700" : "bg-slate-700/30"}`}>
+                  <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
                     <div className="flex-1 min-w-0">
                       <p className="text-white truncate">{item.title}</p>
-                      <p className="text-slate-500 text-[10px]">{item.id}{item.id === mainFileId ? " · principal" : ""}</p>
+                      <p className="text-slate-500 text-[10px]">{item.id}</p>
                     </div>
                     <Link to={`/library/${item.id}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
-              </div>
-            </Card>
-          )}
-          {mainItem && !linkedItems.find((li) => li.id === mainFileId) && (
-            <Card>
-              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
-                <Paperclip size={14} /> Archivo Principal
-              </h3>
-              <div className="p-2 bg-indigo-900/20 border border-indigo-700 rounded-lg text-xs">
-                <p className="text-white truncate">{mainItem.title}</p>
-                <p className="text-slate-500 text-[10px]">{mainItem.id} · {mainItem.type}</p>
               </div>
             </Card>
           )}

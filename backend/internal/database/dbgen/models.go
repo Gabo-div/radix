@@ -16,11 +16,10 @@ type Course struct {
 }
 
 type Lesson struct {
-	ID            string
-	CourseID      string
-	Title         string
-	ContentText   string
-	LibraryItemID sql.NullString
+	ID          string
+	CourseID    string
+	Title       string
+	ContentText string
 }
 
 type LibraryItem struct {
@@ -53,6 +52,18 @@ type QuizQuestion struct {
 	CorrectIndex int64
 }
 
+type ServerLog struct {
+	ID        int64
+	Timestamp string
+	Level     string
+	Message   string
+	Fields    string
+}
+
+type ServerLogsFt struct {
+	Message string
+}
+
 type SyncLog struct {
 	ID        int64
 	Action    string
@@ -60,10 +71,12 @@ type SyncLog struct {
 }
 
 type User struct {
-	ID     string
-	Name   string
-	Role   string
-	Points int64
+	ID           string
+	Name         string
+	Email        string
+	PasswordHash string
+	Role         string
+	Points       int64
 }
 
 type UserCompletedLesson struct {

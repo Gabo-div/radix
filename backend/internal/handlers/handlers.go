@@ -5,6 +5,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"radix-backend/internal/auth"
+	"radix-backend/internal/config"
 	"radix-backend/internal/middleware"
 	"radix-backend/internal/models"
 )
@@ -21,6 +22,7 @@ type Store interface {
 	AddLibraryItem(ctx context.Context, item models.LibraryItem) (string, error)
 	UpdateLibraryItem(ctx context.Context, item *models.LibraryItem) error
 	TotalDiskKB(ctx context.Context) (int, error)
+	GetLessonsUsingLibraryItem(ctx context.Context, itemID string) ([]models.LessonUsage, error)
 
 	GetCourses(ctx context.Context) ([]*models.Course, error)
 	GetCourse(ctx context.Context, id string) (*models.Course, error)
@@ -36,25 +38,31 @@ type Store interface {
 	GetSyncQueue(ctx context.Context) (models.SyncQueue, error)
 	EnqueueSync(ctx context.Context, action string) error
 	ClearSyncQueue(ctx context.Context) (int, error)
+
+	ListServerLogs(ctx context.Context, filter models.ServerLogFilter, search string, limit, offset int) ([]models.ServerLog, bool, error)
+	GetServerLogStats(ctx context.Context, from, to string) (models.ServerLogStats, error)
 }
 
 type Handler struct {
-	Store     Store
-	LogBuffer *middleware.LogBuffer
+	Store            Store
+	LogBuffer        *middleware.LogBuffer
+	LogRetentionDays int
 }
 
-func New(s Store, logBuffer *middleware.LogBuffer) *Handler {
-	return &Handler{Store: s, LogBuffer: logBuffer}
+func New(s Store, logBuffer *middleware.LogBuffer, cfg *config.Config) *Handler {
+	return &Handler{Store: s, LogBuffer: logBuffer, LogRetentionDays: cfg.LogRetentionDays}
 }
 
 func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.POST("/auth/login", a.Login)
+	api.POST("/auth/guest", a.LoginGuest)
 	api.POST("/auth/logout", a.Logout)
 
 	api.GET("/library", h.GetLibrary)
 	api.GET("/library/:id", h.GetLibraryItem)
 	api.PATCH("/library/:id", h.UpdateLibraryItem, a.RequireRole("admin"))
 	api.GET("/library/:id/file", h.ServeLibraryFile)
+	api.GET("/library/:id/usage", h.GetLibraryItemUsage)
 	api.POST("/library", h.CreateLibraryItem, a.RequireRole("admin"))
 
 	api.GET("/courses", h.GetCourses)
@@ -64,7 +72,6 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.POST("/courses/:id/lessons", h.CreateLesson, a.RequireRole("admin"))
 	api.GET("/courses/:courseId/lessons/:lessonId", h.GetLesson)
 	api.PUT("/lessons/:id", h.UpdateLesson, a.RequireRole("admin"))
-	api.PATCH("/lessons/:lessonId/link", h.LinkLibraryItem, a.RequireRole("admin"))
 
 	api.POST("/quizzes", h.CreateQuiz, a.RequireRole("admin"))
 	api.GET("/quizzes/:id", h.GetQuiz)
@@ -74,4 +81,6 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.POST("/monitor/sync", h.ForceSync, a.RequireRole("admin"))
 
 	api.GET("/logs", h.GetLogs)
+	api.GET("/logs/history", h.SearchLogs, a.RequireRole("admin"))
+	api.GET("/logs/stats", h.GetLogStats, a.RequireRole("admin"))
 }

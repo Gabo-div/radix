@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v5"
+	"golang.org/x/crypto/bcrypt"
 	"radix-backend/internal/httpx"
 	"radix-backend/internal/models"
 	"radix-backend/internal/store"
@@ -18,7 +19,7 @@ import (
 // *store.Store without any changes there (structural typing).
 type Store interface {
 	AddUser(ctx context.Context, user *models.User) error
-	GetUserByRole(ctx context.Context, role models.Role) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	CreateSession(userID, name string, role models.Role) string
 	GetSession(token string) (models.Session, bool)
 	DeleteSession(token string)
@@ -40,36 +41,44 @@ func guestID() string {
 
 func (a *Auth) Login(c *echo.Context) error {
 	var req struct {
-		Role models.Role `json:"role"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	if err := c.Bind(&req); err != nil {
 		return httpx.BadRequest(c, "invalid request")
 	}
-	if req.Role != models.RoleAdmin && req.Role != models.RoleStudent && req.Role != models.RoleGuest {
-		return httpx.BadRequest(c, "invalid role")
-	}
 
 	ctx := c.Request().Context()
 
-	var user *models.User
-	if req.Role == models.RoleGuest {
-		user = &models.User{
-			ID:   guestID(),
-			Name: "Invitado",
-			Role: models.RoleGuest,
+	user, err := a.Store.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return httpx.Unauthorized(c, "invalid email or password")
 		}
-		if err := a.Store.AddUser(ctx, user); err != nil {
-			return httpx.InternalError(c, "failed to create guest")
-		}
-	} else {
-		var err error
-		user, err = a.Store.GetUserByRole(ctx, req.Role)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return httpx.NotFound(c, "no user found for role")
-			}
-			return httpx.InternalError(c, "failed to look up user")
-		}
+		return httpx.InternalError(c, "failed to look up user")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
+		return httpx.Unauthorized(c, "invalid email or password")
+	}
+
+	token := a.Store.CreateSession(user.ID, user.Name, user.Role)
+	return httpx.OK(c, http.StatusOK, map[string]interface{}{
+		"token": token,
+		"user":  user,
+	})
+}
+
+func (a *Auth) LoginGuest(c *echo.Context) error {
+	ctx := c.Request().Context()
+	id := guestID()
+	user := &models.User{
+		ID:    id,
+		Name:  "Invitado",
+		Email: id + "@guest.local",
+		Role:  models.RoleGuest,
+	}
+	if err := a.Store.AddUser(ctx, user); err != nil {
+		return httpx.InternalError(c, "failed to create guest")
 	}
 
 	token := a.Store.CreateSession(user.ID, user.Name, user.Role)
@@ -92,7 +101,7 @@ func (a *Auth) Middleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			path := c.Request().URL.Path
-			if path == "/api/v1/auth/login" {
+			if path == "/api/v1/auth/login" || path == "/api/v1/auth/guest" {
 				return next(c)
 			}
 

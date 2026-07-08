@@ -3,21 +3,41 @@ package seed
 import (
 	"context"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"radix-backend/internal/models"
 	"radix-backend/internal/store"
 )
 
+// SeedPassword is the shared password for every seeded demo user — only
+// the email differs per account. Demo-only; real accounts created later
+// pick their own password via bcrypt at signup/admin-creation time.
+const SeedPassword = "radix2024"
+
+func hashSeedPassword() (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(SeedPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
+
 func Data(ctx context.Context, s *store.Store) error {
-	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Prof. Carlos Mendoza", Role: models.RoleAdmin, Points: 0, CompletedLessons: nil}); err != nil {
+	passwordHash, err := hashSeedPassword()
+	if err != nil {
+		return err
+	}
+
+	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Prof. Carlos Mendoza", Email: "carlos.mendoza@radix.local", PasswordHash: passwordHash, Role: models.RoleAdmin, Points: 0, CompletedLessons: nil}); err != nil {
 		return err
 	}
 	// u2's completed lesson ("l1") gets attached after lessons are created below —
 	// user_completed_lessons.lesson_id has a real FK now, can't reference it yet.
-	u2 := &models.User{ID: "u2", Name: "Sofía Ramírez", Role: models.RoleStudent, Points: 150, CompletedLessons: nil}
+	u2 := &models.User{ID: "u2", Name: "Sofía Ramírez", Email: "sofia.ramirez@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, Points: 150, CompletedLessons: nil}
 	if err := s.AddUser(ctx, u2); err != nil {
 		return err
 	}
-	if err := s.AddUser(ctx, &models.User{ID: "u3", Name: "Mateo Torres", Role: models.RoleStudent, Points: 80, CompletedLessons: nil}); err != nil {
+	if err := s.AddUser(ctx, &models.User{ID: "u3", Name: "Mateo Torres", Email: "mateo.torres@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, Points: 80, CompletedLessons: nil}); err != nil {
 		return err
 	}
 
@@ -56,7 +76,7 @@ func Data(ctx context.Context, s *store.Store) error {
 		return err
 	}
 
-	l1 := &models.Lesson{CourseID: c1.ID, Title: "La Célula: Unidad Fundamental", ContentText: "La célula es la unidad básica estructural y funcional de todos los organismos vivos. Existen dos tipos principales: procariotas y eucariotas. Las células procariotas carecen de núcleo definido, mientras que las eucariotas poseen un núcleo rodeado por una membrana nuclear. La teoría celular, formulada en el siglo XIX, establece que todos los seres vivos están compuestos por células y que toda célula proviene de otra célula preexistente. Robert Hooke fue el primero en observar células en 1665 utilizando un microscopio primitivo.", LibraryItemID: &lib1}
+	l1 := &models.Lesson{CourseID: c1.ID, Title: "La Célula: Unidad Fundamental", ContentText: "La célula es la unidad básica estructural y funcional de todos los organismos vivos. Existen dos tipos principales: procariotas y eucariotas. Las células procariotas carecen de núcleo definido, mientras que las eucariotas poseen un núcleo rodeado por una membrana nuclear. La teoría celular, formulada en el siglo XIX, establece que todos los seres vivos están compuestos por células y que toda célula proviene de otra célula preexistente. Robert Hooke fue el primero en observar células en 1665 utilizando un microscopio primitivo.\n\nVer [[" + lib1 + "]] para más detalle."}
 	if err := s.AddLesson(ctx, l1); err != nil {
 		return err
 	}
@@ -67,14 +87,14 @@ func Data(ctx context.Context, s *store.Store) error {
 	if err := s.AddLesson(ctx, &models.Lesson{CourseID: c1.ID, Title: "Metabolismo y Energía Celular", ContentText: "El metabolismo celular comprende todas las reacciones químicas que ocurren dentro de la célula. Se divide en catabolismo (degradación de moléculas para obtener energía) y anabolismo (síntesis de moléculas complejas). La respiración celular, que ocurre en las mitocondrias, es el proceso mediante el cual las células convierten la glucosa en ATP, la moneda energética de la célula. La fotosíntesis, realizada por las plantas en los cloroplastos, convierte la energía lumínica en energía química almacenada en glucosa."}); err != nil {
 		return err
 	}
-	l3 := &models.Lesson{CourseID: c2.ID, Title: "Lógica Proposicional", ContentText: "La lógica proposicional estudia las proposiciones y las conexiones lógicas entre ellas. Una proposición es una afirmación que puede ser verdadera o falsa. Los conectivos lógicos fundamentales incluyen: negación (¬), conjunción (∧), disyunción (∨), implicación (→) y bicondicional (↔). Las tablas de verdad son herramientas que permiten determinar el valor de verdad de una proposición compuesta para todas las combinaciones posibles de valores de verdad de sus proposiciones simples.", LibraryItemID: &lib2}
+	l3 := &models.Lesson{CourseID: c2.ID, Title: "Lógica Proposicional", ContentText: "La lógica proposicional estudia las proposiciones y las conexiones lógicas entre ellas. Una proposición es una afirmación que puede ser verdadera o falsa. Los conectivos lógicos fundamentales incluyen: negación (¬), conjunción (∧), disyunción (∨), implicación (→) y bicondicional (↔). Las tablas de verdad son herramientas que permiten determinar el valor de verdad de una proposición compuesta para todas las combinaciones posibles de valores de verdad de sus proposiciones simples.\n\nVer [[" + lib2 + "]] para más detalle."}
 	if err := s.AddLesson(ctx, l3); err != nil {
 		return err
 	}
 	if err := s.AddLesson(ctx, &models.Lesson{CourseID: c2.ID, Title: "Conjuntos y Operaciones", ContentText: "Un conjunto es una colección bien definida de objetos. Los conjuntos se denotan con llaves y sus elementos pueden ser números, letras u otros objetos. Las operaciones fundamentales entre conjuntos incluyen: unión (∪), intersección (∩), diferencia (−) y complemento. El producto cartesiano de dos conjuntos A y B es el conjunto de todos los pares ordenados (a, b) donde a ∈ A y b ∈ B."}); err != nil {
 		return err
 	}
-	l5 := &models.Lesson{CourseID: c3.ID, Title: "La Revolución Francesa", ContentText: "La Revolución Francesa (1789-1799) fue un período de transformación social y política radical en Francia. Comenzó con la convocatoria de los Estados Generales por el rey Luis XVI y culminó con el ascenso de Napoleón Bonaparte. La Toma de la Bastilla el 14 de julio de 1789 es considerado el evento simbólico que marcó el inicio de la revolución. La Declaración de los Derechos del Hombre y del Ciudadano, aprobada en agosto de 1789, estableció los principios de libertad, igualdad y fraternidad que inspirarían movimientos democráticos en todo el mundo.", LibraryItemID: &lib3}
+	l5 := &models.Lesson{CourseID: c3.ID, Title: "La Revolución Francesa", ContentText: "La Revolución Francesa (1789-1799) fue un período de transformación social y política radical en Francia. Comenzó con la convocatoria de los Estados Generales por el rey Luis XVI y culminó con el ascenso de Napoleón Bonaparte. La Toma de la Bastilla el 14 de julio de 1789 es considerado el evento simbólico que marcó el inicio de la revolución. La Declaración de los Derechos del Hombre y del Ciudadano, aprobada en agosto de 1789, estableció los principios de libertad, igualdad y fraternidad que inspirarían movimientos democráticos en todo el mundo.\n\nEscucha [[" + lib3 + "]] para más detalle."}
 	if err := s.AddLesson(ctx, l5); err != nil {
 		return err
 	}

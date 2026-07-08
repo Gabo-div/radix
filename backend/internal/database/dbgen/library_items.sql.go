@@ -53,12 +53,31 @@ func (q *Queries) AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) 
 }
 
 const getLibraryItem = `-- name: GetLibraryItem :one
-SELECT id, title, type, category, size_kb, mime_type, original_filename, uploaded_at, modified_at, duration, resolution, file_path, uploaded_by FROM library_items WHERE id = ?
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+WHERE library_items.id = ?
 `
 
-func (q *Queries) GetLibraryItem(ctx context.Context, id string) (LibraryItem, error) {
+type GetLibraryItemRow struct {
+	ID               string
+	Title            string
+	Type             string
+	Category         string
+	SizeKb           int64
+	MimeType         string
+	OriginalFilename string
+	UploadedAt       string
+	ModifiedAt       string
+	Duration         sql.NullString
+	Resolution       sql.NullString
+	FilePath         string
+	UploadedBy       sql.NullString
+	UploadedByName   sql.NullString
+}
+
+func (q *Queries) GetLibraryItem(ctx context.Context, id string) (GetLibraryItemRow, error) {
 	row := q.db.QueryRowContext(ctx, getLibraryItem, id)
-	var i LibraryItem
+	var i GetLibraryItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -73,23 +92,43 @@ func (q *Queries) GetLibraryItem(ctx context.Context, id string) (LibraryItem, e
 		&i.Resolution,
 		&i.FilePath,
 		&i.UploadedBy,
+		&i.UploadedByName,
 	)
 	return i, err
 }
 
 const getLibraryItems = `-- name: GetLibraryItems :many
-SELECT id, title, type, category, size_kb, mime_type, original_filename, uploaded_at, modified_at, duration, resolution, file_path, uploaded_by FROM library_items ORDER BY rowid
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+ORDER BY library_items.rowid
 `
 
-func (q *Queries) GetLibraryItems(ctx context.Context) ([]LibraryItem, error) {
+type GetLibraryItemsRow struct {
+	ID               string
+	Title            string
+	Type             string
+	Category         string
+	SizeKb           int64
+	MimeType         string
+	OriginalFilename string
+	UploadedAt       string
+	ModifiedAt       string
+	Duration         sql.NullString
+	Resolution       sql.NullString
+	FilePath         string
+	UploadedBy       sql.NullString
+	UploadedByName   sql.NullString
+}
+
+func (q *Queries) GetLibraryItems(ctx context.Context) ([]GetLibraryItemsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getLibraryItems)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LibraryItem
+	var items []GetLibraryItemsRow
 	for rows.Next() {
-		var i LibraryItem
+		var i GetLibraryItemsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -104,6 +143,7 @@ func (q *Queries) GetLibraryItems(ctx context.Context) ([]LibraryItem, error) {
 			&i.Resolution,
 			&i.FilePath,
 			&i.UploadedBy,
+			&i.UploadedByName,
 		); err != nil {
 			return nil, err
 		}
@@ -132,7 +172,7 @@ func (q *Queries) TotalDiskKB(ctx context.Context) (interface{}, error) {
 const updateLibraryItem = `-- name: UpdateLibraryItem :exec
 UPDATE library_items SET
     title = ?, category = ?, size_kb = ?, mime_type = ?, original_filename = ?,
-    duration = ?, resolution = ?, file_path = ?, uploaded_by = ?
+    duration = ?, resolution = ?, file_path = ?
 WHERE id = ?
 `
 
@@ -145,7 +185,6 @@ type UpdateLibraryItemParams struct {
 	Duration         sql.NullString
 	Resolution       sql.NullString
 	FilePath         string
-	UploadedBy       sql.NullString
 	ID               string
 }
 
@@ -159,7 +198,6 @@ func (q *Queries) UpdateLibraryItem(ctx context.Context, arg UpdateLibraryItemPa
 		arg.Duration,
 		arg.Resolution,
 		arg.FilePath,
-		arg.UploadedBy,
 		arg.ID,
 	)
 	return err
