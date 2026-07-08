@@ -44,9 +44,14 @@ CREATE TABLE lessons (
 );
 
 CREATE TABLE quizzes (
-    id        TEXT PRIMARY KEY,
-    lesson_id TEXT NOT NULL REFERENCES lessons(id)
+    id          TEXT PRIMARY KEY,
+    course_id   TEXT NOT NULL REFERENCES courses(id),
+    lesson_id   TEXT REFERENCES lessons(id),
+    title       TEXT NOT NULL DEFAULT 'Cuestionario',
+    description TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX idx_quizzes_course ON quizzes(course_id);
+CREATE UNIQUE INDEX idx_quizzes_lesson_unique ON quizzes(lesson_id) WHERE lesson_id IS NOT NULL;
 
 CREATE TABLE quiz_questions (
     id            TEXT PRIMARY KEY,
@@ -88,3 +93,11 @@ CREATE TABLE lesson_links (
     PRIMARY KEY (source_lesson_id, target_id)
 );
 CREATE INDEX idx_lesson_links_target ON lesson_links(target_id);
+
+CREATE TABLE quiz_links (
+    source_quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    target_id      TEXT NOT NULL,
+    target_type    TEXT NOT NULL CHECK (target_type IN ('library_item', 'lesson')),
+    PRIMARY KEY (source_quiz_id, target_id)
+);
+CREATE INDEX idx_quiz_links_target ON quiz_links(target_id);

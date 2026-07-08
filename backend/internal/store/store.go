@@ -590,41 +590,171 @@ func (s *Store) GetQuiz(ctx context.Context, id string) (*models.Quiz, error) {
 	if err != nil {
 		return nil, err
 	}
-	questions := make([]models.QuizQuestion, len(questionRows))
-	for i, q := range questionRows {
+	questions, err := quizQuestionsFromRows(questionRows)
+	if err != nil {
+		return nil, err
+	}
+	return quizFromRow(row, questions), nil
+}
+
+func quizFromRow(row dbgen.Quiz, questions []models.QuizQuestion) *models.Quiz {
+	return &models.Quiz{
+		ID:          row.ID,
+		CourseID:    row.CourseID,
+		LessonID:    ptrFromNullString(row.LessonID),
+		Title:       row.Title,
+		Description: row.Description,
+		Questions:   questions,
+	}
+}
+
+func (s *Store) GetQuizzesForCourse(ctx context.Context, courseID string) ([]*models.Quiz, error) {
+	rows, err := s.queries.GetQuizzesForCourse(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	quizzes := make([]*models.Quiz, len(rows))
+	for i, row := range rows {
+		questionRows, err := s.queries.GetQuizQuestions(ctx, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		questions, err := quizQuestionsFromRows(questionRows)
+		if err != nil {
+			return nil, err
+		}
+		quizzes[i] = quizFromRow(row, questions)
+	}
+	return quizzes, nil
+}
+
+func quizQuestionsFromRows(rows []dbgen.QuizQuestion) ([]models.QuizQuestion, error) {
+	questions := make([]models.QuizQuestion, len(rows))
+	for i, q := range rows {
 		var options []string
 		if err := json.Unmarshal([]byte(q.OptionsJson), &options); err != nil {
 			return nil, err
 		}
 		questions[i] = models.QuizQuestion{Text: q.Text, Options: options, CorrectIndex: int(q.CorrectIndex)}
 	}
-	return &models.Quiz{ID: row.ID, LessonID: row.LessonID, Questions: questions}, nil
+	return questions, nil
 }
 
 func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 	quiz.ID = uuid.NewString()
 	return s.withTx(ctx, func(q *dbgen.Queries) error {
-		if err := q.AddQuiz(ctx, dbgen.AddQuizParams{ID: quiz.ID, LessonID: quiz.LessonID}); err != nil {
+		if err := q.AddQuiz(ctx, dbgen.AddQuizParams{
+			ID:          quiz.ID,
+			CourseID:    quiz.CourseID,
+			LessonID:    nullStringFromPtr(quiz.LessonID),
+			Title:       quiz.Title,
+			Description: quiz.Description,
+		}); err != nil {
 			return err
 		}
-		for i, question := range quiz.Questions {
-			optionsJSON, err := json.Marshal(question.Options)
-			if err != nil {
-				return err
-			}
-			if err := q.AddQuizQuestion(ctx, dbgen.AddQuizQuestionParams{
-				ID:           uuid.NewString(),
-				QuizID:       quiz.ID,
-				Ordinal:      int64(i),
-				Text:         question.Text,
-				OptionsJson:  string(optionsJSON),
-				CorrectIndex: int64(question.CorrectIndex),
-			}); err != nil {
-				return err
-			}
+		if err := addQuizQuestions(ctx, q, quiz.ID, quiz.Questions); err != nil {
+			return err
 		}
-		return nil
+		return s.syncQuizLinks(ctx, q, quiz.ID, quiz.Description)
 	})
+}
+
+func (s *Store) UpdateQuiz(ctx context.Context, quiz *models.Quiz) error {
+	return s.withTx(ctx, func(q *dbgen.Queries) error {
+		if err := q.UpdateQuiz(ctx, dbgen.UpdateQuizParams{
+			Title:       quiz.Title,
+			Description: quiz.Description,
+			ID:          quiz.ID,
+		}); err != nil {
+			return err
+		}
+		if err := q.DeleteQuizQuestions(ctx, quiz.ID); err != nil {
+			return err
+		}
+		if err := addQuizQuestions(ctx, q, quiz.ID, quiz.Questions); err != nil {
+			return err
+		}
+		return s.syncQuizLinks(ctx, q, quiz.ID, quiz.Description)
+	})
+}
+
+func addQuizQuestions(ctx context.Context, q *dbgen.Queries, quizID string, questions []models.QuizQuestion) error {
+	for i, question := range questions {
+		optionsJSON, err := json.Marshal(question.Options)
+		if err != nil {
+			return err
+		}
+		if err := q.AddQuizQuestion(ctx, dbgen.AddQuizQuestionParams{
+			ID:           uuid.NewString(),
+			QuizID:       quizID,
+			Ordinal:      int64(i),
+			Text:         question.Text,
+			OptionsJson:  string(optionsJSON),
+			CorrectIndex: int64(question.CorrectIndex),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncQuizLinks mirrors syncLessonLinks for quiz_links — a quiz's description
+// can [[id]]-link library items and lessons the same way a lesson's content
+// can.
+func (s *Store) syncQuizLinks(ctx context.Context, q *dbgen.Queries, quizID, description string) error {
+	if err := q.DeleteQuizLinks(ctx, quizID); err != nil {
+		return err
+	}
+	for _, ref := range extractWikiRefs(description) {
+		targetType := ""
+		if _, err := q.GetLibraryItem(ctx, ref); err == nil {
+			targetType = "library_item"
+		} else if _, err := q.GetLesson(ctx, ref); err == nil {
+			targetType = "lesson"
+		}
+		if targetType == "" {
+			continue
+		}
+		if err := q.AddQuizLink(ctx, dbgen.AddQuizLinkParams{
+			SourceQuizID: quizID, TargetID: ref, TargetType: targetType,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetQuizLinks resolves the library items and lessons quizID links to via
+// quiz_links — scoped to just this quiz.
+func (s *Store) GetQuizLinks(ctx context.Context, quizID string) ([]models.LibraryItem, []models.LessonUsage, error) {
+	itemRows, err := s.queries.GetQuizLinkedLibraryItems(ctx, quizID)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]models.LibraryItem, len(itemRows))
+	for i, r := range itemRows {
+		items[i] = libraryItemFromRow(libraryItemRow{
+			ID: r.ID, Title: r.Title, Type: r.Type, Category: r.Category, SizeKb: r.SizeKb,
+			MimeType: r.MimeType, OriginalFilename: r.OriginalFilename, UploadedAt: r.UploadedAt,
+			ModifiedAt: r.ModifiedAt, Duration: r.Duration, Resolution: r.Resolution,
+			FilePath: r.FilePath, UploadedByName: r.UploadedByName,
+		})
+	}
+
+	lessonRows, err := s.queries.GetQuizLinkedLessons(ctx, quizID)
+	if err != nil {
+		return nil, nil, err
+	}
+	lessons := make([]models.LessonUsage, len(lessonRows))
+	for i, r := range lessonRows {
+		lessons[i] = models.LessonUsage{
+			LessonID:    r.ID,
+			CourseID:    r.CourseID,
+			LessonTitle: r.Title,
+			CourseTitle: r.CourseTitle,
+		}
+	}
+	return items, lessons, nil
 }
 
 // --- Sync log ---

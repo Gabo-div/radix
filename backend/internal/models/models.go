@@ -40,10 +40,16 @@ type QuizQuestion struct {
 	CorrectIndex int      `json:"correctIndex"`
 }
 
+// Quiz.LessonID is optional — quizzes stand on their own inside a course (the
+// course's "Cuestionarios" tab) and can additionally attach to at most one
+// lesson (enforced by idx_quizzes_lesson_unique).
 type Quiz struct {
-	ID        string         `json:"id"`
-	LessonID  string         `json:"lessonId"`
-	Questions []QuizQuestion `json:"questions"`
+	ID          string         `json:"id"`
+	CourseID    string         `json:"courseId"`
+	LessonID    *string        `json:"lessonId"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Questions   []QuizQuestion `json:"questions"`
 }
 
 type Lesson struct {

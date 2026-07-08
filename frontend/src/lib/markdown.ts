@@ -46,3 +46,21 @@ export function extractWikiRefs(text: string): string[] {
   }
   return [...new Set(ids)];
 }
+
+export interface WikiSegment {
+  type: "md" | "wiki";
+  value: string;
+}
+
+// Splits text into markdown chunks and [[id]] wiki-link refs, in order — used
+// by lesson/quiz viewers to interleave ReactMarkdown with inline embeds.
+export function splitWikiSegments(text: string): WikiSegment[] {
+  const parts = text.split(/(\[\[[\w-]+\]\])/g);
+  const segments: WikiSegment[] = [];
+  for (const part of parts) {
+    const m = part.match(/^\[\[([\w-]+)\]\]$/);
+    if (m) segments.push({ type: "wiki", value: m[1] });
+    else if (part) segments.push({ type: "md", value: part });
+  }
+  return segments;
+}

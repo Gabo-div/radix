@@ -7,19 +7,29 @@ package dbgen
 
 import (
 	"context"
+	"database/sql"
 )
 
 const addQuiz = `-- name: AddQuiz :exec
-INSERT INTO quizzes (id, lesson_id) VALUES (?, ?)
+INSERT INTO quizzes (id, course_id, lesson_id, title, description) VALUES (?, ?, ?, ?, ?)
 `
 
 type AddQuizParams struct {
-	ID       string
-	LessonID string
+	ID          string
+	CourseID    string
+	LessonID    sql.NullString
+	Title       string
+	Description string
 }
 
 func (q *Queries) AddQuiz(ctx context.Context, arg AddQuizParams) error {
-	_, err := q.db.ExecContext(ctx, addQuiz, arg.ID, arg.LessonID)
+	_, err := q.db.ExecContext(ctx, addQuiz,
+		arg.ID,
+		arg.CourseID,
+		arg.LessonID,
+		arg.Title,
+		arg.Description,
+	)
 	return err
 }
 
@@ -49,14 +59,29 @@ func (q *Queries) AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams
 	return err
 }
 
+const deleteQuizQuestions = `-- name: DeleteQuizQuestions :exec
+DELETE FROM quiz_questions WHERE quiz_id = ?
+`
+
+func (q *Queries) DeleteQuizQuestions(ctx context.Context, quizID string) error {
+	_, err := q.db.ExecContext(ctx, deleteQuizQuestions, quizID)
+	return err
+}
+
 const getQuiz = `-- name: GetQuiz :one
-SELECT id, lesson_id FROM quizzes WHERE id = ?
+SELECT id, course_id, lesson_id, title, description FROM quizzes WHERE id = ?
 `
 
 func (q *Queries) GetQuiz(ctx context.Context, id string) (Quiz, error) {
 	row := q.db.QueryRowContext(ctx, getQuiz, id)
 	var i Quiz
-	err := row.Scan(&i.ID, &i.LessonID)
+	err := row.Scan(
+		&i.ID,
+		&i.CourseID,
+		&i.LessonID,
+		&i.Title,
+		&i.Description,
+	)
 	return i, err
 }
 
@@ -92,4 +117,52 @@ func (q *Queries) GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQu
 		return nil, err
 	}
 	return items, nil
+}
+
+const getQuizzesForCourse = `-- name: GetQuizzesForCourse :many
+SELECT id, course_id, lesson_id, title, description FROM quizzes WHERE course_id = ? ORDER BY rowid
+`
+
+func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error) {
+	rows, err := q.db.QueryContext(ctx, getQuizzesForCourse, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Quiz
+	for rows.Next() {
+		var i Quiz
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.LessonID,
+			&i.Title,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateQuiz = `-- name: UpdateQuiz :exec
+UPDATE quizzes SET title = ?, description = ? WHERE id = ?
+`
+
+type UpdateQuizParams struct {
+	Title       string
+	Description string
+	ID          string
+}
+
+func (q *Queries) UpdateQuiz(ctx context.Context, arg UpdateQuizParams) error {
+	_, err := q.db.ExecContext(ctx, updateQuiz, arg.Title, arg.Description, arg.ID)
+	return err
 }

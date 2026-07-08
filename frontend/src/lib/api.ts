@@ -110,10 +110,18 @@ export const api = {
   getLessonLinks: (id: string) =>
     request<{ libraryItems: LibraryItem[]; lessons: LessonUsage[] }>(`/api/v1/lessons/${id}/links`),
 
-  createQuiz: (lessonId: string, questions: Quiz["questions"]) =>
-    request<Quiz>("/api/v1/quizzes", { method: "POST", body: JSON.stringify({ lessonId, questions }) }),
+  createQuiz: (data: { courseId?: string; lessonId?: string | null; title: string; description?: string; questions: Quiz["questions"] }) =>
+    request<Quiz>("/api/v1/quizzes", { method: "POST", body: JSON.stringify(data) }),
+
+  updateQuiz: (id: string, data: { title?: string; description?: string; questions?: Quiz["questions"] }) =>
+    request<Quiz>(`/api/v1/quizzes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 
   getQuiz: (id: string) => request<Quiz>(`/api/v1/quizzes/${id}`),
+
+  getCourseQuizzes: (courseId: string) => request<Quiz[]>(`/api/v1/courses/${courseId}/quizzes`),
+
+  getQuizLinks: (id: string) =>
+    request<{ libraryItems: LibraryItem[]; lessons: LessonUsage[] }>(`/api/v1/quizzes/${id}/links`),
 
   submitQuiz: (id: string, answers: number[]) =>
     request<QuizSubmitResponse>(`/api/v1/quizzes/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) }),

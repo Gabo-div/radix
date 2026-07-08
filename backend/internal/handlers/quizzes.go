@@ -11,21 +11,44 @@ import (
 	"radix-backend/internal/store"
 )
 
+// CreateQuiz makes a quiz that stands on its own inside a course (courseId
+// required) and can optionally also attach to one of that course's lessons
+// (lessonId) — a lesson's tied quiz is just a quiz with lessonId set, not a
+// different kind of object.
 func (h *Handler) CreateQuiz(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req struct {
-		LessonID  string                `json:"lessonId"`
-		Questions []models.QuizQuestion `json:"questions"`
+		CourseID    string                `json:"courseId"`
+		LessonID    *string               `json:"lessonId"`
+		Title       string                `json:"title"`
+		Description string                `json:"description"`
+		Questions   []models.QuizQuestion `json:"questions"`
 	}
 	if err := c.Bind(&req); err != nil {
 		return httpx.BadRequest(c, "invalid request")
 	}
-	if _, err := h.Store.GetLesson(ctx, req.LessonID); err != nil {
-		return httpx.NotFound(c, "lesson not found")
+
+	courseID := req.CourseID
+	if req.LessonID != nil {
+		lesson, err := h.Store.GetLesson(ctx, *req.LessonID)
+		if err != nil {
+			return httpx.NotFound(c, "lesson not found")
+		}
+		courseID = lesson.CourseID
 	}
+	if courseID == "" {
+		return httpx.BadRequest(c, "courseId or lessonId is required")
+	}
+	if _, err := h.Store.GetCourse(ctx, courseID); err != nil {
+		return httpx.NotFound(c, "course not found")
+	}
+
 	quiz := &models.Quiz{
-		LessonID:  req.LessonID,
-		Questions: req.Questions,
+		CourseID:    courseID,
+		LessonID:    req.LessonID,
+		Title:       req.Title,
+		Description: req.Description,
+		Questions:   req.Questions,
 	}
 	if err := h.Store.AddQuiz(ctx, quiz); err != nil {
 		return httpx.InternalError(c, "failed to create quiz")
@@ -33,6 +56,75 @@ func (h *Handler) CreateQuiz(c *echo.Context) error {
 
 	h.Store.EnqueueSync(ctx, "ADD_QUIZ: "+quiz.ID)
 	return httpx.OK(c, http.StatusCreated, quiz)
+}
+
+// GetCourseQuizzes lists the standalone + lesson-tied quizzes for a course —
+// backs the course page's "Cuestionarios" tab.
+func (h *Handler) GetCourseQuizzes(c *echo.Context) error {
+	ctx := c.Request().Context()
+	courseID := c.Param("id")
+	quizzes, err := h.Store.GetQuizzesForCourse(ctx, courseID)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load quizzes")
+	}
+	if quizzes == nil {
+		quizzes = []*models.Quiz{}
+	}
+	return httpx.OK(c, http.StatusOK, quizzes)
+}
+
+func (h *Handler) UpdateQuiz(c *echo.Context) error {
+	ctx := c.Request().Context()
+	id := c.Param("id")
+	quiz, err := h.Store.GetQuiz(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return httpx.NotFound(c, "quiz not found")
+		}
+		return httpx.InternalError(c, "failed to load quiz")
+	}
+	var req struct {
+		Title       *string               `json:"title"`
+		Description *string               `json:"description"`
+		Questions   []models.QuizQuestion `json:"questions"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return httpx.BadRequest(c, "invalid request")
+	}
+	if req.Title != nil {
+		quiz.Title = *req.Title
+	}
+	if req.Description != nil {
+		quiz.Description = *req.Description
+	}
+	if req.Questions != nil {
+		quiz.Questions = req.Questions
+	}
+	if err := h.Store.UpdateQuiz(ctx, quiz); err != nil {
+		return httpx.InternalError(c, "failed to update quiz")
+	}
+	h.Store.EnqueueSync(ctx, "UPDATE_QUIZ: "+id)
+	return httpx.OK(c, http.StatusOK, quiz)
+}
+
+// GetQuizLinks resolves the library items and lessons this quiz's description
+// links to via [[id]] wiki-links — mirrors GetLessonLinks.
+func (h *Handler) GetQuizLinks(c *echo.Context) error {
+	id := c.Param("id")
+	items, lessons, err := h.Store.GetQuizLinks(c.Request().Context(), id)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load quiz links")
+	}
+	if items == nil {
+		items = []models.LibraryItem{}
+	}
+	if lessons == nil {
+		lessons = []models.LessonUsage{}
+	}
+	return httpx.OK(c, http.StatusOK, map[string]interface{}{
+		"libraryItems": items,
+		"lessons":      lessons,
+	})
 }
 
 func (h *Handler) GetQuiz(c *echo.Context) error {
@@ -91,15 +183,18 @@ func (h *Handler) SubmitQuiz(c *echo.Context) error {
 		return httpx.InternalError(c, "failed to load user")
 	}
 	user.Points += earnedXP
-	alreadyCompleted := false
-	for _, lid := range user.CompletedLessons {
-		if lid == quiz.LessonID {
-			alreadyCompleted = true
-			break
+	// Standalone quizzes (no lessonId) aren't a lesson-completion gate — just XP.
+	if quiz.LessonID != nil {
+		alreadyCompleted := false
+		for _, lid := range user.CompletedLessons {
+			if lid == *quiz.LessonID {
+				alreadyCompleted = true
+				break
+			}
 		}
-	}
-	if !alreadyCompleted {
-		user.CompletedLessons = append(user.CompletedLessons, quiz.LessonID)
+		if !alreadyCompleted {
+			user.CompletedLessons = append(user.CompletedLessons, *quiz.LessonID)
+		}
 	}
 	if err := h.Store.UpdateUser(ctx, user); err != nil {
 		return httpx.InternalError(c, "failed to update user")

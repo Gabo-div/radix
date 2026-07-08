@@ -32,7 +32,10 @@ export interface QuizQuestion {
 
 export interface Quiz {
   id: string;
-  lessonId: string;
+  courseId: string;
+  lessonId: string | null;
+  title: string;
+  description: string;
   questions: QuizQuestion[];
 }
 

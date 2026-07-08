@@ -102,21 +102,21 @@ func Data(ctx context.Context, s *store.Store) error {
 		return err
 	}
 
-	if err := s.AddQuiz(ctx, &models.Quiz{LessonID: l1.ID, Questions: []models.QuizQuestion{
+	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c1.ID, LessonID: &l1.ID, Title: "Evaluación: Célula", Questions: []models.QuizQuestion{
 		{Text: "¿Quién fue el primero en observar células utilizando un microscopio?", Options: []string{"Anton van Leeuwenhoek", "Robert Hooke", "Louis Pasteur", "Gregor Mendel"}, CorrectIndex: 1},
 		{Text: "¿Cuál de las siguientes NO es una característica de las células procariotas?", Options: []string{"Carecen de núcleo definido", "Poseen pared celular", "Tienen mitocondrias", "Su ADN está disperso en el citoplasma"}, CorrectIndex: 2},
 		{Text: "¿Qué establece la teoría celular?", Options: []string{"Todas las células tienen núcleo", "Los virus son células", "Toda célula proviene de otra preexistente", "Las células sólo existen en animales"}, CorrectIndex: 2},
 	}}); err != nil {
 		return err
 	}
-	if err := s.AddQuiz(ctx, &models.Quiz{LessonID: l3.ID, Questions: []models.QuizQuestion{
+	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c2.ID, LessonID: &l3.ID, Title: "Evaluación: Lógica Proposicional", Questions: []models.QuizQuestion{
 		{Text: "¿Cuál de los siguientes NO es un conectivo lógico fundamental?", Options: []string{"Conjunción (∧)", "Disyunción (∨)", "Multiplicación (×)", "Implicación (→)"}, CorrectIndex: 2},
 		{Text: "¿Qué herramienta se utiliza para determinar el valor de verdad de una proposición compuesta?", Options: []string{"Diagrama de Venn", "Tabla de verdad", "Árbol de decisión", "Matriz booleana"}, CorrectIndex: 1},
 		{Text: "Una proposición es...", Options: []string{"Una pregunta", "Una afirmación que puede ser verdadera o falsa", "Un comando", "Una expresión matemática"}, CorrectIndex: 1},
 	}}); err != nil {
 		return err
 	}
-	if err := s.AddQuiz(ctx, &models.Quiz{LessonID: l5.ID, Questions: []models.QuizQuestion{
+	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c3.ID, LessonID: &l5.ID, Title: "Evaluación: Revolución Francesa", Questions: []models.QuizQuestion{
 		{Text: "¿En qué año comenzó la Revolución Francesa?", Options: []string{"1776", "1789", "1799", "1804"}, CorrectIndex: 1},
 		{Text: "¿Qué documento estableció los principios de libertad, igualdad y fraternidad?", Options: []string{"La Constitución de 1791", "El Código Napoleónico", "La Declaración de los Derechos del Hombre y del Ciudadano", "La Carta Magna"}, CorrectIndex: 2},
 		{Text: "¿Qué evento simbólico marcó el inicio de la Revolución Francesa?", Options: []string{"La ejecución de Luis XVI", "La Toma de la Bastilla", "El golpe de estado de Napoleón", "La firma del Tratado de Versalles"}, CorrectIndex: 1},

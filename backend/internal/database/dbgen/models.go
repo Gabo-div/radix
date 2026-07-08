@@ -45,8 +45,17 @@ type LibraryItem struct {
 }
 
 type Quiz struct {
-	ID       string
-	LessonID string
+	ID          string
+	CourseID    string
+	LessonID    sql.NullString
+	Title       string
+	Description string
+}
+
+type QuizLink struct {
+	SourceQuizID string
+	TargetID     string
+	TargetType   string
 }
 
 type QuizQuestion struct {

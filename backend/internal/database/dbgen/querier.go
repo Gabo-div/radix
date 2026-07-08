@@ -15,6 +15,7 @@ type Querier interface {
 	AddLessonLink(ctx context.Context, arg AddLessonLinkParams) error
 	AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) error
 	AddQuiz(ctx context.Context, arg AddQuizParams) error
+	AddQuizLink(ctx context.Context, arg AddQuizLinkParams) error
 	AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams) error
 	AddServerLog(ctx context.Context, arg AddServerLogParams) error
 	AddSyncLog(ctx context.Context, arg AddSyncLogParams) error
@@ -26,6 +27,8 @@ type Querier interface {
 	DeleteCompletedLessons(ctx context.Context, userID string) error
 	DeleteLessonLinks(ctx context.Context, sourceLessonID string) error
 	DeleteOldServerLogs(ctx context.Context, timestamp string) (int64, error)
+	DeleteQuizLinks(ctx context.Context, sourceQuizID string) error
+	DeleteQuizQuestions(ctx context.Context, quizID string) error
 	GetAllLessonsWithCourse(ctx context.Context) ([]GetAllLessonsWithCourseRow, error)
 	GetCompletedLessonIDs(ctx context.Context, userID string) ([]string, error)
 	GetCourse(ctx context.Context, id string) (Course, error)
@@ -38,7 +41,10 @@ type Querier interface {
 	GetLinkedLessons(ctx context.Context, sourceLessonID string) ([]GetLinkedLessonsRow, error)
 	GetLinkedLibraryItems(ctx context.Context, sourceLessonID string) ([]GetLinkedLibraryItemsRow, error)
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
+	GetQuizLinkedLessons(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLessonsRow, error)
+	GetQuizLinkedLibraryItems(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLibraryItemsRow, error)
 	GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error)
+	GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error)
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByRole(ctx context.Context, role string) (User, error)
@@ -48,6 +54,7 @@ type Querier interface {
 	TotalDiskKB(ctx context.Context) (interface{}, error)
 	UpdateLesson(ctx context.Context, arg UpdateLessonParams) error
 	UpdateLibraryItem(ctx context.Context, arg UpdateLibraryItemParams) error
+	UpdateQuiz(ctx context.Context, arg UpdateQuizParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 }
 

@@ -1,31 +1,29 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { LibraryItem, LessonUsage } from "../types";
 import { extractWikiRefs } from "../lib/markdown";
-import { Card, Button, Badge } from "../components/ui";
+import { Card, Button } from "../components/ui";
 import MarkdownEditor from "../components/MarkdownEditor";
 import QuizQuestionsEditor from "../components/QuizQuestionsEditor";
 import FilePickerModal from "../components/common/FilePickerModal";
 import LessonPickerModal from "../components/common/LessonPickerModal";
-import { ArrowLeft, Save, FileQuestion, Paperclip, BookOpen, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save, Paperclip, BookOpen, CheckCircle } from "lucide-react";
 
-export default function LessonEditor() {
-  const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
-  const isEditing = !!lessonId;
+export default function QuizEditor() {
+  const { courseId, quizId } = useParams<{ courseId: string; quizId?: string }>();
+  const isEditing = !!quizId;
   const navigate = useNavigate();
   const [course, setCourse] = useState<any>(null);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [allLessons, setAllLessons] = useState<LessonUsage[]>([]);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [loadingLesson, setLoadingLesson] = useState(isEditing);
+  const [description, setDescription] = useState("");
+  const [questions, setQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
+  const [loadingQuiz, setLoadingQuiz] = useState(isEditing);
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
-  const [showQuizSection, setShowQuizSection] = useState(false);
-  const [quizQuestions, setQuizQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
-  const [existingQuiz, setExistingQuiz] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -34,79 +32,68 @@ export default function LessonEditor() {
     api.getCourse(courseId).then((d) => setCourse(d.course)).catch(() => {});
     api.getLibrary().then(setLibrary).catch(() => {});
     api.getAllLessons().then(setAllLessons).catch(() => {});
-    if (lessonId) {
-      api.getLesson(courseId, lessonId).then((d) => {
-        setTitle(d.lesson.title);
-        setContent(d.lesson.contentText);
-        if (d.quiz) {
-          setQuizQuestions(d.quiz.questions);
-          setShowQuizSection(true);
-          setExistingQuiz({ id: d.quiz.id });
-        }
-        setLoadingLesson(false);
-      }).catch(() => setLoadingLesson(false));
+    if (quizId) {
+      api.getQuiz(quizId).then((q) => {
+        setTitle(q.title);
+        setDescription(q.description);
+        setQuestions(q.questions);
+        setLoadingQuiz(false);
+      }).catch(() => setLoadingQuiz(false));
     }
-  }, [courseId, lessonId]);
+  }, [courseId, quizId]);
 
-  const wikiRefs = useMemo(() => extractWikiRefs(content), [content]);
+  const wikiRefs = useMemo(() => extractWikiRefs(description), [description]);
   const linkedItems = useMemo(() => library.filter((li) => wikiRefs.includes(li.id)), [wikiRefs, library]);
-  const linkedLessons = useMemo(
-    () => allLessons.filter((l) => wikiRefs.includes(l.lessonId) && l.lessonId !== lessonId),
-    [wikiRefs, allLessons, lessonId]
-  );
+  const linkedLessons = useMemo(() => allLessons.filter((l) => wikiRefs.includes(l.lessonId)), [wikiRefs, allLessons]);
 
   const showMsg = (text: string) => { setMsg(text); setTimeout(() => setMsg(""), 3000); };
 
   const insertWikiLink = (id: string) => {
-    setContent((prev) => prev + `[[${id}]]`);
+    setDescription((prev) => prev + `[[${id}]]`);
     setShowFilePicker(false);
     setShowLessonPicker(false);
   };
 
   const handleSave = async () => {
-    if (!courseId || !title || !content) { alert("Título y contenido son obligatorios."); return; }
+    if (!courseId || !title || !questions[0].text) { alert("Título y al menos una pregunta son obligatorios."); return; }
     setSaving(true);
     try {
-      if (isEditing && lessonId) {
-        await api.updateLesson(lessonId, title, content);
-        showMsg("Lección actualizada exitosamente");
-        setTimeout(() => navigate(`/courses/${courseId}`), 1000);
+      if (isEditing && quizId) {
+        await api.updateQuiz(quizId, { title, description, questions });
+        showMsg("Cuestionario actualizado exitosamente");
       } else {
-        const lesson = await api.addLesson(courseId, title, content);
-        if (showQuizSection && quizQuestions[0].text) {
-          await api.createQuiz({ lessonId: lesson.id, title: `Evaluación: ${title}`, questions: quizQuestions });
-        }
-        showMsg("Lección creada exitosamente");
-        setTimeout(() => navigate(`/courses/${courseId}`), 1000);
+        await api.createQuiz({ courseId, title, description, questions });
+        showMsg("Cuestionario creado exitosamente");
       }
+      setTimeout(() => navigate(`/courses/${courseId}?tab=quizzes`), 1000);
     } catch (err) {
       alert("Error: " + (err as Error).message);
     }
     setSaving(false);
   };
 
-  if (loadingLesson) return <p className="text-slate-400">Cargando lección...</p>;
+  if (loadingQuiz) return <p className="text-slate-400">Cargando cuestionario...</p>;
 
   return (
     <div className="space-y-6">
       {showFilePicker && <FilePickerModal onSelect={insertWikiLink} onClose={() => setShowFilePicker(false)} />}
       {showLessonPicker && (
-        <LessonPickerModal currentLessonId={lessonId} onSelect={insertWikiLink} onClose={() => setShowLessonPicker(false)} />
+        <LessonPickerModal onSelect={insertWikiLink} onClose={() => setShowLessonPicker(false)} />
       )}
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
             <ArrowLeft size={16} /> Volver
           </Link>
           <span className="text-slate-600">/</span>
           <span className="text-sm text-slate-300">{course?.title || "Cargando..."}</span>
           <span className="text-slate-600">/</span>
-          <h1 className="text-lg font-bold text-white">{isEditing ? "Editar Lección" : "Nueva Lección"}</h1>
+          <h1 className="text-lg font-bold text-white">{isEditing ? "Editar Cuestionario" : "Nuevo Cuestionario"}</h1>
         </div>
         <Button onClick={handleSave} disabled={saving} variant={saving ? "secondary" : "success"}>
           <Save size={16} className="mr-1.5 inline" />
-          {saving ? "Guardando..." : isEditing ? "Actualizar Lección" : "Guardar Lección"}
+          {saving ? "Guardando..." : isEditing ? "Actualizar Cuestionario" : "Guardar Cuestionario"}
         </Button>
       </div>
 
@@ -118,15 +105,15 @@ export default function LessonEditor() {
 
       <div className="flex gap-6">
         <div className="flex-1 min-w-0 space-y-6">
-          <input type="text" placeholder="Título de la lección" value={title}
+          <input type="text" placeholder="Título del cuestionario" value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" required />
 
           <Card>
-            <h2 className="text-sm font-medium text-slate-300 mb-4">Contenido</h2>
+            <h2 className="text-sm font-medium text-slate-300 mb-4">Descripción (opcional)</h2>
             <MarkdownEditor
-              value={content}
-              onChange={setContent}
+              value={description}
+              onChange={setDescription}
               library={library}
               lessons={allLessons}
               showPreview={showPreview}
@@ -137,17 +124,8 @@ export default function LessonEditor() {
           </Card>
 
           <Card>
-            <button type="button" onClick={() => setShowQuizSection(!showQuizSection)}
-              className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white transition-colors">
-              <FileQuestion size={16} />
-              {showQuizSection ? "Ocultar" : "Agregar"} cuestionario
-            </button>
-
-            {showQuizSection && (
-              <div className="mt-4">
-                <QuizQuestionsEditor questions={quizQuestions} onChange={setQuizQuestions} />
-              </div>
-            )}
+            <h2 className="text-sm font-medium text-slate-300 mb-4">Preguntas</h2>
+            <QuizQuestionsEditor questions={questions} onChange={setQuestions} />
           </Card>
         </div>
 

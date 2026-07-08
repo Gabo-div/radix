@@ -36,6 +36,9 @@ type Store interface {
 
 	GetQuiz(ctx context.Context, id string) (*models.Quiz, error)
 	AddQuiz(ctx context.Context, quiz *models.Quiz) error
+	UpdateQuiz(ctx context.Context, quiz *models.Quiz) error
+	GetQuizzesForCourse(ctx context.Context, courseID string) ([]*models.Quiz, error)
+	GetQuizLinks(ctx context.Context, quizID string) ([]models.LibraryItem, []models.LessonUsage, error)
 
 	GetSyncQueue(ctx context.Context) (models.SyncQueue, error)
 	EnqueueSync(ctx context.Context, action string) error
@@ -78,8 +81,11 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.GET("/lessons/:id/links", h.GetLessonLinks)
 	api.GET("/lessons/:id/usage", h.GetLessonUsage)
 
+	api.GET("/courses/:id/quizzes", h.GetCourseQuizzes)
 	api.POST("/quizzes", h.CreateQuiz, a.RequireRole("admin"))
 	api.GET("/quizzes/:id", h.GetQuiz)
+	api.PUT("/quizzes/:id", h.UpdateQuiz, a.RequireRole("admin"))
+	api.GET("/quizzes/:id/links", h.GetQuizLinks)
 	api.POST("/quizzes/:id/submit", h.SubmitQuiz, a.RequireRole("student"))
 
 	api.GET("/monitor", h.GetMonitor, a.RequireRole("admin"))
