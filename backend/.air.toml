@@ -1,2 +1,4 @@
 [build]
 cmd = "go build -o ./tmp/main ./cmd/server/main.go"
+send_interrupt = true
+kill_delay = "2s"

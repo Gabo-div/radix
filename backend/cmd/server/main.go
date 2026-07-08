@@ -89,6 +89,7 @@ func newEcho(lc fx.Lifecycle, cfg *config.Config, a *auth.Auth, h *handlers.Hand
 	e := echo.New()
 	logger := middleware.NewLogger(baseLogger, logBuf, persister)
 
+	e.Use(middleware.DetachContext)
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
 		AllowOrigins: cfg.CORSOrigins,
 		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
