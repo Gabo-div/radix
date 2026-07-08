@@ -15,8 +15,10 @@ function levelColor(level: string): "emerald" | "amber" | "red" | "slate" {
 }
 
 export default function Logs() {
+  const [tab, setTab] = useState<"live" | "history">("live");
   const [logs, setLogs] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const liveContainerRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true);
 
   const [filters, setFilters] = useState({ level: "", from: "", to: "", q: "" });
   const [results, setResults] = useState<ServerLog[]>([]);
@@ -74,29 +76,57 @@ export default function Logs() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
+  const handleLiveScroll = () => {
+    const el = liveContainerRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+  };
+
+  useEffect(() => {
+    const el = liveContainerRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [logs]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Logs del Servidor</h1>
 
-      <Card>
-        <details className="group" open>
-          <summary className="flex items-center gap-2 text-sm font-medium text-slate-300 cursor-pointer list-none">
+      <div className="flex gap-1 border-b border-slate-700">
+        <button
+          onClick={() => setTab("live")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === "live" ? "border-emerald-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+        >
+          <Terminal size={16} className="text-emerald-400" /> En vivo
+        </button>
+        <button
+          onClick={() => setTab("history")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === "history" ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+        >
+          <BarChart3 size={16} className="text-indigo-400" /> Historial
+        </button>
+      </div>
+
+      {tab === "live" && (
+        <Card>
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
             <Terminal size={16} className="text-emerald-400" />
             En vivo
             <span className="text-xs text-slate-500 ml-auto">{logs.length} líneas</span>
-          </summary>
-          <div className="mt-3 bg-black rounded-lg p-3 font-mono text-xs leading-relaxed max-h-64 overflow-y-auto">
+          </div>
+          <div
+            ref={liveContainerRef}
+            onScroll={handleLiveScroll}
+            className="bg-black rounded-lg p-3 font-mono text-xs leading-relaxed h-96 overflow-y-auto"
+          >
             {logs.length === 0 && <span className="text-slate-600">[GO-SERVER] Esperando logs...</span>}
             {logs.map((line, i) => (
               <div key={i} className="text-slate-300 whitespace-pre-wrap">{line}</div>
             ))}
-            <div ref={logEndRef} />
           </div>
-        </details>
-      </Card>
+        </Card>
+      )}
 
+      {tab === "history" && (
       <Card>
         <h2 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
           <BarChart3 size={16} className="text-indigo-400" /> Historial — Búsqueda y Filtros
@@ -162,6 +192,7 @@ export default function Logs() {
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }
