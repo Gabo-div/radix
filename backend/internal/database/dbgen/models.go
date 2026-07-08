@@ -22,6 +22,12 @@ type Lesson struct {
 	ContentText string
 }
 
+type LessonLink struct {
+	SourceLessonID string
+	TargetID       string
+	TargetType     string
+}
+
 type LibraryItem struct {
 	ID               string
 	Title            string

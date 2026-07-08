@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { LibraryItem } from "../types";
+import type { LibraryItem, LessonUsage } from "../types";
 import { extractWikiRefs } from "../lib/markdown";
 import { Card, Button, Badge } from "../components/ui";
 import MarkdownEditor from "../components/MarkdownEditor";
 import FilePickerModal from "../components/common/FilePickerModal";
-import { ArrowLeft, Save, Plus, FileQuestion, Paperclip, CheckCircle } from "lucide-react";
+import LessonPickerModal from "../components/common/LessonPickerModal";
+import { ArrowLeft, Save, Plus, FileQuestion, Paperclip, BookOpen, CheckCircle } from "lucide-react";
 
 export default function LessonEditor() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
@@ -14,11 +15,13 @@ export default function LessonEditor() {
   const navigate = useNavigate();
   const [course, setCourse] = useState<any>(null);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
+  const [allLessons, setAllLessons] = useState<LessonUsage[]>([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [loadingLesson, setLoadingLesson] = useState(isEditing);
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [showLessonPicker, setShowLessonPicker] = useState(false);
   const [showQuizSection, setShowQuizSection] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
   const [existingQuiz, setExistingQuiz] = useState<{ id: string } | null>(null);
@@ -29,6 +32,7 @@ export default function LessonEditor() {
     if (!courseId) return;
     api.getCourse(courseId).then((d) => setCourse(d.course)).catch(() => {});
     api.getLibrary().then(setLibrary).catch(() => {});
+    api.getAllLessons().then(setAllLessons).catch(() => {});
     if (lessonId) {
       api.getLesson(courseId, lessonId).then((d) => {
         setTitle(d.lesson.title);
@@ -45,12 +49,17 @@ export default function LessonEditor() {
 
   const wikiRefs = useMemo(() => extractWikiRefs(content), [content]);
   const linkedItems = useMemo(() => library.filter((li) => wikiRefs.includes(li.id)), [wikiRefs, library]);
+  const linkedLessons = useMemo(
+    () => allLessons.filter((l) => wikiRefs.includes(l.lessonId) && l.lessonId !== lessonId),
+    [wikiRefs, allLessons, lessonId]
+  );
 
   const showMsg = (text: string) => { setMsg(text); setTimeout(() => setMsg(""), 3000); };
 
-  const insertWikiLink = (fileId: string) => {
-    setContent((prev) => prev + `[[${fileId}]]`);
+  const insertWikiLink = (id: string) => {
+    setContent((prev) => prev + `[[${id}]]`);
     setShowFilePicker(false);
+    setShowLessonPicker(false);
   };
 
   const handleSave = async () => {
@@ -86,6 +95,9 @@ export default function LessonEditor() {
   return (
     <div className="space-y-6">
       {showFilePicker && <FilePickerModal onSelect={insertWikiLink} onClose={() => setShowFilePicker(false)} />}
+      {showLessonPicker && (
+        <LessonPickerModal currentLessonId={lessonId} onSelect={insertWikiLink} onClose={() => setShowLessonPicker(false)} />
+      )}
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -121,10 +133,11 @@ export default function LessonEditor() {
               value={content}
               onChange={setContent}
               library={library}
+              lessons={allLessons}
               showPreview={showPreview}
               onTogglePreview={() => setShowPreview(!showPreview)}
               onAttachClick={() => setShowFilePicker(true)}
-              
+              onAttachLessonClick={() => setShowLessonPicker(true)}
             />
           </Card>
 
@@ -184,6 +197,25 @@ export default function LessonEditor() {
                       <p className="text-slate-500 text-[10px]">{item.id}</p>
                     </div>
                     <Link to={`/library/${item.id}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {linkedLessons.length > 0 && (
+            <Card>
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+                <BookOpen size={14} /> Lecciones Enlazadas
+              </h3>
+              <div className="space-y-2">
+                {linkedLessons.map((lesson) => (
+                  <div key={lesson.lessonId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white truncate">{lesson.lessonTitle}</p>
+                      <p className="text-slate-500 text-[10px]">{lesson.courseTitle}</p>
+                    </div>
+                    <Link to={`/courses/${lesson.courseId}/lessons/${lesson.lessonId}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>

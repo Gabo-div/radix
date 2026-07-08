@@ -102,6 +102,14 @@ export const api = {
   getLibraryItemUsage: (id: string) =>
     request<LessonUsage[]>(`/api/v1/library/${id}/usage`),
 
+  getAllLessons: () => request<LessonUsage[]>("/api/v1/lessons"),
+
+  getLessonUsage: (id: string) =>
+    request<LessonUsage[]>(`/api/v1/lessons/${id}/usage`),
+
+  getLessonLinks: (id: string) =>
+    request<{ libraryItems: LibraryItem[]; lessons: LessonUsage[] }>(`/api/v1/lessons/${id}/links`),
+
   createQuiz: (lessonId: string, questions: Quiz["questions"]) =>
     request<Quiz>("/api/v1/quizzes", { method: "POST", body: JSON.stringify({ lessonId, questions }) }),
 

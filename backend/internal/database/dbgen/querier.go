@@ -12,6 +12,7 @@ type Querier interface {
 	AddCompletedLesson(ctx context.Context, arg AddCompletedLessonParams) error
 	AddCourse(ctx context.Context, arg AddCourseParams) error
 	AddLesson(ctx context.Context, arg AddLessonParams) error
+	AddLessonLink(ctx context.Context, arg AddLessonLinkParams) error
 	AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) error
 	AddQuiz(ctx context.Context, arg AddQuizParams) error
 	AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams) error
@@ -23,15 +24,19 @@ type Querier interface {
 	CountServerLogsTotal(ctx context.Context, arg CountServerLogsTotalParams) (int64, error)
 	CountSyncLog(ctx context.Context) (int64, error)
 	DeleteCompletedLessons(ctx context.Context, userID string) error
+	DeleteLessonLinks(ctx context.Context, sourceLessonID string) error
 	DeleteOldServerLogs(ctx context.Context, timestamp string) (int64, error)
+	GetAllLessonsWithCourse(ctx context.Context) ([]GetAllLessonsWithCourseRow, error)
 	GetCompletedLessonIDs(ctx context.Context, userID string) ([]string, error)
 	GetCourse(ctx context.Context, id string) (Course, error)
 	GetCourses(ctx context.Context) ([]Course, error)
 	GetLesson(ctx context.Context, id string) (GetLessonRow, error)
 	GetLessonsForCourse(ctx context.Context, courseID string) ([]GetLessonsForCourseRow, error)
-	GetLessonsReferencingLibraryItem(ctx context.Context, contentText string) ([]GetLessonsReferencingLibraryItemRow, error)
+	GetLessonsLinkingToTarget(ctx context.Context, targetID string) ([]GetLessonsLinkingToTargetRow, error)
 	GetLibraryItem(ctx context.Context, id string) (GetLibraryItemRow, error)
 	GetLibraryItems(ctx context.Context) ([]GetLibraryItemsRow, error)
+	GetLinkedLessons(ctx context.Context, sourceLessonID string) ([]GetLinkedLessonsRow, error)
+	GetLinkedLibraryItems(ctx context.Context, sourceLessonID string) ([]GetLinkedLibraryItemsRow, error)
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
 	GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error)
 	GetUser(ctx context.Context, id string) (User, error)

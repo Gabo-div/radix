@@ -80,3 +80,11 @@ CREATE INDEX idx_server_logs_timestamp ON server_logs(timestamp);
 CREATE INDEX idx_server_logs_level ON server_logs(level);
 
 CREATE VIRTUAL TABLE server_logs_fts USING fts5(message, content='server_logs', content_rowid='id');
+
+CREATE TABLE lesson_links (
+    source_lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    target_id        TEXT NOT NULL,
+    target_type      TEXT NOT NULL CHECK (target_type IN ('library_item', 'lesson')),
+    PRIMARY KEY (source_lesson_id, target_id)
+);
+CREATE INDEX idx_lesson_links_target ON lesson_links(target_id);

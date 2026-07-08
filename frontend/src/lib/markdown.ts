@@ -1,4 +1,4 @@
-import type { LibraryItem } from "../types";
+import type { LibraryItem, LessonUsage } from "../types";
 
 const wikiLinkRe = /\[\[([\w-]+)\]\]/g;
 const headingRe = /^(#{1,3})\s+(.+)$/gm;
@@ -9,14 +9,18 @@ export interface TocEntry {
   id: string;
 }
 
-export function preprocessWikiLinks(text: string, items: LibraryItem[]): string {
+export function preprocessWikiLinks(text: string, items: LibraryItem[], lessons: LessonUsage[] = []): string {
   const map: Record<string, LibraryItem> = {};
   for (const item of items) map[item.id] = item;
+  const lessonMap: Record<string, LessonUsage> = {};
+  for (const lesson of lessons) lessonMap[lesson.lessonId] = lesson;
 
   return text.replace(wikiLinkRe, (_, id: string) => {
     const item = map[id];
-    const title = item?.title || id;
-    return `[${title}](/library/${id})`;
+    if (item) return `[${item.title}](/library/${id})`;
+    const lesson = lessonMap[id];
+    if (lesson) return `[${lesson.lessonTitle}](/courses/${lesson.courseId}/lessons/${id})`;
+    return `[${id}](/library/${id})`;
   });
 }
 

@@ -5,17 +5,16 @@ import remarkGfm from "remark-gfm";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { canTakeQuiz, canSeeQuiz, canEdit } from "../lib/rbac";
-import { extractToc, extractWikiRefs } from "../lib/markdown";
+import { extractToc } from "../lib/markdown";
 import type { TocEntry } from "../lib/markdown";
-import type { LibraryItem } from "../types";
+import type { LibraryItem, LessonUsage } from "../types";
 import { Card, Button, Badge } from "../components/ui";
 import LessonSidebar from "../components/layout/LessonSidebar";
 import InlineMedia from "../components/InlineMedia";
+import InlineLesson from "../components/InlineLesson";
 import { ArrowLeft, Edit, CheckCircle, XCircle } from "lucide-react";
 
-const wikiLinkRe = /\[\[([\w-]+)\]\]/g;
-
-function renderContent(text: string, items: LibraryItem[]) {
+function renderContent(text: string) {
   const parts = text.split(/(\[\[[\w-]+\]\])/g);
   const segments: { type: "md" | "wiki"; value: string }[] = [];
   for (const part of parts) {
@@ -31,7 +30,9 @@ export default function LessonViewer() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<{ lesson: any; quiz?: any } | null>(null);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
+  const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
+  const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
+  const [usage, setUsage] = useState<LessonUsage[]>([]);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<{ score: number; earnedXP: number; correct: number; total: number; passed: boolean; totalPoints: number } | null>(null);
@@ -43,7 +44,12 @@ export default function LessonViewer() {
         setData(d);
         if (d.quiz) setAnswers(new Array(d.quiz.questions.length).fill(-1));
       }).catch(() => { });
-      api.getLibrary().then(setLibrary).catch(() => { });
+      // Scoped to this lesson's own [[id]] refs — not a full library/lesson fetch.
+      api.getLessonLinks(lessonId).then(({ libraryItems, lessons }) => {
+        setLinkedItems(libraryItems);
+        setLinkedLessons(lessons);
+      }).catch(() => { });
+      api.getLessonUsage(lessonId).then(setUsage).catch(() => { });
     }
   };
 
@@ -67,16 +73,25 @@ export default function LessonViewer() {
   const isAdmin = currentUser && canEdit(currentUser.role);
 
   const lessonText = data?.lesson?.contentText || "";
-  const wikiRefs = extractWikiRefs(lessonText);
-  const linkedItems = library.filter((li) => wikiRefs.includes(li.id));
+  const relatedLessons = useMemo(() => {
+    const map: Record<string, LessonUsage> = {};
+    for (const l of [...linkedLessons, ...usage]) if (l.lessonId !== lessonId) map[l.lessonId] = l;
+    return Object.values(map);
+  }, [linkedLessons, usage, lessonId]);
   const toc: TocEntry[] = extractToc(lessonText);
-  const segments = useMemo(() => renderContent(lessonText, library), [lessonText, library]);
+  const segments = useMemo(() => renderContent(lessonText), [lessonText]);
 
   const itemMap = useMemo(() => {
     const m: Record<string, LibraryItem> = {};
-    for (const item of library) m[item.id] = item;
+    for (const item of linkedItems) m[item.id] = item;
     return m;
-  }, [library]);
+  }, [linkedItems]);
+
+  const lessonMap = useMemo(() => {
+    const m: Record<string, LessonUsage> = {};
+    for (const l of linkedLessons) m[l.lessonId] = l;
+    return m;
+  }, [linkedLessons]);
 
   if (!data) return <p className="text-slate-400">Cargando lección...</p>;
 
@@ -106,9 +121,10 @@ export default function LessonViewer() {
                   seg.type === "wiki" ? (
                     (() => {
                       const item = itemMap[seg.value];
-                      return item ? (
-                        <InlineMedia key={i} item={item} />
-                      ) : (
+                      if (item) return <InlineMedia key={i} item={item} />;
+                      const lesson = lessonMap[seg.value];
+                      if (lesson) return <InlineLesson key={i} lesson={lesson} />;
+                      return (
                         <span key={i} className="text-red-400 text-sm bg-red-900/20 px-1 rounded">[[{seg.value} no encontrado]]</span>
                       );
                     })()
@@ -207,7 +223,7 @@ export default function LessonViewer() {
           </div>
 
           <div className="min-w-64 shrink-0 hidden lg:block">
-            <LessonSidebar toc={toc} linkedItems={linkedItems} />
+            <LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={relatedLessons} />
           </div>
         </div>
       </div>

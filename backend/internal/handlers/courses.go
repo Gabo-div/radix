@@ -118,6 +118,54 @@ func (h *Handler) GetLesson(c *echo.Context) error {
 	return httpx.OK(c, http.StatusOK, resp)
 }
 
+// GetAllLessons lists every lesson across all courses — used by the frontend
+// to resolve [[id]] wiki-links against lessons (in addition to library items).
+func (h *Handler) GetAllLessons(c *echo.Context) error {
+	ctx := c.Request().Context()
+	lessons, err := h.Store.GetAllLessons(ctx)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load lessons")
+	}
+	if lessons == nil {
+		lessons = []models.LessonUsage{}
+	}
+	return httpx.OK(c, http.StatusOK, lessons)
+}
+
+// GetLessonUsage lists lessons that link to this lesson via [[id]].
+func (h *Handler) GetLessonUsage(c *echo.Context) error {
+	id := c.Param("id")
+	usage, err := h.Store.GetLessonsLinkingTo(c.Request().Context(), id)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load usage")
+	}
+	if usage == nil {
+		usage = []models.LessonUsage{}
+	}
+	return httpx.OK(c, http.StatusOK, usage)
+}
+
+// GetLessonLinks resolves the library items and lessons this lesson links to
+// via [[id]] wiki-links — scoped to just this lesson (backed by lesson_links),
+// so viewing a lesson doesn't require fetching the entire library/lesson index.
+func (h *Handler) GetLessonLinks(c *echo.Context) error {
+	id := c.Param("id")
+	items, lessons, err := h.Store.GetLessonLinks(c.Request().Context(), id)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load lesson links")
+	}
+	if items == nil {
+		items = []models.LibraryItem{}
+	}
+	if lessons == nil {
+		lessons = []models.LessonUsage{}
+	}
+	return httpx.OK(c, http.StatusOK, map[string]interface{}{
+		"libraryItems": items,
+		"lessons":      lessons,
+	})
+}
+
 func (h *Handler) UpdateLesson(c *echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")

@@ -17,9 +17,8 @@ INSERT INTO lessons (id, course_id, title, content_text) VALUES (?, ?, ?, ?);
 -- name: UpdateLesson :exec
 UPDATE lessons SET title = ?, content_text = ? WHERE id = ?;
 
--- name: GetLessonsReferencingLibraryItem :many
+-- name: GetAllLessonsWithCourse :many
 SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title
 FROM lessons
 JOIN courses ON courses.id = lessons.course_id
-WHERE lessons.content_text LIKE ?
 ORDER BY lessons.rowid;

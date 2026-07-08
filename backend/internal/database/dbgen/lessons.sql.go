@@ -31,6 +31,48 @@ func (q *Queries) AddLesson(ctx context.Context, arg AddLessonParams) error {
 	return err
 }
 
+const getAllLessonsWithCourse = `-- name: GetAllLessonsWithCourse :many
+SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title
+FROM lessons
+JOIN courses ON courses.id = lessons.course_id
+ORDER BY lessons.rowid
+`
+
+type GetAllLessonsWithCourseRow struct {
+	ID          string
+	CourseID    string
+	Title       string
+	CourseTitle string
+}
+
+func (q *Queries) GetAllLessonsWithCourse(ctx context.Context) ([]GetAllLessonsWithCourseRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllLessonsWithCourse)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllLessonsWithCourseRow
+	for rows.Next() {
+		var i GetAllLessonsWithCourseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Title,
+			&i.CourseTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLesson = `-- name: GetLesson :one
 SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, quizzes.id AS quiz_id
 FROM lessons
@@ -90,49 +132,6 @@ func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]G
 			&i.Title,
 			&i.ContentText,
 			&i.QuizID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getLessonsReferencingLibraryItem = `-- name: GetLessonsReferencingLibraryItem :many
-SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title
-FROM lessons
-JOIN courses ON courses.id = lessons.course_id
-WHERE lessons.content_text LIKE ?
-ORDER BY lessons.rowid
-`
-
-type GetLessonsReferencingLibraryItemRow struct {
-	ID          string
-	CourseID    string
-	Title       string
-	CourseTitle string
-}
-
-func (q *Queries) GetLessonsReferencingLibraryItem(ctx context.Context, contentText string) ([]GetLessonsReferencingLibraryItemRow, error) {
-	rows, err := q.db.QueryContext(ctx, getLessonsReferencingLibraryItem, contentText)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetLessonsReferencingLibraryItemRow
-	for rows.Next() {
-		var i GetLessonsReferencingLibraryItemRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CourseID,
-			&i.Title,
-			&i.CourseTitle,
 		); err != nil {
 			return nil, err
 		}

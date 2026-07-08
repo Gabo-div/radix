@@ -22,7 +22,7 @@ type Store interface {
 	AddLibraryItem(ctx context.Context, item models.LibraryItem) (string, error)
 	UpdateLibraryItem(ctx context.Context, item *models.LibraryItem) error
 	TotalDiskKB(ctx context.Context) (int, error)
-	GetLessonsUsingLibraryItem(ctx context.Context, itemID string) ([]models.LessonUsage, error)
+	GetLessonsLinkingTo(ctx context.Context, targetID string) ([]models.LessonUsage, error)
 
 	GetCourses(ctx context.Context) ([]*models.Course, error)
 	GetCourse(ctx context.Context, id string) (*models.Course, error)
@@ -31,6 +31,8 @@ type Store interface {
 	GetLesson(ctx context.Context, id string) (*models.Lesson, error)
 	AddLesson(ctx context.Context, lesson *models.Lesson) error
 	UpdateLesson(ctx context.Context, lesson *models.Lesson) error
+	GetAllLessons(ctx context.Context) ([]models.LessonUsage, error)
+	GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, error)
 
 	GetQuiz(ctx context.Context, id string) (*models.Quiz, error)
 	AddQuiz(ctx context.Context, quiz *models.Quiz) error
@@ -72,6 +74,9 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.POST("/courses/:id/lessons", h.CreateLesson, a.RequireRole("admin"))
 	api.GET("/courses/:courseId/lessons/:lessonId", h.GetLesson)
 	api.PUT("/lessons/:id", h.UpdateLesson, a.RequireRole("admin"))
+	api.GET("/lessons", h.GetAllLessons)
+	api.GET("/lessons/:id/links", h.GetLessonLinks)
+	api.GET("/lessons/:id/usage", h.GetLessonUsage)
 
 	api.POST("/quizzes", h.CreateQuiz, a.RequireRole("admin"))
 	api.GET("/quizzes/:id", h.GetQuiz)

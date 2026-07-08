@@ -1,12 +1,14 @@
 import { ViewPlugin, Decoration, hoverTooltip } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
-import type { LibraryItem } from "../types";
+import type { LibraryItem, LessonUsage } from "../types";
 import { getToken } from "./api";
 
-export function createWikiLinkExtensions(items: LibraryItem[]): Extension[] {
+export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUsage[] = []): Extension[] {
   const map: Record<string, LibraryItem> = {};
   for (const item of items) map[item.id] = item;
+  const lessonMap: Record<string, LessonUsage> = {};
+  for (const lesson of lessons) lessonMap[lesson.lessonId] = lesson;
   const token = getToken();
 
   const wikiLinkPlugin = ViewPlugin.fromClass(
@@ -39,7 +41,8 @@ export function createWikiLinkExtensions(items: LibraryItem[]): Extension[] {
     while ((m = re.exec(text)) !== null) {
       if (pos >= m.index && pos <= m.index + m[0].length) {
         const item = map[m[1]];
-        if (!item) return null;
+        const lesson = !item ? lessonMap[m[1]] : undefined;
+        if (!item && !lesson) return null;
         const iconMap: Record<string, string> = { video: "🎬", audio: "🎵", image: "🖼️", pdf: "📄", text: "📝", document: "📎" };
         return {
           pos: m.index,
@@ -48,19 +51,31 @@ export function createWikiLinkExtensions(items: LibraryItem[]): Extension[] {
           create() {
             const dom = document.createElement("div");
             dom.className = "bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm max-w-xs";
-            dom.innerHTML = `
-              <div class="flex items-center gap-2 mb-2">
-                <span>${iconMap[item.type] || "📎"}</span>
-                <span class="font-medium text-white">${item.title}</span>
-              </div>
-              <div class="text-xs text-slate-400 space-y-0.5">
-                <div>Tipo: <span class="text-slate-300 capitalize">${item.type}</span></div>
-                ${item.sizeKB ? `<div>Tamaño: <span class="text-slate-300">${item.sizeKB >= 1024 ? (item.sizeKB / 1024).toFixed(1) + " MB" : item.sizeKB + " KB"}</span></div>` : ""}
-                ${item.duration ? `<div>Duración: <span class="text-slate-300">${item.duration}</span></div>` : ""}
-                ${item.resolution ? `<div>Resolución: <span class="text-slate-300">${item.resolution}</span></div>` : ""}
-              </div>
-              ${item.type === "image" ? `<img src="/api/v1/library/${item.id}/file?token=${token}" class="mt-2 max-w-[200px] max-h-[150px] rounded object-contain" />` : ""}
-            `;
+            if (item) {
+              dom.innerHTML = `
+                <div class="flex items-center gap-2 mb-2">
+                  <span>${iconMap[item.type] || "📎"}</span>
+                  <span class="font-medium text-white">${item.title}</span>
+                </div>
+                <div class="text-xs text-slate-400 space-y-0.5">
+                  <div>Tipo: <span class="text-slate-300 capitalize">${item.type}</span></div>
+                  ${item.sizeKB ? `<div>Tamaño: <span class="text-slate-300">${item.sizeKB >= 1024 ? (item.sizeKB / 1024).toFixed(1) + " MB" : item.sizeKB + " KB"}</span></div>` : ""}
+                  ${item.duration ? `<div>Duración: <span class="text-slate-300">${item.duration}</span></div>` : ""}
+                  ${item.resolution ? `<div>Resolución: <span class="text-slate-300">${item.resolution}</span></div>` : ""}
+                </div>
+                ${item.type === "image" ? `<img src="/api/v1/library/${item.id}/file?token=${token}" class="mt-2 max-w-[200px] max-h-[150px] rounded object-contain" />` : ""}
+              `;
+            } else if (lesson) {
+              dom.innerHTML = `
+                <div class="flex items-center gap-2 mb-2">
+                  <span>📘</span>
+                  <span class="font-medium text-white">${lesson.lessonTitle}</span>
+                </div>
+                <div class="text-xs text-slate-400">
+                  <div>Curso: <span class="text-slate-300">${lesson.courseTitle}</span></div>
+                </div>
+              `;
+            }
             return { dom };
           },
         };

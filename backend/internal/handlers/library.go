@@ -132,7 +132,7 @@ func (h *Handler) GetLibraryItem(c *echo.Context) error {
 // live from lesson content on every call, so it's always in sync.
 func (h *Handler) GetLibraryItemUsage(c *echo.Context) error {
 	id := c.Param("id")
-	usage, err := h.Store.GetLessonsUsingLibraryItem(c.Request().Context(), id)
+	usage, err := h.Store.GetLessonsLinkingTo(c.Request().Context(), id)
 	if err != nil {
 		return httpx.InternalError(c, "failed to load usage")
 	}

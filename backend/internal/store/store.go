@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -428,29 +429,138 @@ func (s *Store) GetLesson(ctx context.Context, id string) (*models.Lesson, error
 	return lessonFromRow(r.ID, r.CourseID, r.Title, r.ContentText, r.QuizID), nil
 }
 
+var wikiLinkRe = regexp.MustCompile(`\[\[([\w-]+)\]\]`)
+
+// extractWikiRefs returns the deduplicated set of ids referenced via [[id]]
+// wiki-links in text — mirrors frontend/src/lib/markdown.ts's extractWikiRefs.
+func extractWikiRefs(text string) []string {
+	seen := make(map[string]bool)
+	var refs []string
+	for _, m := range wikiLinkRe.FindAllStringSubmatch(text, -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			refs = append(refs, m[1])
+		}
+	}
+	return refs
+}
+
+// syncLessonLinks recomputes lesson_links from content_text — a materialized
+// cache of a lesson's [[id]] wiki-links kept in sync on every create/update so
+// forward/reverse lookups are indexed table reads instead of a LIKE scan over
+// every lesson body. Dangling refs (id matches neither a library item nor a
+// lesson) are silently dropped, same as the live-render behaviour ("no
+// encontrado").
+func (s *Store) syncLessonLinks(ctx context.Context, q *dbgen.Queries, lessonID, contentText string) error {
+	if err := q.DeleteLessonLinks(ctx, lessonID); err != nil {
+		return err
+	}
+	for _, ref := range extractWikiRefs(contentText) {
+		targetType := ""
+		if _, err := q.GetLibraryItem(ctx, ref); err == nil {
+			targetType = "library_item"
+		} else if _, err := q.GetLesson(ctx, ref); err == nil {
+			targetType = "lesson"
+		}
+		if targetType == "" {
+			continue
+		}
+		if err := q.AddLessonLink(ctx, dbgen.AddLessonLinkParams{
+			SourceLessonID: lessonID, TargetID: ref, TargetType: targetType,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Store) AddLesson(ctx context.Context, lesson *models.Lesson) error {
 	lesson.ID = uuid.NewString()
-	return s.queries.AddLesson(ctx, dbgen.AddLessonParams{
-		ID:          lesson.ID,
-		CourseID:    lesson.CourseID,
-		Title:       lesson.Title,
-		ContentText: lesson.ContentText,
+	return s.withTx(ctx, func(q *dbgen.Queries) error {
+		if err := q.AddLesson(ctx, dbgen.AddLessonParams{
+			ID:          lesson.ID,
+			CourseID:    lesson.CourseID,
+			Title:       lesson.Title,
+			ContentText: lesson.ContentText,
+		}); err != nil {
+			return err
+		}
+		return s.syncLessonLinks(ctx, q, lesson.ID, lesson.ContentText)
 	})
 }
 
 func (s *Store) UpdateLesson(ctx context.Context, lesson *models.Lesson) error {
-	return s.queries.UpdateLesson(ctx, dbgen.UpdateLessonParams{
-		Title:       lesson.Title,
-		ContentText: lesson.ContentText,
-		ID:          lesson.ID,
+	return s.withTx(ctx, func(q *dbgen.Queries) error {
+		if err := q.UpdateLesson(ctx, dbgen.UpdateLessonParams{
+			Title:       lesson.Title,
+			ContentText: lesson.ContentText,
+			ID:          lesson.ID,
+		}); err != nil {
+			return err
+		}
+		return s.syncLessonLinks(ctx, q, lesson.ID, lesson.ContentText)
 	})
 }
 
-// GetLessonsUsingLibraryItem finds lessons whose content embeds itemID via
-// the [[id]] wiki-link syntax — computed live from content_text on every
-// call, so it never drifts when a lesson is edited or (in the future) deleted.
-func (s *Store) GetLessonsUsingLibraryItem(ctx context.Context, itemID string) ([]models.LessonUsage, error) {
-	rows, err := s.queries.GetLessonsReferencingLibraryItem(ctx, "%[["+itemID+"]]%")
+// GetAllLessons lists every lesson across all courses (id/title/course) — used
+// only to populate the admin lesson-picker (browse-to-link UI), not for
+// per-view link resolution (see GetLessonLinks).
+func (s *Store) GetAllLessons(ctx context.Context) ([]models.LessonUsage, error) {
+	rows, err := s.queries.GetAllLessonsWithCourse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	all := make([]models.LessonUsage, len(rows))
+	for i, r := range rows {
+		all[i] = models.LessonUsage{
+			LessonID:    r.ID,
+			CourseID:    r.CourseID,
+			LessonTitle: r.Title,
+			CourseTitle: r.CourseTitle,
+		}
+	}
+	return all, nil
+}
+
+// GetLessonLinks resolves the library items and lessons that lessonID links to
+// via lesson_links — only what that one lesson actually references, not the
+// full library/lesson index.
+func (s *Store) GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, error) {
+	itemRows, err := s.queries.GetLinkedLibraryItems(ctx, lessonID)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]models.LibraryItem, len(itemRows))
+	for i, r := range itemRows {
+		items[i] = libraryItemFromRow(libraryItemRow{
+			ID: r.ID, Title: r.Title, Type: r.Type, Category: r.Category, SizeKb: r.SizeKb,
+			MimeType: r.MimeType, OriginalFilename: r.OriginalFilename, UploadedAt: r.UploadedAt,
+			ModifiedAt: r.ModifiedAt, Duration: r.Duration, Resolution: r.Resolution,
+			FilePath: r.FilePath, UploadedByName: r.UploadedByName,
+		})
+	}
+
+	lessonRows, err := s.queries.GetLinkedLessons(ctx, lessonID)
+	if err != nil {
+		return nil, nil, err
+	}
+	lessons := make([]models.LessonUsage, len(lessonRows))
+	for i, r := range lessonRows {
+		lessons[i] = models.LessonUsage{
+			LessonID:    r.ID,
+			CourseID:    r.CourseID,
+			LessonTitle: r.Title,
+			CourseTitle: r.CourseTitle,
+		}
+	}
+	return items, lessons, nil
+}
+
+// GetLessonsLinkingTo finds lessons that link to targetID (a library item id
+// or a lesson id) via lesson_links — the reverse lookup backing both
+// /library/:id/usage and /lessons/:id/usage.
+func (s *Store) GetLessonsLinkingTo(ctx context.Context, targetID string) ([]models.LessonUsage, error) {
+	rows, err := s.queries.GetLessonsLinkingToTarget(ctx, targetID)
 	if err != nil {
 		return nil, err
 	}
