@@ -14,8 +14,40 @@ type User struct {
 	Email            string   `json:"email"`
 	PasswordHash     string   `json:"-"`
 	Role             Role     `json:"role"`
-	Points           int      `json:"points"`
 	CompletedLessons []string `json:"completedLessons"`
+	// EnrolledCourses is only meaningful for students — admins/guests aren't
+	// enrollment-gated, see Store.IsEnrolled.
+	EnrolledCourses []string `json:"enrolledCourses"`
+}
+
+// CourseStudent is a student enrolled in a course, for the course's
+// "Estudiantes" admin tab.
+type CourseStudent struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Points int    `json:"points"`
+}
+
+// ForumPost is one node in a course's discussion forum. ParentID nil means a
+// top-level post; otherwise it's a reply to another post, to unbounded depth
+// — the tree is built client-side from the flat per-course list returned by
+// GetForumPosts, not recursive SQL. Liked tracks whether the requesting user
+// has liked it (populated per-request, not stored on the row).
+// ForumPost.Title is only set on a thread-starting post (ParentID nil) —
+// replies have no title, enforced in the handler.
+type ForumPost struct {
+	ID         string  `json:"id"`
+	CourseID   string  `json:"courseId"`
+	ParentID   *string `json:"parentId"`
+	UserID     string  `json:"userId"`
+	AuthorName string  `json:"authorName"`
+	AuthorRole Role    `json:"authorRole"`
+	Title      string  `json:"title"`
+	Body       string  `json:"body"`
+	CreatedAt  string  `json:"createdAt"`
+	LikeCount  int     `json:"likeCount"`
+	Liked      bool    `json:"liked"`
 }
 
 type LibraryItem struct {
@@ -44,12 +76,15 @@ type QuizQuestion struct {
 // course's "Cuestionarios" tab) and can additionally attach to at most one
 // lesson (enforced by idx_quizzes_lesson_unique).
 type Quiz struct {
-	ID          string         `json:"id"`
-	CourseID    string         `json:"courseId"`
-	LessonID    *string        `json:"lessonId"`
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Questions   []QuizQuestion `json:"questions"`
+	ID          string  `json:"id"`
+	CourseID    string  `json:"courseId"`
+	LessonID    *string `json:"lessonId"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	// Value is the max points a student can earn from this quiz — a
+	// student's grade for it is (score% * Value), see Store.RecordQuizGrade.
+	Value     int            `json:"value"`
+	Questions []QuizQuestion `json:"questions"`
 }
 
 type Lesson struct {
@@ -67,6 +102,16 @@ type LessonUsage struct {
 	LessonID    string `json:"lessonId"`
 	CourseID    string `json:"courseId"`
 	LessonTitle string `json:"lessonTitle"`
+	CourseTitle string `json:"courseTitle"`
+}
+
+// QuizUsage identifies a quiz referenced via a [[id]] wiki-link — the quiz
+// counterpart to LessonUsage, used for lightweight link previews (no
+// Questions payload).
+type QuizUsage struct {
+	QuizID      string `json:"quizId"`
+	CourseID    string `json:"courseId"`
+	QuizTitle   string `json:"quizTitle"`
 	CourseTitle string `json:"courseTitle"`
 }
 

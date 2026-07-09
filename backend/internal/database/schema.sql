@@ -8,8 +8,7 @@ CREATE TABLE users (
     name          TEXT NOT NULL,
     email         TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL,
-    points        INTEGER NOT NULL DEFAULT 0
+    role          TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_users_email ON users(email);
 
@@ -48,7 +47,8 @@ CREATE TABLE quizzes (
     course_id   TEXT NOT NULL REFERENCES courses(id),
     lesson_id   TEXT REFERENCES lessons(id),
     title       TEXT NOT NULL DEFAULT 'Cuestionario',
-    description TEXT NOT NULL DEFAULT ''
+    description TEXT NOT NULL DEFAULT '',
+    value       INTEGER NOT NULL DEFAULT 100
 );
 CREATE INDEX idx_quizzes_course ON quizzes(course_id);
 CREATE UNIQUE INDEX idx_quizzes_lesson_unique ON quizzes(lesson_id) WHERE lesson_id IS NOT NULL;
@@ -62,11 +62,53 @@ CREATE TABLE quiz_questions (
     correct_index INTEGER NOT NULL
 );
 
+CREATE TABLE quiz_grades (
+    user_id   TEXT NOT NULL REFERENCES users(id),
+    quiz_id   TEXT NOT NULL REFERENCES quizzes(id),
+    grade     INTEGER NOT NULL,
+    graded_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, quiz_id)
+);
+CREATE INDEX idx_quiz_grades_user ON quiz_grades(user_id);
+
 CREATE TABLE user_completed_lessons (
     user_id   TEXT NOT NULL REFERENCES users(id),
     lesson_id TEXT NOT NULL REFERENCES lessons(id),
     PRIMARY KEY (user_id, lesson_id)
 );
+
+CREATE TABLE course_enrollments (
+    user_id   TEXT NOT NULL REFERENCES users(id),
+    course_id TEXT NOT NULL REFERENCES courses(id),
+    PRIMARY KEY (user_id, course_id)
+);
+CREATE INDEX idx_course_enrollments_course ON course_enrollments(course_id);
+
+CREATE TABLE forum_posts (
+    id         TEXT PRIMARY KEY,
+    course_id  TEXT NOT NULL REFERENCES courses(id),
+    parent_id  TEXT REFERENCES forum_posts(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    title      TEXT NOT NULL DEFAULT '',
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX idx_forum_posts_course ON forum_posts(course_id);
+CREATE INDEX idx_forum_posts_parent ON forum_posts(parent_id);
+
+CREATE TABLE forum_likes (
+    post_id TEXT NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    PRIMARY KEY (post_id, user_id)
+);
+
+CREATE TABLE forum_links (
+    source_post_id TEXT NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    target_id      TEXT NOT NULL,
+    target_type    TEXT NOT NULL CHECK (target_type IN ('library_item', 'lesson', 'quiz')),
+    PRIMARY KEY (source_post_id, target_id)
+);
+CREATE INDEX idx_forum_links_target ON forum_links(target_id);
 
 CREATE TABLE sync_log (
     id         INTEGER PRIMARY KEY,

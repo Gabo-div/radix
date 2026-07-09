@@ -53,7 +53,7 @@ export default function QuizTaker({ quiz, canSee, canSubmit, onSubmitted }: Prop
         </div>
         <div className="flex gap-4 text-sm">
           <Badge color={result.passed ? "emerald" : "red"}>{result.passed ? "Aprobado" : "Reprobado"}</Badge>
-          <Badge color="indigo">+{result.earnedXP} XP</Badge>
+          <Badge color="indigo">Calificación: {result.grade}/{result.quizValue}</Badge>
         </div>
         {canSubmit && (
           <Button variant="secondary" onClick={() => { setSubmitted(false); setResult(null); }} className="mt-4">

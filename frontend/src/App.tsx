@@ -14,6 +14,7 @@ import LessonEditor from "./pages/LessonEditor";
 import LessonViewer from "./pages/LessonViewer";
 import QuizEditor from "./pages/QuizEditor";
 import QuizViewer from "./pages/QuizViewer";
+import ForumThread from "./pages/ForumThread";
 import AdminPanel from "./pages/admin/AdminPanel";
 import Monitor from "./pages/admin/Monitor";
 import Logs from "./pages/admin/Logs";
@@ -45,6 +46,7 @@ function AppRoutes() {
         <Route path="courses/:courseId/quizzes/new" element={<ProtectedRoute role="admin"><QuizEditor /></ProtectedRoute>} />
         <Route path="courses/:courseId/quizzes/:quizId/edit" element={<ProtectedRoute role="admin"><QuizEditor /></ProtectedRoute>} />
         <Route path="courses/:courseId/quizzes/:quizId" element={<QuizViewer />} />
+        <Route path="courses/:courseId/forum/:postId" element={<ForumThread />} />
         <Route path="admin" element={<ProtectedRoute role="admin"><AdminPanel /></ProtectedRoute>} />
         <Route path="admin/monitor" element={<ProtectedRoute role="admin"><Monitor /></ProtectedRoute>} />
         <Route path="admin/logs" element={<ProtectedRoute role="admin"><Logs /></ProtectedRoute>} />

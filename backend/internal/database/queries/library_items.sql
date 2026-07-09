@@ -22,3 +22,20 @@ WHERE id = ?;
 
 -- name: TotalDiskKB :one
 SELECT COALESCE(SUM(size_kb), 0) FROM library_items;
+
+-- name: GetCourseLibraryResources :many
+SELECT library_items.*, users.name AS uploaded_by_name
+FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+WHERE library_items.id IN (
+    SELECT lesson_links.target_id
+    FROM lesson_links
+    JOIN lessons ON lessons.id = lesson_links.source_lesson_id
+    WHERE lessons.course_id = ? AND lesson_links.target_type = 'library_item'
+    UNION
+    SELECT quiz_links.target_id
+    FROM quiz_links
+    JOIN quizzes ON quizzes.id = quiz_links.source_quiz_id
+    WHERE quizzes.course_id = ? AND quiz_links.target_type = 'library_item'
+)
+ORDER BY library_items.rowid;

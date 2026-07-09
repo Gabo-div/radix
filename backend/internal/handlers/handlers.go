@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"radix-backend/internal/auth"
 	"radix-backend/internal/config"
+	"radix-backend/internal/httpx"
 	"radix-backend/internal/middleware"
 	"radix-backend/internal/models"
 )
@@ -27,6 +28,19 @@ type Store interface {
 	GetCourses(ctx context.Context) ([]*models.Course, error)
 	GetCourse(ctx context.Context, id string) (*models.Course, error)
 	AddCourse(ctx context.Context, course *models.Course) error
+	IsEnrolled(ctx context.Context, userID, courseID string) (bool, error)
+	EnrollStudent(ctx context.Context, userID, courseID string) error
+	UnenrollStudent(ctx context.Context, userID, courseID string) error
+	GetEnrolledStudents(ctx context.Context, courseID string) ([]models.CourseStudent, error)
+	GetUnenrolledStudents(ctx context.Context, courseID string) ([]models.CourseStudent, error)
+	GetCourseLibraryResources(ctx context.Context, courseID string) ([]models.LibraryItem, error)
+
+	GetForumPosts(ctx context.Context, courseID, userID string) ([]models.ForumPost, error)
+	GetForumPost(ctx context.Context, id string) (*models.ForumPost, error)
+	AddForumPost(ctx context.Context, post *models.ForumPost) error
+	LikePost(ctx context.Context, postID, userID string) error
+	UnlikePost(ctx context.Context, postID, userID string) error
+	GetCourseForumLinks(ctx context.Context, courseID string) ([]models.LibraryItem, []models.LessonUsage, []models.QuizUsage, error)
 	GetLessonsForCourse(ctx context.Context, courseID string) ([]*models.Lesson, error)
 	GetLesson(ctx context.Context, id string) (*models.Lesson, error)
 	AddLesson(ctx context.Context, lesson *models.Lesson) error
@@ -37,6 +51,8 @@ type Store interface {
 	GetQuiz(ctx context.Context, id string) (*models.Quiz, error)
 	AddQuiz(ctx context.Context, quiz *models.Quiz) error
 	UpdateQuiz(ctx context.Context, quiz *models.Quiz) error
+	RecordQuizGrade(ctx context.Context, userID, quizID string, grade int) error
+	GetUserCoursePoints(ctx context.Context, userID, courseID string) (int, error)
 	GetQuizzesForCourse(ctx context.Context, courseID string) ([]*models.Quiz, error)
 	GetQuizLinks(ctx context.Context, quizID string) ([]models.LibraryItem, []models.LessonUsage, error)
 
@@ -58,6 +74,27 @@ func New(s Store, logBuffer *middleware.LogBuffer, cfg *config.Config) *Handler 
 	return &Handler{Store: s, LogBuffer: logBuffer, LogRetentionDays: cfg.LogRetentionDays}
 }
 
+// requireCourseAccess enforces that students only access courses they're
+// enrolled in — admins and guests are unrestricted (see request from user:
+// "students should have access only to courses where they are registered").
+// On success it returns (true, nil). On failure it has already written the
+// HTTP response; callers must `return err` immediately.
+func (h *Handler) requireCourseAccess(c *echo.Context, courseID string) (bool, error) {
+	role, _ := c.Get("user_role").(models.Role)
+	if role != models.RoleStudent {
+		return true, nil
+	}
+	userID, _ := c.Get("user_id").(string)
+	enrolled, err := h.Store.IsEnrolled(c.Request().Context(), userID, courseID)
+	if err != nil {
+		return false, httpx.InternalError(c, "failed to check enrollment")
+	}
+	if !enrolled {
+		return false, httpx.Forbidden(c, "not enrolled in this course")
+	}
+	return true, nil
+}
+
 func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.POST("/auth/login", a.Login)
 	api.POST("/auth/guest", a.LoginGuest)
@@ -73,6 +110,16 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 	api.GET("/courses", h.GetCourses)
 	api.POST("/courses", h.CreateCourse, a.RequireRole("admin"))
 	api.GET("/courses/:id", h.GetCourse)
+	api.GET("/courses/:id/students", h.GetEnrolledStudents, a.RequireRole("admin"))
+	api.GET("/courses/:id/students/available", h.GetAvailableStudents, a.RequireRole("admin"))
+	api.POST("/courses/:id/students", h.EnrollStudent, a.RequireRole("admin"))
+	api.DELETE("/courses/:id/students/:userId", h.UnenrollStudent, a.RequireRole("admin"))
+	api.GET("/courses/:id/resources", h.GetCourseResources)
+	api.GET("/courses/:id/forum", h.GetForumPosts)
+	api.GET("/courses/:id/forum/links", h.GetForumLinks)
+	api.POST("/courses/:id/forum", h.CreateForumPost)
+	api.POST("/forum/:id/like", h.LikeForumPost)
+	api.DELETE("/forum/:id/like", h.UnlikeForumPost)
 
 	api.POST("/courses/:id/lessons", h.CreateLesson, a.RequireRole("admin"))
 	api.GET("/courses/:courseId/lessons/:lessonId", h.GetLesson)

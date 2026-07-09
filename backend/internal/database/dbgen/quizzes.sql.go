@@ -11,7 +11,7 @@ import (
 )
 
 const addQuiz = `-- name: AddQuiz :exec
-INSERT INTO quizzes (id, course_id, lesson_id, title, description) VALUES (?, ?, ?, ?, ?)
+INSERT INTO quizzes (id, course_id, lesson_id, title, description, value) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type AddQuizParams struct {
@@ -20,6 +20,7 @@ type AddQuizParams struct {
 	LessonID    sql.NullString
 	Title       string
 	Description string
+	Value       int64
 }
 
 func (q *Queries) AddQuiz(ctx context.Context, arg AddQuizParams) error {
@@ -29,6 +30,7 @@ func (q *Queries) AddQuiz(ctx context.Context, arg AddQuizParams) error {
 		arg.LessonID,
 		arg.Title,
 		arg.Description,
+		arg.Value,
 	)
 	return err
 }
@@ -69,7 +71,7 @@ func (q *Queries) DeleteQuizQuestions(ctx context.Context, quizID string) error 
 }
 
 const getQuiz = `-- name: GetQuiz :one
-SELECT id, course_id, lesson_id, title, description FROM quizzes WHERE id = ?
+SELECT id, course_id, lesson_id, title, description, value FROM quizzes WHERE id = ?
 `
 
 func (q *Queries) GetQuiz(ctx context.Context, id string) (Quiz, error) {
@@ -81,6 +83,7 @@ func (q *Queries) GetQuiz(ctx context.Context, id string) (Quiz, error) {
 		&i.LessonID,
 		&i.Title,
 		&i.Description,
+		&i.Value,
 	)
 	return i, err
 }
@@ -120,7 +123,7 @@ func (q *Queries) GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQu
 }
 
 const getQuizzesForCourse = `-- name: GetQuizzesForCourse :many
-SELECT id, course_id, lesson_id, title, description FROM quizzes WHERE course_id = ? ORDER BY rowid
+SELECT id, course_id, lesson_id, title, description, value FROM quizzes WHERE course_id = ? ORDER BY rowid
 `
 
 func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error) {
@@ -138,6 +141,7 @@ func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Q
 			&i.LessonID,
 			&i.Title,
 			&i.Description,
+			&i.Value,
 		); err != nil {
 			return nil, err
 		}
@@ -153,16 +157,22 @@ func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Q
 }
 
 const updateQuiz = `-- name: UpdateQuiz :exec
-UPDATE quizzes SET title = ?, description = ? WHERE id = ?
+UPDATE quizzes SET title = ?, description = ?, value = ? WHERE id = ?
 `
 
 type UpdateQuizParams struct {
 	Title       string
 	Description string
+	Value       int64
 	ID          string
 }
 
 func (q *Queries) UpdateQuiz(ctx context.Context, arg UpdateQuizParams) error {
-	_, err := q.db.ExecContext(ctx, updateQuiz, arg.Title, arg.Description, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateQuiz,
+		arg.Title,
+		arg.Description,
+		arg.Value,
+		arg.ID,
+	)
 	return err
 }

@@ -1,4 +1,4 @@
-import type { LibraryItem, LessonUsage } from "../types";
+import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 
 const wikiLinkRe = /\[\[([\w-]+)\]\]/g;
 const headingRe = /^(#{1,3})\s+(.+)$/gm;
@@ -9,19 +9,29 @@ export interface TocEntry {
   id: string;
 }
 
-export function preprocessWikiLinks(text: string, items: LibraryItem[], lessons: LessonUsage[] = []): string {
+export function preprocessWikiLinks(text: string, items: LibraryItem[], lessons: LessonUsage[] = [], quizzes: QuizUsage[] = []): string {
   const map: Record<string, LibraryItem> = {};
   for (const item of items) map[item.id] = item;
   const lessonMap: Record<string, LessonUsage> = {};
   for (const lesson of lessons) lessonMap[lesson.lessonId] = lesson;
+  const quizMap: Record<string, QuizUsage> = {};
+  for (const quiz of quizzes) quizMap[quiz.quizId] = quiz;
 
   return text.replace(wikiLinkRe, (_, id: string) => {
     const item = map[id];
     if (item) return `[${item.title}](/library/${id})`;
     const lesson = lessonMap[id];
     if (lesson) return `[${lesson.lessonTitle}](/courses/${lesson.courseId}/lessons/${id})`;
+    const quiz = quizMap[id];
+    if (quiz) return `[${quiz.quizTitle}](/courses/${quiz.courseId}/quizzes/${id})`;
     return `[${id}](/library/${id})`;
   });
+}
+
+// Removes [[id]] tokens entirely — used for plain-text previews (e.g. a
+// forum thread list card) where links are shown separately as badges.
+export function stripWikiLinks(text: string): string {
+  return text.replace(wikiLinkRe, "").replace(/\s+/g, " ").trim();
 }
 
 export function extractToc(text: string): TocEntry[] {

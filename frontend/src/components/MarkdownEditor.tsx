@@ -4,23 +4,25 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { createWikiLinkExtensions } from "../lib/codemirror-wiki";
 import { preprocessWikiLinks } from "../lib/markdown";
-import type { LibraryItem, LessonUsage } from "../types";
+import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bold, Italic, Heading1, Heading2, Link2, BookOpen, Eye, EyeOff } from "lucide-react";
+import { Bold, Italic, Heading1, Heading2, Link2, BookOpen, FileQuestion, Eye, EyeOff } from "lucide-react";
 
 interface Props {
   value: string;
   onChange: (val: string) => void;
   library: LibraryItem[];
   lessons?: LessonUsage[];
+  quizzes?: QuizUsage[];
   showPreview: boolean;
   onTogglePreview: () => void;
   onAttachClick: () => void;
   onAttachLessonClick?: () => void;
+  onAttachQuizClick?: () => void;
 }
 
-export default function MarkdownEditor({ value, onChange, library, lessons = [], showPreview, onTogglePreview, onAttachClick, onAttachLessonClick }: Props) {
+export default function MarkdownEditor({ value, onChange, library, lessons = [], quizzes = [], showPreview, onTogglePreview, onAttachClick, onAttachLessonClick, onAttachQuizClick }: Props) {
   const viewRef = useRef<EditorView | null>(null);
   const extensions = useMemo(() => [
     markdown({ base: markdownLanguage }),
@@ -33,8 +35,8 @@ export default function MarkdownEditor({ value, onChange, library, lessons = [],
       ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "#475569" },
       ".cm-activeLineGutter": { backgroundColor: "transparent" },
     }),
-    ...createWikiLinkExtensions(library, lessons),
-  ], [library, lessons]);
+    ...createWikiLinkExtensions(library, lessons, quizzes),
+  ], [library, lessons, quizzes]);
 
   const handleChange = useCallback((val: string) => onChange(val), [onChange]);
 
@@ -85,6 +87,12 @@ export default function MarkdownEditor({ value, onChange, library, lessons = [],
             <BookOpen size={14} /> Lección
           </button>
         )}
+        {onAttachQuizClick && (
+          <button type="button" onClick={onAttachQuizClick}
+            className="flex items-center gap-1 p-1.5 rounded hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition-colors text-xs" title="Enlazar cuestionario">
+            <FileQuestion size={14} /> Cuestionario
+          </button>
+        )}
         <button type="button" onClick={onTogglePreview}
           className="flex items-center gap-1 p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs ml-auto" title="Vista previa">
           {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -96,7 +104,7 @@ export default function MarkdownEditor({ value, onChange, library, lessons = [],
         {showPreview ? (
           <div className="p-4 min-h-[300px] prose prose-invert prose-sm max-w-none text-slate-300">
             {value ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{preprocessWikiLinks(value, library, lessons)}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{preprocessWikiLinks(value, library, lessons, quizzes)}</ReactMarkdown>
             ) : (
               <p className="text-slate-500 italic">Sin contenido</p>
             )}

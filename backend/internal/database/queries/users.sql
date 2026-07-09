@@ -8,10 +8,10 @@ SELECT * FROM users WHERE role = ? LIMIT 1;
 SELECT * FROM users WHERE email = ?;
 
 -- name: AddUser :exec
-INSERT INTO users (id, name, email, password_hash, role, points) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?);
 
 -- name: UpdateUser :exec
-UPDATE users SET name = ?, role = ?, points = ? WHERE id = ?;
+UPDATE users SET name = ?, role = ? WHERE id = ?;
 
 -- name: GetCompletedLessonIDs :many
 SELECT lesson_id FROM user_completed_lessons WHERE user_id = ?;

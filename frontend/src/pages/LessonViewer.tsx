@@ -10,7 +10,7 @@ import { Card, Button } from "../components/ui";
 import LessonSidebar from "../components/layout/LessonSidebar";
 import WikiContent from "../components/WikiContent";
 import QuizTaker from "../components/QuizTaker";
-import { ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit, Lock } from "lucide-react";
 
 export default function LessonViewer() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
@@ -19,10 +19,12 @@ export default function LessonViewer() {
   const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
   const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
   const [usage, setUsage] = useState<LessonUsage[]>([]);
+  const [error, setError] = useState("");
 
   const load = () => {
     if (courseId && lessonId) {
-      api.getLesson(courseId, lessonId).then(setData).catch(() => { });
+      setError("");
+      api.getLesson(courseId, lessonId).then(setData).catch((err) => setError(err.message));
       // Scoped to this lesson's own [[id]] refs — not a full library/lesson fetch.
       api.getLessonLinks(lessonId).then(({ libraryItems, lessons }) => {
         setLinkedItems(libraryItems);
@@ -58,6 +60,20 @@ export default function LessonViewer() {
     return m;
   }, [linkedLessons]);
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} /> Volver al curso
+        </Link>
+        <Card className="flex flex-col items-center gap-3 py-12 text-center">
+          <Lock size={32} className="text-slate-500" />
+          <p className="text-slate-300">No estás inscrito en este curso.</p>
+        </Card>
+      </div>
+    );
+  }
+
   if (!data) return <p className="text-slate-400">Cargando lección...</p>;
 
   return (
@@ -85,12 +101,7 @@ export default function LessonViewer() {
             </Card>
 
             {data.quiz && (
-              <QuizTaker
-                quiz={data.quiz}
-                canSee={!!showQuiz}
-                canSubmit={!!isStudent}
-                onSubmitted={(res) => { if (currentUser) currentUser.points = res.totalPoints; }}
-              />
+              <QuizTaker quiz={data.quiz} canSee={!!showQuiz} canSubmit={!!isStudent} />
             )}
           </div>
 

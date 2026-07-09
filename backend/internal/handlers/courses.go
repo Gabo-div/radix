@@ -51,6 +51,9 @@ func (h *Handler) GetCourse(c *echo.Context) error {
 		}
 		return httpx.InternalError(c, "failed to load course")
 	}
+	if ok, err := h.requireCourseAccess(c, id); !ok {
+		return err
+	}
 	lessons, err := h.Store.GetLessonsForCourse(ctx, id)
 	if err != nil {
 		return httpx.InternalError(c, "failed to load lessons")
@@ -101,6 +104,9 @@ func (h *Handler) GetLesson(c *echo.Context) error {
 			return httpx.NotFound(c, "lesson not found")
 		}
 		return httpx.InternalError(c, "failed to load lesson")
+	}
+	if ok, err := h.requireCourseAccess(c, lesson.CourseID); !ok {
+		return err
 	}
 
 	role, _ := c.Get("user_role").(models.Role)
@@ -194,4 +200,79 @@ func (h *Handler) UpdateLesson(c *echo.Context) error {
 	}
 	h.Store.EnqueueSync(ctx, "UPDATE_LESSON: "+id)
 	return httpx.OK(c, http.StatusOK, lesson)
+}
+
+// GetEnrolledStudents backs the course page's "Estudiantes" admin tab.
+func (h *Handler) GetEnrolledStudents(c *echo.Context) error {
+	ctx := c.Request().Context()
+	students, err := h.Store.GetEnrolledStudents(ctx, c.Param("id"))
+	if err != nil {
+		return httpx.InternalError(c, "failed to load students")
+	}
+	if students == nil {
+		students = []models.CourseStudent{}
+	}
+	return httpx.OK(c, http.StatusOK, students)
+}
+
+// GetAvailableStudents lists students not yet enrolled — backs the admin's
+// "add student" picker.
+func (h *Handler) GetAvailableStudents(c *echo.Context) error {
+	ctx := c.Request().Context()
+	students, err := h.Store.GetUnenrolledStudents(ctx, c.Param("id"))
+	if err != nil {
+		return httpx.InternalError(c, "failed to load available students")
+	}
+	if students == nil {
+		students = []models.CourseStudent{}
+	}
+	return httpx.OK(c, http.StatusOK, students)
+}
+
+func (h *Handler) EnrollStudent(c *echo.Context) error {
+	ctx := c.Request().Context()
+	courseID := c.Param("id")
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	if err := c.Bind(&req); err != nil || req.UserID == "" {
+		return httpx.BadRequest(c, "invalid request")
+	}
+	if _, err := h.Store.GetCourse(ctx, courseID); err != nil {
+		return httpx.NotFound(c, "course not found")
+	}
+	if err := h.Store.EnrollStudent(ctx, req.UserID, courseID); err != nil {
+		return httpx.InternalError(c, "failed to enroll student")
+	}
+	h.Store.EnqueueSync(ctx, "ENROLL_STUDENT: "+req.UserID+" -> "+courseID)
+	return httpx.NoContent(c)
+}
+
+// GetCourseResources lists every library item linked from any lesson/quiz in
+// this course — backs the course page's "Recursos" tab.
+func (h *Handler) GetCourseResources(c *echo.Context) error {
+	ctx := c.Request().Context()
+	courseID := c.Param("id")
+	if ok, err := h.requireCourseAccess(c, courseID); !ok {
+		return err
+	}
+	items, err := h.Store.GetCourseLibraryResources(ctx, courseID)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load resources")
+	}
+	if items == nil {
+		items = []models.LibraryItem{}
+	}
+	return httpx.OK(c, http.StatusOK, items)
+}
+
+func (h *Handler) UnenrollStudent(c *echo.Context) error {
+	ctx := c.Request().Context()
+	courseID := c.Param("id")
+	userID := c.Param("userId")
+	if err := h.Store.UnenrollStudent(ctx, userID, courseID); err != nil {
+		return httpx.InternalError(c, "failed to unenroll student")
+	}
+	h.Store.EnqueueSync(ctx, "UNENROLL_STUDENT: "+userID+" -> "+courseID)
+	return httpx.NoContent(c)
 }

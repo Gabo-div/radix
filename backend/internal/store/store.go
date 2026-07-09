@@ -91,16 +91,28 @@ func ptrFromNullString(v sql.NullString) *string {
 
 // --- Users / Sessions ---
 
-func userFromRow(row dbgen.User, completedLessons []string) *models.User {
+func userFromRow(row dbgen.User, completedLessons, enrolledCourses []string) *models.User {
 	return &models.User{
 		ID:               row.ID,
 		Name:             row.Name,
 		Email:            row.Email,
 		PasswordHash:     row.PasswordHash,
 		Role:             models.Role(row.Role),
-		Points:           int(row.Points),
 		CompletedLessons: completedLessons,
+		EnrolledCourses:  enrolledCourses,
 	}
+}
+
+func (s *Store) loadUserAssociations(ctx context.Context, userID string) (completedLessons, enrolledCourses []string, err error) {
+	completedLessons, err = s.queries.GetCompletedLessonIDs(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	enrolledCourses, err = s.queries.GetEnrolledCourseIDs(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return completedLessons, enrolledCourses, nil
 }
 
 func (s *Store) GetUser(ctx context.Context, id string) (*models.User, error) {
@@ -111,11 +123,11 @@ func (s *Store) GetUser(ctx context.Context, id string) (*models.User, error) {
 		}
 		return nil, err
 	}
-	lessonIDs, err := s.queries.GetCompletedLessonIDs(ctx, id)
+	completedLessons, enrolledCourses, err := s.loadUserAssociations(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return userFromRow(row, lessonIDs), nil
+	return userFromRow(row, completedLessons, enrolledCourses), nil
 }
 
 func (s *Store) GetUserByRole(ctx context.Context, role models.Role) (*models.User, error) {
@@ -126,11 +138,11 @@ func (s *Store) GetUserByRole(ctx context.Context, role models.Role) (*models.Us
 		}
 		return nil, err
 	}
-	lessonIDs, err := s.queries.GetCompletedLessonIDs(ctx, row.ID)
+	completedLessons, enrolledCourses, err := s.loadUserAssociations(ctx, row.ID)
 	if err != nil {
 		return nil, err
 	}
-	return userFromRow(row, lessonIDs), nil
+	return userFromRow(row, completedLessons, enrolledCourses), nil
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
@@ -141,11 +153,11 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User,
 		}
 		return nil, err
 	}
-	lessonIDs, err := s.queries.GetCompletedLessonIDs(ctx, row.ID)
+	completedLessons, enrolledCourses, err := s.loadUserAssociations(ctx, row.ID)
 	if err != nil {
 		return nil, err
 	}
-	return userFromRow(row, lessonIDs), nil
+	return userFromRow(row, completedLessons, enrolledCourses), nil
 }
 
 // AddUser stores the user with whatever ID the caller already set (guest
@@ -159,7 +171,6 @@ func (s *Store) AddUser(ctx context.Context, user *models.User) error {
 			Email:        user.Email,
 			PasswordHash: user.PasswordHash,
 			Role:         string(user.Role),
-			Points:       int64(user.Points),
 		}); err != nil {
 			return err
 		}
@@ -175,10 +186,9 @@ func (s *Store) AddUser(ctx context.Context, user *models.User) error {
 func (s *Store) UpdateUser(ctx context.Context, user *models.User) error {
 	return s.withTx(ctx, func(q *dbgen.Queries) error {
 		if err := q.UpdateUser(ctx, dbgen.UpdateUserParams{
-			Name:   user.Name,
-			Role:   string(user.Role),
-			Points: int64(user.Points),
-			ID:     user.ID,
+			Name: user.Name,
+			Role: string(user.Role),
+			ID:   user.ID,
 		}); err != nil {
 			return err
 		}
@@ -358,6 +368,29 @@ func (s *Store) TotalDiskKB(ctx context.Context) (int, error) {
 	return 0, nil
 }
 
+// GetCourseLibraryResources lists every library item [[id]]-linked from any
+// lesson or quiz in courseID — backs the course's "Recursos" tab. Deduped: a
+// file linked from 3 lessons still shows up once (library_items.id is a PK,
+// so the UNION'd id subquery already dedups before the outer join runs).
+func (s *Store) GetCourseLibraryResources(ctx context.Context, courseID string) ([]models.LibraryItem, error) {
+	rows, err := s.queries.GetCourseLibraryResources(ctx, dbgen.GetCourseLibraryResourcesParams{
+		CourseID: courseID, CourseID_2: courseID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]models.LibraryItem, len(rows))
+	for i, r := range rows {
+		items[i] = libraryItemFromRow(libraryItemRow{
+			ID: r.ID, Title: r.Title, Type: r.Type, Category: r.Category, SizeKb: r.SizeKb,
+			MimeType: r.MimeType, OriginalFilename: r.OriginalFilename, UploadedAt: r.UploadedAt,
+			ModifiedAt: r.ModifiedAt, Duration: r.Duration, Resolution: r.Resolution,
+			FilePath: r.FilePath, UploadedByName: r.UploadedByName,
+		})
+	}
+	return items, nil
+}
+
 // --- Courses / Lessons ---
 
 func (s *Store) GetCourses(ctx context.Context) ([]*models.Course, error) {
@@ -391,6 +424,49 @@ func (s *Store) AddCourse(ctx context.Context, course *models.Course) error {
 		Description: course.Description,
 		Category:    course.Category,
 	})
+}
+
+// --- Course enrollments ---
+
+func (s *Store) IsEnrolled(ctx context.Context, userID, courseID string) (bool, error) {
+	n, err := s.queries.IsEnrolled(ctx, dbgen.IsEnrolledParams{UserID: userID, CourseID: courseID})
+	if err != nil {
+		return false, err
+	}
+	return n != 0, nil
+}
+
+func (s *Store) EnrollStudent(ctx context.Context, userID, courseID string) error {
+	return s.queries.EnrollStudent(ctx, dbgen.EnrollStudentParams{UserID: userID, CourseID: courseID})
+}
+
+func (s *Store) UnenrollStudent(ctx context.Context, userID, courseID string) error {
+	return s.queries.UnenrollStudent(ctx, dbgen.UnenrollStudentParams{UserID: userID, CourseID: courseID})
+}
+
+func (s *Store) GetEnrolledStudents(ctx context.Context, courseID string) ([]models.CourseStudent, error) {
+	rows, err := s.queries.GetEnrolledStudents(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	students := make([]models.CourseStudent, len(rows))
+	for i, r := range rows {
+		points, _ := r.Points.(int64)
+		students[i] = models.CourseStudent{ID: r.ID, Name: r.Name, Email: r.Email, Points: int(points)}
+	}
+	return students, nil
+}
+
+func (s *Store) GetUnenrolledStudents(ctx context.Context, courseID string) ([]models.CourseStudent, error) {
+	rows, err := s.queries.GetUnenrolledStudents(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	students := make([]models.CourseStudent, len(rows))
+	for i, r := range rows {
+		students[i] = models.CourseStudent{ID: r.ID, Name: r.Name, Email: r.Email}
+	}
+	return students, nil
 }
 
 // lessonFromRow assembles a Lesson with QuizID derived from a LEFT JOIN
@@ -604,6 +680,7 @@ func quizFromRow(row dbgen.Quiz, questions []models.QuizQuestion) *models.Quiz {
 		LessonID:    ptrFromNullString(row.LessonID),
 		Title:       row.Title,
 		Description: row.Description,
+		Value:       int(row.Value),
 		Questions:   questions,
 	}
 }
@@ -640,8 +717,15 @@ func quizQuestionsFromRows(rows []dbgen.QuizQuestion) ([]models.QuizQuestion, er
 	return questions, nil
 }
 
+// defaultQuizValue is applied when a quiz is created/updated with no
+// (or a non-positive) value — 100 reads as a percentage-style grade.
+const defaultQuizValue = 100
+
 func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 	quiz.ID = uuid.NewString()
+	if quiz.Value <= 0 {
+		quiz.Value = defaultQuizValue
+	}
 	return s.withTx(ctx, func(q *dbgen.Queries) error {
 		if err := q.AddQuiz(ctx, dbgen.AddQuizParams{
 			ID:          quiz.ID,
@@ -649,6 +733,7 @@ func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 			LessonID:    nullStringFromPtr(quiz.LessonID),
 			Title:       quiz.Title,
 			Description: quiz.Description,
+			Value:       int64(quiz.Value),
 		}); err != nil {
 			return err
 		}
@@ -660,10 +745,14 @@ func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 }
 
 func (s *Store) UpdateQuiz(ctx context.Context, quiz *models.Quiz) error {
+	if quiz.Value <= 0 {
+		quiz.Value = defaultQuizValue
+	}
 	return s.withTx(ctx, func(q *dbgen.Queries) error {
 		if err := q.UpdateQuiz(ctx, dbgen.UpdateQuizParams{
 			Title:       quiz.Title,
 			Description: quiz.Description,
+			Value:       int64(quiz.Value),
 			ID:          quiz.ID,
 		}); err != nil {
 			return err
@@ -676,6 +765,30 @@ func (s *Store) UpdateQuiz(ctx context.Context, quiz *models.Quiz) error {
 		}
 		return s.syncQuizLinks(ctx, q, quiz.ID, quiz.Description)
 	})
+}
+
+// RecordQuizGrade sets userID's grade for quizID — a retake overwrites the
+// previous grade for that quiz, the latest attempt counts. Points are never
+// stored: GetUserCoursePoints/GetEnrolledStudents always sum quiz_grades live,
+// scoped to one course, so there's nothing to recompute here.
+func (s *Store) RecordQuizGrade(ctx context.Context, userID, quizID string, grade int) error {
+	return s.queries.UpsertQuizGrade(ctx, dbgen.UpsertQuizGradeParams{
+		UserID:   userID,
+		QuizID:   quizID,
+		Grade:    int64(grade),
+		GradedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// GetUserCoursePoints sums userID's quiz grades within courseID only — a
+// student's points are per-course, not global.
+func (s *Store) GetUserCoursePoints(ctx context.Context, userID, courseID string) (int, error) {
+	v, err := s.queries.GetUserCoursePoints(ctx, dbgen.GetUserCoursePointsParams{UserID: userID, CourseID: courseID})
+	if err != nil {
+		return 0, err
+	}
+	points, _ := v.(int64)
+	return int(points), nil
 }
 
 func addQuizQuestions(ctx context.Context, q *dbgen.Queries, quizID string, questions []models.QuizQuestion) error {
@@ -908,4 +1021,154 @@ func (s *Store) GetServerLogStats(ctx context.Context, from, to string) (models.
 		stats.ByLevel[r.Level] = r.Count
 	}
 	return stats, nil
+}
+
+// --- Forum ---
+
+// GetForumPosts returns every post in courseID's forum, flat (parentID links
+// form the tree — built client-side, not here), with Liked set per requesting
+// user (userID may be "" for an anonymous/guest read, in which case nothing
+// is ever liked).
+func (s *Store) GetForumPosts(ctx context.Context, courseID, userID string) ([]models.ForumPost, error) {
+	rows, err := s.queries.GetForumPostsForCourse(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	liked := make(map[string]bool)
+	if userID != "" {
+		likedIDs, err := s.queries.GetLikedPostIDsForCourse(ctx, dbgen.GetLikedPostIDsForCourseParams{UserID: userID, CourseID: courseID})
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range likedIDs {
+			liked[id] = true
+		}
+	}
+	posts := make([]models.ForumPost, len(rows))
+	for i, r := range rows {
+		posts[i] = models.ForumPost{
+			ID:         r.ID,
+			CourseID:   r.CourseID,
+			ParentID:   ptrFromNullString(r.ParentID),
+			UserID:     r.UserID,
+			AuthorName: r.AuthorName,
+			AuthorRole: models.Role(r.AuthorRole),
+			Title:      r.Title,
+			Body:       r.Body,
+			CreatedAt:  r.CreatedAt,
+			LikeCount:  int(r.LikeCount),
+			Liked:      liked[r.ID],
+		}
+	}
+	return posts, nil
+}
+
+func (s *Store) GetForumPost(ctx context.Context, id string) (*models.ForumPost, error) {
+	row, err := s.queries.GetForumPost(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &models.ForumPost{
+		ID:       row.ID,
+		CourseID: row.CourseID,
+		ParentID: ptrFromNullString(row.ParentID),
+		UserID:   row.UserID,
+		Body:     row.Body,
+	}, nil
+}
+
+func (s *Store) AddForumPost(ctx context.Context, post *models.ForumPost) error {
+	post.ID = uuid.NewString()
+	post.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	return s.withTx(ctx, func(q *dbgen.Queries) error {
+		if err := q.AddForumPost(ctx, dbgen.AddForumPostParams{
+			ID:        post.ID,
+			CourseID:  post.CourseID,
+			ParentID:  nullStringFromPtr(post.ParentID),
+			UserID:    post.UserID,
+			Title:     post.Title,
+			Body:      post.Body,
+			CreatedAt: post.CreatedAt,
+		}); err != nil {
+			return err
+		}
+		return s.syncForumLinks(ctx, q, post.ID, post.Body)
+	})
+}
+
+// syncForumLinks mirrors syncLessonLinks/syncQuizLinks for forum_links — a
+// post's body can [[id]]-link library items, lessons, or quizzes. Posts are
+// never edited, so unlike the lesson/quiz variants this only ever runs once,
+// at creation — no delete-then-reinsert needed.
+func (s *Store) syncForumLinks(ctx context.Context, q *dbgen.Queries, postID, body string) error {
+	for _, ref := range extractWikiRefs(body) {
+		targetType := ""
+		if _, err := q.GetLibraryItem(ctx, ref); err == nil {
+			targetType = "library_item"
+		} else if _, err := q.GetLesson(ctx, ref); err == nil {
+			targetType = "lesson"
+		} else if _, err := q.GetQuiz(ctx, ref); err == nil {
+			targetType = "quiz"
+		}
+		if targetType == "" {
+			continue
+		}
+		if err := q.AddForumLink(ctx, dbgen.AddForumLinkParams{
+			SourcePostID: postID, TargetID: ref, TargetType: targetType,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetCourseForumLinks resolves every library item, lesson, and quiz
+// [[id]]-linked from ANY post in courseID's forum — a single course-wide
+// bundle (not scoped per post) that the frontend uses to resolve every
+// post's own body, since ids are globally unique.
+func (s *Store) GetCourseForumLinks(ctx context.Context, courseID string) ([]models.LibraryItem, []models.LessonUsage, []models.QuizUsage, error) {
+	itemRows, err := s.queries.GetCourseForumLinkedLibraryItems(ctx, courseID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	items := make([]models.LibraryItem, len(itemRows))
+	for i, r := range itemRows {
+		items[i] = libraryItemFromRow(libraryItemRow{
+			ID: r.ID, Title: r.Title, Type: r.Type, Category: r.Category, SizeKb: r.SizeKb,
+			MimeType: r.MimeType, OriginalFilename: r.OriginalFilename, UploadedAt: r.UploadedAt,
+			ModifiedAt: r.ModifiedAt, Duration: r.Duration, Resolution: r.Resolution,
+			FilePath: r.FilePath, UploadedByName: r.UploadedByName,
+		})
+	}
+
+	lessonRows, err := s.queries.GetCourseForumLinkedLessons(ctx, courseID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	lessons := make([]models.LessonUsage, len(lessonRows))
+	for i, r := range lessonRows {
+		lessons[i] = models.LessonUsage{LessonID: r.ID, CourseID: r.CourseID, LessonTitle: r.Title, CourseTitle: r.CourseTitle}
+	}
+
+	quizRows, err := s.queries.GetCourseForumLinkedQuizzes(ctx, courseID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	quizzes := make([]models.QuizUsage, len(quizRows))
+	for i, r := range quizRows {
+		quizzes[i] = models.QuizUsage{QuizID: r.ID, CourseID: r.CourseID, QuizTitle: r.Title, CourseTitle: r.CourseTitle}
+	}
+
+	return items, lessons, quizzes, nil
+}
+
+func (s *Store) LikePost(ctx context.Context, postID, userID string) error {
+	return s.queries.LikePost(ctx, dbgen.LikePostParams{PostID: postID, UserID: userID})
+}
+
+func (s *Store) UnlikePost(ctx context.Context, postID, userID string) error {
+	return s.queries.UnlikePost(ctx, dbgen.UnlikePostParams{PostID: postID, UserID: userID})
 }

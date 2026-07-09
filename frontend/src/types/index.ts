@@ -5,8 +5,34 @@ export interface User {
   name: string;
   email: string;
   role: Role;
-  points: number;
   completedLessons: string[];
+  enrolledCourses: string[];
+}
+
+// CourseStudent.points is scoped to one course (sum of quiz grades within it)
+// — there's no global points concept anymore.
+export interface CourseStudent {
+  id: string;
+  name: string;
+  email: string;
+  points: number;
+}
+
+// ForumPost.parentId null = top-level post; otherwise a reply to another post
+// (which may itself be a reply) — the tree is built client-side from the flat
+// per-course list GET /courses/:id/forum returns.
+export interface ForumPost {
+  id: string;
+  courseId: string;
+  parentId: string | null;
+  userId: string;
+  authorName: string;
+  authorRole: Role;
+  title: string;
+  body: string;
+  createdAt: string;
+  likeCount: number;
+  liked: boolean;
 }
 
 export interface LibraryItem {
@@ -36,6 +62,7 @@ export interface Quiz {
   lessonId: string | null;
   title: string;
   description: string;
+  value: number;
   questions: QuizQuestion[];
 }
 
@@ -51,6 +78,13 @@ export interface LessonUsage {
   lessonId: string;
   courseId: string;
   lessonTitle: string;
+  courseTitle: string;
+}
+
+export interface QuizUsage {
+  quizId: string;
+  courseId: string;
+  quizTitle: string;
   courseTitle: string;
 }
 
@@ -85,7 +119,8 @@ export interface QuizSubmitResponse {
   score: number;
   correct: number;
   total: number;
-  earnedXP: number;
+  grade: number;
+  quizValue: number;
   passed: boolean;
   totalPoints: number;
 }

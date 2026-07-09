@@ -28,16 +28,19 @@ func Data(ctx context.Context, s *store.Store) error {
 		return err
 	}
 
-	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Prof. Carlos Mendoza", Email: "carlos.mendoza@radix.local", PasswordHash: passwordHash, Role: models.RoleAdmin, Points: 0, CompletedLessons: nil}); err != nil {
+	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Prof. Carlos Mendoza", Email: "carlos.mendoza@radix.local", PasswordHash: passwordHash, Role: models.RoleAdmin, CompletedLessons: nil}); err != nil {
 		return err
 	}
 	// u2's completed lesson ("l1") gets attached after lessons are created below —
 	// user_completed_lessons.lesson_id has a real FK now, can't reference it yet.
-	u2 := &models.User{ID: "u2", Name: "Sofía Ramírez", Email: "sofia.ramirez@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, Points: 150, CompletedLessons: nil}
+	// Points are derived from quiz_grades, per course (see RecordQuizGrade calls
+	// below) — nothing to set here.
+	u2 := &models.User{ID: "u2", Name: "Sofía Ramírez", Email: "sofia.ramirez@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, CompletedLessons: nil}
 	if err := s.AddUser(ctx, u2); err != nil {
 		return err
 	}
-	if err := s.AddUser(ctx, &models.User{ID: "u3", Name: "Mateo Torres", Email: "mateo.torres@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, Points: 80, CompletedLessons: nil}); err != nil {
+	u3 := &models.User{ID: "u3", Name: "Mateo Torres", Email: "mateo.torres@radix.local", PasswordHash: passwordHash, Role: models.RoleStudent, CompletedLessons: nil}
+	if err := s.AddUser(ctx, u3); err != nil {
 		return err
 	}
 
@@ -76,6 +79,16 @@ func Data(ctx context.Context, s *store.Store) error {
 		return err
 	}
 
+	// Both demo students are enrolled in every demo course, so the seeded
+	// dataset still reads as fully accessible out of the box.
+	for _, courseID := range []string{c1.ID, c2.ID, c3.ID} {
+		for _, studentID := range []string{"u2", "u3"} {
+			if err := s.EnrollStudent(ctx, studentID, courseID); err != nil {
+				return err
+			}
+		}
+	}
+
 	l1 := &models.Lesson{CourseID: c1.ID, Title: "La Célula: Unidad Fundamental", ContentText: "La célula es la unidad básica estructural y funcional de todos los organismos vivos. Existen dos tipos principales: procariotas y eucariotas. Las células procariotas carecen de núcleo definido, mientras que las eucariotas poseen un núcleo rodeado por una membrana nuclear. La teoría celular, formulada en el siglo XIX, establece que todos los seres vivos están compuestos por células y que toda célula proviene de otra célula preexistente. Robert Hooke fue el primero en observar células en 1665 utilizando un microscopio primitivo.\n\nVer [[" + lib1 + "]] para más detalle."}
 	if err := s.AddLesson(ctx, l1); err != nil {
 		return err
@@ -102,25 +115,42 @@ func Data(ctx context.Context, s *store.Store) error {
 		return err
 	}
 
-	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c1.ID, LessonID: &l1.ID, Title: "Evaluación: Célula", Questions: []models.QuizQuestion{
+	q1 := &models.Quiz{CourseID: c1.ID, LessonID: &l1.ID, Title: "Evaluación: Célula", Questions: []models.QuizQuestion{
 		{Text: "¿Quién fue el primero en observar células utilizando un microscopio?", Options: []string{"Anton van Leeuwenhoek", "Robert Hooke", "Louis Pasteur", "Gregor Mendel"}, CorrectIndex: 1},
 		{Text: "¿Cuál de las siguientes NO es una característica de las células procariotas?", Options: []string{"Carecen de núcleo definido", "Poseen pared celular", "Tienen mitocondrias", "Su ADN está disperso en el citoplasma"}, CorrectIndex: 2},
 		{Text: "¿Qué establece la teoría celular?", Options: []string{"Todas las células tienen núcleo", "Los virus son células", "Toda célula proviene de otra preexistente", "Las células sólo existen en animales"}, CorrectIndex: 2},
-	}}); err != nil {
+	}}
+	if err := s.AddQuiz(ctx, q1); err != nil {
 		return err
 	}
-	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c2.ID, LessonID: &l3.ID, Title: "Evaluación: Lógica Proposicional", Questions: []models.QuizQuestion{
+	q2 := &models.Quiz{CourseID: c2.ID, LessonID: &l3.ID, Title: "Evaluación: Lógica Proposicional", Questions: []models.QuizQuestion{
 		{Text: "¿Cuál de los siguientes NO es un conectivo lógico fundamental?", Options: []string{"Conjunción (∧)", "Disyunción (∨)", "Multiplicación (×)", "Implicación (→)"}, CorrectIndex: 2},
 		{Text: "¿Qué herramienta se utiliza para determinar el valor de verdad de una proposición compuesta?", Options: []string{"Diagrama de Venn", "Tabla de verdad", "Árbol de decisión", "Matriz booleana"}, CorrectIndex: 1},
 		{Text: "Una proposición es...", Options: []string{"Una pregunta", "Una afirmación que puede ser verdadera o falsa", "Un comando", "Una expresión matemática"}, CorrectIndex: 1},
-	}}); err != nil {
+	}}
+	if err := s.AddQuiz(ctx, q2); err != nil {
 		return err
 	}
-	if err := s.AddQuiz(ctx, &models.Quiz{CourseID: c3.ID, LessonID: &l5.ID, Title: "Evaluación: Revolución Francesa", Questions: []models.QuizQuestion{
+	q3 := &models.Quiz{CourseID: c3.ID, LessonID: &l5.ID, Title: "Evaluación: Revolución Francesa", Questions: []models.QuizQuestion{
 		{Text: "¿En qué año comenzó la Revolución Francesa?", Options: []string{"1776", "1789", "1799", "1804"}, CorrectIndex: 1},
 		{Text: "¿Qué documento estableció los principios de libertad, igualdad y fraternidad?", Options: []string{"La Constitución de 1791", "El Código Napoleónico", "La Declaración de los Derechos del Hombre y del Ciudadano", "La Carta Magna"}, CorrectIndex: 2},
 		{Text: "¿Qué evento simbólico marcó el inicio de la Revolución Francesa?", Options: []string{"La ejecución de Luis XVI", "La Toma de la Bastilla", "El golpe de estado de Napoleón", "La firma del Tratado de Versalles"}, CorrectIndex: 1},
-	}}); err != nil {
+	}}
+	if err := s.AddQuiz(ctx, q3); err != nil {
+		return err
+	}
+
+	// Demo grades — points are derived from these, not set on the user directly.
+	if err := s.RecordQuizGrade(ctx, u2.ID, q1.ID, 90); err != nil {
+		return err
+	}
+	if err := s.RecordQuizGrade(ctx, u2.ID, q2.ID, 80); err != nil {
+		return err
+	}
+	if err := s.RecordQuizGrade(ctx, u2.ID, q3.ID, 100); err != nil {
+		return err
+	}
+	if err := s.RecordQuizGrade(ctx, u3.ID, q1.ID, 70); err != nil {
 		return err
 	}
 

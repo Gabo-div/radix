@@ -5,10 +5,10 @@ SELECT * FROM quizzes WHERE id = ?;
 SELECT * FROM quizzes WHERE course_id = ? ORDER BY rowid;
 
 -- name: AddQuiz :exec
-INSERT INTO quizzes (id, course_id, lesson_id, title, description) VALUES (?, ?, ?, ?, ?);
+INSERT INTO quizzes (id, course_id, lesson_id, title, description, value) VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: UpdateQuiz :exec
-UPDATE quizzes SET title = ?, description = ? WHERE id = ?;
+UPDATE quizzes SET title = ?, description = ?, value = ? WHERE id = ?;
 
 -- name: GetQuizQuestions :many
 SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY ordinal;

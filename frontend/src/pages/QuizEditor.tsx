@@ -19,6 +19,7 @@ export default function QuizEditor() {
   const [allLessons, setAllLessons] = useState<LessonUsage[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [value, setValue] = useState(100);
   const [questions, setQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
   const [loadingQuiz, setLoadingQuiz] = useState(isEditing);
   const [showPreview, setShowPreview] = useState(false);
@@ -36,6 +37,7 @@ export default function QuizEditor() {
       api.getQuiz(quizId).then((q) => {
         setTitle(q.title);
         setDescription(q.description);
+        setValue(q.value);
         setQuestions(q.questions);
         setLoadingQuiz(false);
       }).catch(() => setLoadingQuiz(false));
@@ -59,10 +61,10 @@ export default function QuizEditor() {
     setSaving(true);
     try {
       if (isEditing && quizId) {
-        await api.updateQuiz(quizId, { title, description, questions });
+        await api.updateQuiz(quizId, { title, description, value, questions });
         showMsg("Cuestionario actualizado exitosamente");
       } else {
-        await api.createQuiz({ courseId, title, description, questions });
+        await api.createQuiz({ courseId, title, description, value, questions });
         showMsg("Cuestionario creado exitosamente");
       }
       setTimeout(() => navigate(`/courses/${courseId}?tab=quizzes`), 1000);
@@ -105,9 +107,17 @@ export default function QuizEditor() {
 
       <div className="flex gap-6">
         <div className="flex-1 min-w-0 space-y-6">
-          <input type="text" placeholder="Título del cuestionario" value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" required />
+          <div className="flex gap-3">
+            <input type="text" placeholder="Título del cuestionario" value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" required />
+            <div className="flex flex-col items-center justify-center bg-slate-800 border border-slate-700 rounded-xl px-4">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider">Valor</label>
+              <input type="number" min={1} value={value}
+                onChange={(e) => setValue(Number(e.target.value) || 0)}
+                className="w-16 bg-transparent text-center text-lg font-bold text-white focus:outline-none" />
+            </div>
+          </div>
 
           <Card>
             <h2 className="text-sm font-medium text-slate-300 mb-4">Descripción (opcional)</h2>

@@ -52,6 +52,84 @@ func (q *Queries) AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) 
 	return err
 }
 
+const getCourseLibraryResources = `-- name: GetCourseLibraryResources :many
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name
+FROM library_items
+LEFT JOIN users ON library_items.uploaded_by = users.id
+WHERE library_items.id IN (
+    SELECT lesson_links.target_id
+    FROM lesson_links
+    JOIN lessons ON lessons.id = lesson_links.source_lesson_id
+    WHERE lessons.course_id = ? AND lesson_links.target_type = 'library_item'
+    UNION
+    SELECT quiz_links.target_id
+    FROM quiz_links
+    JOIN quizzes ON quizzes.id = quiz_links.source_quiz_id
+    WHERE quizzes.course_id = ? AND quiz_links.target_type = 'library_item'
+)
+ORDER BY library_items.rowid
+`
+
+type GetCourseLibraryResourcesParams struct {
+	CourseID   string
+	CourseID_2 string
+}
+
+type GetCourseLibraryResourcesRow struct {
+	ID               string
+	Title            string
+	Type             string
+	Category         string
+	SizeKb           int64
+	MimeType         string
+	OriginalFilename string
+	UploadedAt       string
+	ModifiedAt       string
+	Duration         sql.NullString
+	Resolution       sql.NullString
+	FilePath         string
+	UploadedBy       sql.NullString
+	UploadedByName   sql.NullString
+}
+
+func (q *Queries) GetCourseLibraryResources(ctx context.Context, arg GetCourseLibraryResourcesParams) ([]GetCourseLibraryResourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCourseLibraryResources, arg.CourseID, arg.CourseID_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCourseLibraryResourcesRow
+	for rows.Next() {
+		var i GetCourseLibraryResourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Type,
+			&i.Category,
+			&i.SizeKb,
+			&i.MimeType,
+			&i.OriginalFilename,
+			&i.UploadedAt,
+			&i.ModifiedAt,
+			&i.Duration,
+			&i.Resolution,
+			&i.FilePath,
+			&i.UploadedBy,
+			&i.UploadedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLibraryItem = `-- name: GetLibraryItem :one
 SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name FROM library_items
 LEFT JOIN users ON library_items.uploaded_by = users.id

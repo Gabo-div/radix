@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	AddCompletedLesson(ctx context.Context, arg AddCompletedLessonParams) error
 	AddCourse(ctx context.Context, arg AddCourseParams) error
+	AddForumLink(ctx context.Context, arg AddForumLinkParams) error
+	AddForumPost(ctx context.Context, arg AddForumPostParams) error
 	AddLesson(ctx context.Context, arg AddLessonParams) error
 	AddLessonLink(ctx context.Context, arg AddLessonLinkParams) error
 	AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) error
@@ -29,15 +31,25 @@ type Querier interface {
 	DeleteOldServerLogs(ctx context.Context, timestamp string) (int64, error)
 	DeleteQuizLinks(ctx context.Context, sourceQuizID string) error
 	DeleteQuizQuestions(ctx context.Context, quizID string) error
+	EnrollStudent(ctx context.Context, arg EnrollStudentParams) error
 	GetAllLessonsWithCourse(ctx context.Context) ([]GetAllLessonsWithCourseRow, error)
 	GetCompletedLessonIDs(ctx context.Context, userID string) ([]string, error)
 	GetCourse(ctx context.Context, id string) (Course, error)
+	GetCourseForumLinkedLessons(ctx context.Context, courseID string) ([]GetCourseForumLinkedLessonsRow, error)
+	GetCourseForumLinkedLibraryItems(ctx context.Context, courseID string) ([]GetCourseForumLinkedLibraryItemsRow, error)
+	GetCourseForumLinkedQuizzes(ctx context.Context, courseID string) ([]GetCourseForumLinkedQuizzesRow, error)
+	GetCourseLibraryResources(ctx context.Context, arg GetCourseLibraryResourcesParams) ([]GetCourseLibraryResourcesRow, error)
 	GetCourses(ctx context.Context) ([]Course, error)
+	GetEnrolledCourseIDs(ctx context.Context, userID string) ([]string, error)
+	GetEnrolledStudents(ctx context.Context, courseID string) ([]GetEnrolledStudentsRow, error)
+	GetForumPost(ctx context.Context, id string) (ForumPost, error)
+	GetForumPostsForCourse(ctx context.Context, courseID string) ([]GetForumPostsForCourseRow, error)
 	GetLesson(ctx context.Context, id string) (GetLessonRow, error)
 	GetLessonsForCourse(ctx context.Context, courseID string) ([]GetLessonsForCourseRow, error)
 	GetLessonsLinkingToTarget(ctx context.Context, targetID string) ([]GetLessonsLinkingToTargetRow, error)
 	GetLibraryItem(ctx context.Context, id string) (GetLibraryItemRow, error)
 	GetLibraryItems(ctx context.Context) ([]GetLibraryItemsRow, error)
+	GetLikedPostIDsForCourse(ctx context.Context, arg GetLikedPostIDsForCourseParams) ([]string, error)
 	GetLinkedLessons(ctx context.Context, sourceLessonID string) ([]GetLinkedLessonsRow, error)
 	GetLinkedLibraryItems(ctx context.Context, sourceLessonID string) ([]GetLinkedLibraryItemsRow, error)
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
@@ -45,17 +57,24 @@ type Querier interface {
 	GetQuizLinkedLibraryItems(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLibraryItemsRow, error)
 	GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error)
 	GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error)
+	GetUnenrolledStudents(ctx context.Context, courseID string) ([]GetUnenrolledStudentsRow, error)
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByRole(ctx context.Context, role string) (User, error)
+	GetUserCoursePoints(ctx context.Context, arg GetUserCoursePointsParams) (interface{}, error)
+	IsEnrolled(ctx context.Context, arg IsEnrolledParams) (int64, error)
+	LikePost(ctx context.Context, arg LikePostParams) error
 	ListServerLogs(ctx context.Context, arg ListServerLogsParams) ([]ServerLog, error)
 	ListSyncLog(ctx context.Context) ([]string, error)
 	SearchServerLogs(ctx context.Context, arg SearchServerLogsParams) ([]ServerLog, error)
 	TotalDiskKB(ctx context.Context) (interface{}, error)
+	UnenrollStudent(ctx context.Context, arg UnenrollStudentParams) error
+	UnlikePost(ctx context.Context, arg UnlikePostParams) error
 	UpdateLesson(ctx context.Context, arg UpdateLessonParams) error
 	UpdateLibraryItem(ctx context.Context, arg UpdateLibraryItemParams) error
 	UpdateQuiz(ctx context.Context, arg UpdateQuizParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
+	UpsertQuizGrade(ctx context.Context, arg UpsertQuizGradeParams) error
 }
 
 var _ Querier = (*Queries)(nil)

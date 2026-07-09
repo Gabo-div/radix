@@ -1,14 +1,16 @@
 import { ViewPlugin, Decoration, hoverTooltip } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
-import type { LibraryItem, LessonUsage } from "../types";
+import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import { getToken } from "./api";
 
-export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUsage[] = []): Extension[] {
+export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUsage[] = [], quizzes: QuizUsage[] = []): Extension[] {
   const map: Record<string, LibraryItem> = {};
   for (const item of items) map[item.id] = item;
   const lessonMap: Record<string, LessonUsage> = {};
   for (const lesson of lessons) lessonMap[lesson.lessonId] = lesson;
+  const quizMap: Record<string, QuizUsage> = {};
+  for (const quiz of quizzes) quizMap[quiz.quizId] = quiz;
   const token = getToken();
 
   const wikiLinkPlugin = ViewPlugin.fromClass(
@@ -42,7 +44,8 @@ export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUs
       if (pos >= m.index && pos <= m.index + m[0].length) {
         const item = map[m[1]];
         const lesson = !item ? lessonMap[m[1]] : undefined;
-        if (!item && !lesson) return null;
+        const quiz = !item && !lesson ? quizMap[m[1]] : undefined;
+        if (!item && !lesson && !quiz) return null;
         const iconMap: Record<string, string> = { video: "🎬", audio: "🎵", image: "🖼️", pdf: "📄", text: "📝", document: "📎" };
         return {
           pos: m.index,
@@ -73,6 +76,16 @@ export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUs
                 </div>
                 <div class="text-xs text-slate-400">
                   <div>Curso: <span class="text-slate-300">${lesson.courseTitle}</span></div>
+                </div>
+              `;
+            } else if (quiz) {
+              dom.innerHTML = `
+                <div class="flex items-center gap-2 mb-2">
+                  <span>📝</span>
+                  <span class="font-medium text-white">${quiz.quizTitle}</span>
+                </div>
+                <div class="text-xs text-slate-400">
+                  <div>Curso: <span class="text-slate-300">${quiz.courseTitle}</span></div>
                 </div>
               `;
             }

@@ -15,6 +15,32 @@ type Course struct {
 	Category    string
 }
 
+type CourseEnrollment struct {
+	UserID   string
+	CourseID string
+}
+
+type ForumLike struct {
+	PostID string
+	UserID string
+}
+
+type ForumLink struct {
+	SourcePostID string
+	TargetID     string
+	TargetType   string
+}
+
+type ForumPost struct {
+	ID        string
+	CourseID  string
+	ParentID  sql.NullString
+	UserID    string
+	Title     string
+	Body      string
+	CreatedAt string
+}
+
 type Lesson struct {
 	ID          string
 	CourseID    string
@@ -50,6 +76,14 @@ type Quiz struct {
 	LessonID    sql.NullString
 	Title       string
 	Description string
+	Value       int64
+}
+
+type QuizGrade struct {
+	UserID   string
+	QuizID   string
+	Grade    int64
+	GradedAt string
 }
 
 type QuizLink struct {
@@ -91,7 +125,6 @@ type User struct {
 	Email        string
 	PasswordHash string
 	Role         string
-	Points       int64
 }
 
 type UserCompletedLesson struct {

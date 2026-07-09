@@ -4,14 +4,16 @@ import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { splitWikiSegments } from "../lib/markdown";
-import type { LibraryItem, LessonUsage } from "../types";
+import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import InlineMedia from "./InlineMedia";
 import InlineLesson from "./InlineLesson";
+import InlineQuiz from "./InlineQuiz";
 
 interface Props {
   text: string;
   itemMap: Record<string, LibraryItem>;
   lessonMap: Record<string, LessonUsage>;
+  quizMap?: Record<string, QuizUsage>;
 }
 
 const headingId = (children: ReactNode) =>
@@ -19,7 +21,7 @@ const headingId = (children: ReactNode) =>
 
 // Renders markdown interleaved with [[id]] wiki-link embeds (library items as
 // InlineMedia, lessons as InlineLesson) — shared by LessonViewer and QuizViewer.
-export default function WikiContent({ text, itemMap, lessonMap }: Props) {
+export default function WikiContent({ text, itemMap, lessonMap, quizMap = {} }: Props) {
   const segments = useMemo(() => splitWikiSegments(text), [text]);
 
   return (
@@ -31,6 +33,8 @@ export default function WikiContent({ text, itemMap, lessonMap }: Props) {
             if (item) return <InlineMedia key={i} item={item} />;
             const lesson = lessonMap[seg.value];
             if (lesson) return <InlineLesson key={i} lesson={lesson} />;
+            const quiz = quizMap[seg.value];
+            if (quiz) return <InlineQuiz key={i} quiz={quiz} />;
             return (
               <span key={i} className="text-red-400 text-sm bg-red-900/20 px-1 rounded">[[{seg.value} no encontrado]]</span>
             );

@@ -4,7 +4,10 @@ import type {
   Quiz,
   Lesson,
   LessonUsage,
+  QuizUsage,
   Course,
+  CourseStudent,
+  ForumPost,
   LoginResponse,
   CourseDetailResponse,
   LessonDetailResponse,
@@ -90,6 +93,36 @@ export const api = {
   addCourse: (title: string, description: string, category: string) =>
     request<Course>("/api/v1/courses", { method: "POST", body: JSON.stringify({ title, description, category }) }),
 
+  getEnrolledStudents: (courseId: string) =>
+    request<CourseStudent[]>(`/api/v1/courses/${courseId}/students`),
+
+  getAvailableStudents: (courseId: string) =>
+    request<CourseStudent[]>(`/api/v1/courses/${courseId}/students/available`),
+
+  enrollStudent: (courseId: string, userId: string) =>
+    request<void>(`/api/v1/courses/${courseId}/students`, { method: "POST", body: JSON.stringify({ userId }) }),
+
+  unenrollStudent: (courseId: string, userId: string) =>
+    request<void>(`/api/v1/courses/${courseId}/students/${userId}`, { method: "DELETE" }),
+
+  getCourseResources: (courseId: string) =>
+    request<LibraryItem[]>(`/api/v1/courses/${courseId}/resources`),
+
+  getForumPosts: (courseId: string) =>
+    request<ForumPost[]>(`/api/v1/courses/${courseId}/forum`),
+
+  createForumPost: (courseId: string, data: { parentId?: string; title?: string; body: string }) =>
+    request<ForumPost>(`/api/v1/courses/${courseId}/forum`, { method: "POST", body: JSON.stringify(data) }),
+
+  getForumLinks: (courseId: string) =>
+    request<{ libraryItems: LibraryItem[]; lessons: LessonUsage[]; quizzes: QuizUsage[] }>(`/api/v1/courses/${courseId}/forum/links`),
+
+  likeForumPost: (id: string) =>
+    request<void>(`/api/v1/forum/${id}/like`, { method: "POST" }),
+
+  unlikeForumPost: (id: string) =>
+    request<void>(`/api/v1/forum/${id}/like`, { method: "DELETE" }),
+
   addLesson: (courseId: string, title: string, contentText: string) =>
     request<Lesson>(`/api/v1/courses/${courseId}/lessons`, { method: "POST", body: JSON.stringify({ title, contentText }) }),
 
@@ -110,10 +143,10 @@ export const api = {
   getLessonLinks: (id: string) =>
     request<{ libraryItems: LibraryItem[]; lessons: LessonUsage[] }>(`/api/v1/lessons/${id}/links`),
 
-  createQuiz: (data: { courseId?: string; lessonId?: string | null; title: string; description?: string; questions: Quiz["questions"] }) =>
+  createQuiz: (data: { courseId?: string; lessonId?: string | null; title: string; description?: string; value?: number; questions: Quiz["questions"] }) =>
     request<Quiz>("/api/v1/quizzes", { method: "POST", body: JSON.stringify(data) }),
 
-  updateQuiz: (id: string, data: { title?: string; description?: string; questions?: Quiz["questions"] }) =>
+  updateQuiz: (id: string, data: { title?: string; description?: string; value?: number; questions?: Quiz["questions"] }) =>
     request<Quiz>(`/api/v1/quizzes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 
   getQuiz: (id: string) => request<Quiz>(`/api/v1/quizzes/${id}`),

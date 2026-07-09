@@ -35,14 +35,7 @@ export default function StudentDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <div className="flex items-center gap-2 text-indigo-400 mb-2">
-            <Flame size={20} />
-            <span className="text-sm font-medium">Puntos (XP)</span>
-          </div>
-          <p className="text-3xl font-bold text-white">{currentUser.points}</p>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <div className="flex items-center gap-2 text-emerald-400 mb-2">
             <BookCheck size={20} />

@@ -22,6 +22,7 @@ func (h *Handler) CreateQuiz(c *echo.Context) error {
 		LessonID    *string               `json:"lessonId"`
 		Title       string                `json:"title"`
 		Description string                `json:"description"`
+		Value       int                   `json:"value"`
 		Questions   []models.QuizQuestion `json:"questions"`
 	}
 	if err := c.Bind(&req); err != nil {
@@ -48,6 +49,7 @@ func (h *Handler) CreateQuiz(c *echo.Context) error {
 		LessonID:    req.LessonID,
 		Title:       req.Title,
 		Description: req.Description,
+		Value:       req.Value,
 		Questions:   req.Questions,
 	}
 	if err := h.Store.AddQuiz(ctx, quiz); err != nil {
@@ -63,6 +65,9 @@ func (h *Handler) CreateQuiz(c *echo.Context) error {
 func (h *Handler) GetCourseQuizzes(c *echo.Context) error {
 	ctx := c.Request().Context()
 	courseID := c.Param("id")
+	if ok, err := h.requireCourseAccess(c, courseID); !ok {
+		return err
+	}
 	quizzes, err := h.Store.GetQuizzesForCourse(ctx, courseID)
 	if err != nil {
 		return httpx.InternalError(c, "failed to load quizzes")
@@ -86,6 +91,7 @@ func (h *Handler) UpdateQuiz(c *echo.Context) error {
 	var req struct {
 		Title       *string               `json:"title"`
 		Description *string               `json:"description"`
+		Value       *int                  `json:"value"`
 		Questions   []models.QuizQuestion `json:"questions"`
 	}
 	if err := c.Bind(&req); err != nil {
@@ -96,6 +102,9 @@ func (h *Handler) UpdateQuiz(c *echo.Context) error {
 	}
 	if req.Description != nil {
 		quiz.Description = *req.Description
+	}
+	if req.Value != nil {
+		quiz.Value = *req.Value
 	}
 	if req.Questions != nil {
 		quiz.Questions = req.Questions
@@ -141,6 +150,9 @@ func (h *Handler) GetQuiz(c *echo.Context) error {
 		}
 		return httpx.InternalError(c, "failed to load quiz")
 	}
+	if ok, err := h.requireCourseAccess(c, quiz.CourseID); !ok {
+		return err
+	}
 	return httpx.OK(c, http.StatusOK, quiz)
 }
 
@@ -153,6 +165,9 @@ func (h *Handler) SubmitQuiz(c *echo.Context) error {
 			return httpx.NotFound(c, "quiz not found")
 		}
 		return httpx.InternalError(c, "failed to load quiz")
+	}
+	if ok, err := h.requireCourseAccess(c, quiz.CourseID); !ok {
+		return err
 	}
 
 	var req struct {
@@ -175,15 +190,14 @@ func (h *Handler) SubmitQuiz(c *echo.Context) error {
 
 	total := len(quiz.Questions)
 	score := correct * 100 / total
-	earnedXP := correct * 10
+	grade := score * quiz.Value / 100
 
 	userID, _ := c.Get("user_id").(string)
 	user, err := h.Store.GetUser(ctx, userID)
 	if err != nil {
 		return httpx.InternalError(c, "failed to load user")
 	}
-	user.Points += earnedXP
-	// Standalone quizzes (no lessonId) aren't a lesson-completion gate — just XP.
+	// Standalone quizzes (no lessonId) aren't a lesson-completion gate.
 	if quiz.LessonID != nil {
 		alreadyCompleted := false
 		for _, lid := range user.CompletedLessons {
@@ -194,20 +208,32 @@ func (h *Handler) SubmitQuiz(c *echo.Context) error {
 		}
 		if !alreadyCompleted {
 			user.CompletedLessons = append(user.CompletedLessons, *quiz.LessonID)
+			if err := h.Store.UpdateUser(ctx, user); err != nil {
+				return httpx.InternalError(c, "failed to update user")
+			}
 		}
 	}
-	if err := h.Store.UpdateUser(ctx, user); err != nil {
-		return httpx.InternalError(c, "failed to update user")
+
+	// A retake overwrites this quiz's grade — the latest attempt counts.
+	if err := h.Store.RecordQuizGrade(ctx, userID, quizID, grade); err != nil {
+		return httpx.InternalError(c, "failed to record grade")
+	}
+	// Points are per-course, not global — sum of this user's grades across
+	// only this quiz's course.
+	totalPoints, err := h.Store.GetUserCoursePoints(ctx, userID, quiz.CourseID)
+	if err != nil {
+		return httpx.InternalError(c, "failed to load points")
 	}
 
-	h.Store.EnqueueSync(ctx, fmt.Sprintf("SUBMIT_QUIZ: %s | Score: %d%% | XP: %d", quizID, score, earnedXP))
+	h.Store.EnqueueSync(ctx, fmt.Sprintf("SUBMIT_QUIZ: %s | Score: %d%% | Grade: %d/%d", quizID, score, grade, quiz.Value))
 
 	return httpx.OK(c, http.StatusOK, map[string]interface{}{
 		"score":       score,
 		"correct":     correct,
 		"total":       total,
-		"earnedXP":    earnedXP,
+		"grade":       grade,
+		"quizValue":   quiz.Value,
 		"passed":      score >= 60,
-		"totalPoints": user.Points,
+		"totalPoints": totalPoints,
 	})
 }

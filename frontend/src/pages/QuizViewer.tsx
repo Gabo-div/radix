@@ -10,7 +10,7 @@ import { Card, Button } from "../components/ui";
 import WikiContent from "../components/WikiContent";
 import QuizTaker from "../components/QuizTaker";
 import LessonSidebar from "../components/layout/LessonSidebar";
-import { ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit, Lock } from "lucide-react";
 
 export default function QuizViewer() {
   const { courseId, quizId } = useParams<{ courseId: string; quizId: string }>();
@@ -18,10 +18,12 @@ export default function QuizViewer() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
   const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!quizId) return;
-    api.getQuiz(quizId).then(setQuiz).catch(() => { });
+    setError("");
+    api.getQuiz(quizId).then(setQuiz).catch((err) => setError(err.message));
     api.getQuizLinks(quizId).then(({ libraryItems, lessons }) => {
       setLinkedItems(libraryItems);
       setLinkedLessons(lessons);
@@ -45,6 +47,20 @@ export default function QuizViewer() {
     for (const l of linkedLessons) m[l.lessonId] = l;
     return m;
   }, [linkedLessons]);
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} /> Volver al curso
+        </Link>
+        <Card className="flex flex-col items-center gap-3 py-12 text-center">
+          <Lock size={32} className="text-slate-500" />
+          <p className="text-slate-300">No estás inscrito en este curso.</p>
+        </Card>
+      </div>
+    );
+  }
 
   if (!quiz) return <p className="text-slate-400">Cargando cuestionario...</p>;
 
@@ -74,12 +90,7 @@ export default function QuizViewer() {
               </Card>
             )}
 
-            <QuizTaker
-              quiz={quiz}
-              canSee={!!showQuiz}
-              canSubmit={!!isStudent}
-              onSubmitted={(res) => { if (currentUser) currentUser.points = res.totalPoints; }}
-            />
+            <QuizTaker quiz={quiz} canSee={!!showQuiz} canSubmit={!!isStudent} />
           </div>
 
           <div className="min-w-64 shrink-0 hidden lg:block">
