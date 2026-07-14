@@ -109,3 +109,25 @@ bun run build                # tsc + vite build
 | `DB_PATH` | local file used as SQLite storage (local-only mode only — remote mode keeps no local cache); its directory also holds `sessions.json` |
 | `TURSO_URL`, `TURSO_AUTH_TOKEN` | if `TURSO_URL` is set, the backend connects in remote mode against that libSQL-compatible server (defaults to the local docker-compose container, no auth token needed there) |
 | `GOOSE_DRIVER`, `GOOSE_DBSTRING`, `GOOSE_MIGRATION_DIR` | for the `goose` CLI only (manual migration authoring/status) — the app itself runs migrations programmatically from the embedded `migrations/` folder and doesn't read these |
+
+## University deliverable reports (`docs/`)
+
+When asked for a report/document for university submission (requirements spec, design doc, any "informe"), follow this process — `docs/ESPECIFICACION_REQUISITOS.md` is the reference example:
+
+1. **Author the content as a markdown file in `docs/`** (UPPER_SNAKE name, e.g. `docs/DISENO_ARQUITECTURA.md`), in Spanish, then generate the PDF:
+   ```bash
+   python3 docs/tools/md2pdf.py docs/ARCHIVO.md --title "Título del documento — RADIX"
+   ```
+   Output: cover page from `docs/PORTADA.png` + auto-generated clickable "Índice" with real page numbers + body with page numbers in the footer, PDF Creator/Producer metadata blanked. Requires chromium, poppler (`pdfinfo`/`pdftotext`), python-markdown; ffmpeg optional (recompresses the cover, ~4x smaller PDF).
+
+2. **Markdown conventions the script depends on:** no document title and no cover content in the `.md` — the file starts directly at `## 1. Introducción`. Sections are `##` and subsections `###`; exactly those two levels feed the TOC. Long heading texts are fine (page detection is whitespace-normalized). GFM tables supported.
+
+3. **Team members:** `docs/INTEGRANTES.md` is the source of truth (docente, C.I., which of the two asignaturas — Sistemas Distribuidos / Robótica — each student belongs to). When a report needs an integrantes list, filter that table by the relevant asignatura; resolve any `REVISAR`/`PENDIENTE` HTML comments in it with the user before including those rows.
+
+4. **Content/style rules for these documents:**
+   - Formal academic Spanish, but slightly imperfect on purpose — natural student writing, not polished-perfect prose. Avoid em-dash-heavy sentences, rhetorical parallelism, and showy vocabulary. No spelling/grammar errors.
+   - **Never mention Claude, AI, or code assistants** anywhere in content or metadata (don't cite `CLAUDE.md` as a reference — cite `README.md`, IEEE standards, textbooks like Tanenbaum & Van Steen / Coulouris instead).
+   - Requirements docs follow adapted IEEE 830 structure with `RF-XX`/`RNF-XX`/`RES-XX` ID tables; when theory is requested, it goes in its own section *before* the system-specific content, each concept tied back to RADIX.
+5. **Verify before delivering:** Read a few pages of the generated PDF visually (cover, índice, one body page), and check the script's output line — it prints a `SIN PÁGINA EN ÍNDICE` warning if any heading couldn't be located.
+
+**Never post-process the PDF with `pdfunite`** (or any merge tool): merging destroys the named destinations that make the índice links work. The cover must go through the script (it embeds the PNG in the same single Chromium render). That's also why the script exists at all — don't replace it with pandoc/pdfunite pipelines.
