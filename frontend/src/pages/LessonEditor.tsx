@@ -1,52 +1,53 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { api } from "../lib/api";
-import type { LibraryItem, LessonUsage } from "../types";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { extractWikiRefs } from "../lib/markdown";
-import { Card, Button, Badge } from "../components/ui";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCourse } from "@/hooks/useCourses";
+import { useLibrary } from "@/hooks/useLibrary";
+import { useAllLessons, useLesson, useAddLesson, useUpdateLesson } from "@/hooks/useLessons";
 import MarkdownEditor from "../components/MarkdownEditor";
 import QuizQuestionsEditor from "../components/QuizQuestionsEditor";
 import FilePickerModal from "../components/common/FilePickerModal";
 import LessonPickerModal from "../components/common/LessonPickerModal";
-import { ArrowLeft, Save, FileQuestion, Paperclip, BookOpen, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save, FileQuestion, Paperclip, BookOpen } from "lucide-react";
 
 export default function LessonEditor() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
   const isEditing = !!lessonId;
   const navigate = useNavigate();
-  const [course, setCourse] = useState<any>(null);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [allLessons, setAllLessons] = useState<LessonUsage[]>([]);
+
+  const { data: course } = useCourse(courseId);
+  const { data: library = [] } = useLibrary();
+  const { data: allLessons = [] } = useAllLessons();
+  const { data: lessonData, isPending: lessonPending } = useLesson(courseId, lessonId);
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [loadingLesson, setLoadingLesson] = useState(isEditing);
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
   const [showQuizSection, setShowQuizSection] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
-  const [existingQuiz, setExistingQuiz] = useState<{ id: string } | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    if (!courseId) return;
-    api.getCourse(courseId).then((d) => setCourse(d.course)).catch(() => {});
-    api.getLibrary().then(setLibrary).catch(() => {});
-    api.getAllLessons().then(setAllLessons).catch(() => {});
-    if (lessonId) {
-      api.getLesson(courseId, lessonId).then((d) => {
-        setTitle(d.lesson.title);
-        setContent(d.lesson.contentText);
-        if (d.quiz) {
-          setQuizQuestions(d.quiz.questions);
-          setShowQuizSection(true);
-          setExistingQuiz({ id: d.quiz.id });
-        }
-        setLoadingLesson(false);
-      }).catch(() => setLoadingLesson(false));
+    if (lessonData) {
+      setTitle(lessonData.lesson.title);
+      setContent(lessonData.lesson.contentText);
+      if (lessonData.quiz) {
+        setQuizQuestions(lessonData.quiz.questions);
+        setShowQuizSection(true);
+      }
     }
-  }, [courseId, lessonId]);
+  }, [lessonData]);
+
+  const addLesson = useAddLesson(courseId!);
+  const updateLesson = useUpdateLesson(lessonId!, courseId!);
+  const saving = addLesson.isPending || updateLesson.isPending;
+  const loadingLesson = isEditing && lessonPending;
 
   const wikiRefs = useMemo(() => extractWikiRefs(content), [content]);
   const linkedItems = useMemo(() => library.filter((li) => wikiRefs.includes(li.id)), [wikiRefs, library]);
@@ -55,8 +56,6 @@ export default function LessonEditor() {
     [wikiRefs, allLessons, lessonId]
   );
 
-  const showMsg = (text: string) => { setMsg(text); setTimeout(() => setMsg(""), 3000); };
-
   const insertWikiLink = (id: string) => {
     setContent((prev) => prev + `[[${id}]]`);
     setShowFilePicker(false);
@@ -64,28 +63,26 @@ export default function LessonEditor() {
   };
 
   const handleSave = async () => {
-    if (!courseId || !title || !content) { alert("Título y contenido son obligatorios."); return; }
-    setSaving(true);
+    if (!courseId || !title || !content) { toast.error("Título y contenido son obligatorios."); return; }
     try {
       if (isEditing && lessonId) {
-        await api.updateLesson(lessonId, title, content);
-        showMsg("Lección actualizada exitosamente");
+        await updateLesson.mutateAsync({ title, contentText: content });
+        toast.success("Lección actualizada exitosamente");
         setTimeout(() => navigate(`/courses/${courseId}`), 1000);
       } else {
-        const lesson = await api.addLesson(courseId, title, content);
+        const lesson = await addLesson.mutateAsync({ title, contentText: content });
         if (showQuizSection && quizQuestions[0].text) {
           await api.createQuiz({ lessonId: lesson.id, title: `Evaluación: ${title}`, questions: quizQuestions });
         }
-        showMsg("Lección creada exitosamente");
+        toast.success("Lección creada exitosamente");
         setTimeout(() => navigate(`/courses/${courseId}`), 1000);
       }
     } catch (err) {
-      alert("Error: " + (err as Error).message);
+      toast.error("Error: " + (err as Error).message);
     }
-    setSaving(false);
   };
 
-  if (loadingLesson) return <p className="text-slate-400">Cargando lección...</p>;
+  if (loadingLesson) return <p className="text-muted-foreground">Cargando lección...</p>;
 
   return (
     <div className="space-y-6">
@@ -96,34 +93,28 @@ export default function LessonEditor() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft size={16} /> Volver
           </Link>
-          <span className="text-slate-600">/</span>
-          <span className="text-sm text-slate-300">{course?.title || "Cargando..."}</span>
-          <span className="text-slate-600">/</span>
-          <h1 className="text-lg font-bold text-white">{isEditing ? "Editar Lección" : "Nueva Lección"}</h1>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-sm text-foreground/90">{course?.course.title || "Cargando..."}</span>
+          <span className="text-muted-foreground">/</span>
+          <h1 className="text-lg font-bold text-foreground">{isEditing ? "Editar Lección" : "Nueva Lección"}</h1>
         </div>
         <Button onClick={handleSave} disabled={saving} variant={saving ? "secondary" : "success"}>
-          <Save size={16} className="mr-1.5 inline" />
+          <Save size={16} />
           {saving ? "Guardando..." : isEditing ? "Actualizar Lección" : "Guardar Lección"}
         </Button>
       </div>
 
-      {msg && (
-        <div className="flex items-center gap-2 bg-emerald-900/30 border border-emerald-700 text-emerald-300 px-4 py-2 rounded-lg text-sm">
-          <CheckCircle size={16} /> {msg}
-        </div>
-      )}
-
       <div className="flex gap-6">
         <div className="flex-1 min-w-0 space-y-6">
-          <input type="text" placeholder="Título de la lección" value={title}
+          <Input type="text" placeholder="Título de la lección" value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" required />
+            className="h-auto px-5 py-4 text-xl font-bold" required />
 
           <Card>
-            <h2 className="text-sm font-medium text-slate-300 mb-4">Contenido</h2>
+            <h2 className="text-sm font-medium text-foreground/90 mb-4">Contenido</h2>
             <MarkdownEditor
               value={content}
               onChange={setContent}
@@ -138,7 +129,7 @@ export default function LessonEditor() {
 
           <Card>
             <button type="button" onClick={() => setShowQuizSection(!showQuizSection)}
-              className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white transition-colors">
+              className="flex items-center gap-1.5 text-sm text-foreground/90 hover:text-foreground transition-colors">
               <FileQuestion size={16} />
               {showQuizSection ? "Ocultar" : "Agregar"} cuestionario
             </button>
@@ -154,17 +145,17 @@ export default function LessonEditor() {
         <div className="w-64 shrink-0 hidden lg:block space-y-6 sticky top-0 self-start">
           {linkedItems.length > 0 && (
             <Card>
-              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-foreground/90 uppercase tracking-wider mb-3">
                 <Paperclip size={14} /> Archivos Enlazados
               </h3>
               <div className="space-y-2">
                 {linkedItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
+                  <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-secondary/30">
                     <div className="flex-1 min-w-0">
-                      <p className="text-white truncate">{item.title}</p>
-                      <p className="text-slate-500 text-[10px]">{item.id}</p>
+                      <p className="text-foreground truncate">{item.title}</p>
+                      <p className="text-muted-foreground text-[10px]">{item.id}</p>
                     </div>
-                    <Link to={`/library/${item.id}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
+                    <Link to={`/library/${item.id}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>
@@ -173,17 +164,17 @@ export default function LessonEditor() {
 
           {linkedLessons.length > 0 && (
             <Card>
-              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-foreground/90 uppercase tracking-wider mb-3">
                 <BookOpen size={14} /> Lecciones Enlazadas
               </h3>
               <div className="space-y-2">
                 {linkedLessons.map((lesson) => (
-                  <div key={lesson.lessonId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
+                  <div key={lesson.lessonId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-secondary/30">
                     <div className="flex-1 min-w-0">
-                      <p className="text-white truncate">{lesson.lessonTitle}</p>
-                      <p className="text-slate-500 text-[10px]">{lesson.courseTitle}</p>
+                      <p className="text-foreground truncate">{lesson.lessonTitle}</p>
+                      <p className="text-muted-foreground text-[10px]">{lesson.courseTitle}</p>
                     </div>
-                    <Link to={`/courses/${lesson.courseId}/lessons/${lesson.lessonId}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
+                    <Link to={`/courses/${lesson.courseId}/lessons/${lesson.lessonId}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>

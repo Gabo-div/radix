@@ -1,80 +1,54 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { api, getToken } from "../../lib/api";
-import { Card, Button, Badge } from "../../components/ui";
+import { useEffect, useRef, useState } from "react";
 import { Terminal, Search, BarChart3 } from "lucide-react";
-import type { ServerLog, ServerLogStats } from "../../types";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useLiveLogs, useLogStats, useLogSearch } from "@/hooks/useLogs";
+import type { LogSearchFilters } from "@/types";
 
-const LOG_LEVELS = ["", "debug", "info", "warn", "error"];
-const PAGE_SIZE = 25;
+const LOG_LEVELS = [
+  { value: "all", label: "Nivel: todos" },
+  { value: "debug", label: "debug" },
+  { value: "info", label: "info" },
+  { value: "warn", label: "warn" },
+  { value: "error", label: "error" },
+];
 
-function levelColor(level: string): "emerald" | "amber" | "red" | "slate" {
-  if (level === "error") return "red";
-  if (level === "warn") return "amber";
-  if (level === "info") return "emerald";
-  return "slate";
+function levelVariant(level: string): "success" | "warning" | "destructive" | "secondary" {
+  if (level === "error") return "destructive";
+  if (level === "warn") return "warning";
+  if (level === "info") return "success";
+  return "secondary";
 }
 
 export default function Logs() {
-  const [tab, setTab] = useState<"live" | "history">("live");
-  const [logs, setLogs] = useState<string[]>([]);
+  const { data: logs = [] } = useLiveLogs();
   const liveContainerRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
 
-  const [filters, setFilters] = useState({ level: "", from: "", to: "", q: "" });
-  const [results, setResults] = useState<ServerLog[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [searching, setSearching] = useState(false);
-  const [stats, setStats] = useState<ServerLogStats | null>(null);
-  const [retentionDays, setRetentionDays] = useState<number | null>(null);
+  const { data: statsRes } = useLogStats();
 
-  const loadStats = useCallback(async () => {
-    try {
-      const res = await api.getLogStats();
-      setStats(res.stats);
-      setRetentionDays(res.retentionDays);
-    } catch { }
-  }, []);
+  const [level, setLevel] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [q, setQ] = useState("");
+  const [submittedFilters, setSubmittedFilters] = useState<LogSearchFilters | null>(null);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-
-  const runSearch = async (nextOffset: number) => {
-    setSearching(true);
-    try {
-      const res = await api.searchLogs({
-        level: filters.level || undefined,
-        from: filters.from ? new Date(filters.from).toISOString() : undefined,
-        to: filters.to ? new Date(filters.to).toISOString() : undefined,
-        q: filters.q || undefined,
-        limit: PAGE_SIZE,
-        offset: nextOffset,
-      });
-      setResults((prev) => (nextOffset === 0 ? res.logs : [...prev, ...res.logs]));
-      setHasMore(res.hasMore);
-      setOffset(nextOffset);
-    } catch (err) {
-      alert("Error al buscar logs: " + (err as Error).message);
-    }
-    setSearching(false);
-  };
+  const search = useLogSearch(submittedFilters);
+  const results = search.data?.pages.flatMap((p) => p.logs) ?? [];
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    runSearch(0);
+    setSubmittedFilters({
+      level: level === "all" ? undefined : level,
+      from: from ? new Date(from).toISOString() : undefined,
+      to: to ? new Date(to).toISOString() : undefined,
+      q: q || undefined,
+    });
   };
-
-  useEffect(() => {
-    if (!getToken()) return;
-    const interval = setInterval(async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
-        const res = await fetch("/api/v1/logs", { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) setLogs(await res.json());
-      } catch { }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLiveScroll = () => {
     const el = liveContainerRef.current;
@@ -89,110 +63,110 @@ export default function Logs() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Logs del Servidor</h1>
+      <h1 className="text-xl font-semibold text-foreground">Logs del Servidor</h1>
 
-      <div className="flex gap-1 border-b border-slate-700">
-        <button
-          onClick={() => setTab("live")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === "live" ? "border-emerald-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
-        >
-          <Terminal size={16} className="text-emerald-400" /> En vivo
-        </button>
-        <button
-          onClick={() => setTab("history")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === "history" ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
-        >
-          <BarChart3 size={16} className="text-indigo-400" /> Historial
-        </button>
-      </div>
+      <Tabs defaultValue="live">
+        <TabsList>
+          <TabsTrigger value="live">
+            <Terminal size={16} className="text-success" /> En vivo
+          </TabsTrigger>
+          <TabsTrigger value="history">
+            <BarChart3 size={16} className="text-primary" /> Historial
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === "live" && (
-        <Card>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
-            <Terminal size={16} className="text-emerald-400" />
-            En vivo
-            <span className="text-xs text-slate-500 ml-auto">{logs.length} líneas</span>
-          </div>
-          <div
-            ref={liveContainerRef}
-            onScroll={handleLiveScroll}
-            className="bg-black rounded-lg p-3 font-mono text-xs leading-relaxed h-96 overflow-y-auto"
-          >
-            {logs.length === 0 && <span className="text-slate-600">[GO-SERVER] Esperando logs...</span>}
-            {logs.map((line, i) => (
-              <div key={i} className="text-slate-300 whitespace-pre-wrap">{line}</div>
-            ))}
-          </div>
-        </Card>
-      )}
+        <TabsContent value="live">
+          <Card>
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-3">
+              <Terminal size={16} className="text-success" />
+              En vivo
+              <span className="text-xs text-muted-foreground/70 ml-auto">{logs.length} líneas</span>
+            </div>
+            <div
+              ref={liveContainerRef}
+              onScroll={handleLiveScroll}
+              className="bg-black rounded-lg p-3 font-mono text-xs leading-relaxed h-96 overflow-y-auto"
+            >
+              {logs.length === 0 && <span className="text-muted-foreground/60">[GO-SERVER] Esperando logs...</span>}
+              {logs.map((line, i) => (
+                <div key={i} className="text-foreground/80 whitespace-pre-wrap">{line}</div>
+              ))}
+            </div>
+          </Card>
+        </TabsContent>
 
-      {tab === "history" && (
-      <Card>
-        <h2 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
-          <BarChart3 size={16} className="text-indigo-400" /> Historial — Búsqueda y Filtros
-        </h2>
+        <TabsContent value="history">
+          <Card>
+            <h2 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+              <BarChart3 size={16} className="text-primary" /> Historial — Búsqueda y Filtros
+            </h2>
 
-        {stats && (
-          <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
-            <Badge color="indigo">{stats.total} logs (últimas 24h)</Badge>
-            {Object.entries(stats.byLevel).map(([level, count]) => (
-              <Badge key={level} color={levelColor(level)}>{level}: {count}</Badge>
-            ))}
-            {retentionDays !== null && (
-              <span className="text-slate-500 ml-auto">Retención: {retentionDays} días</span>
-            )}
-          </div>
-        )}
-
-        <form onSubmit={handleSearchSubmit} className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-          <select value={filters.level} onChange={(e) => setFilters({ ...filters, level: e.target.value })}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white">
-            {LOG_LEVELS.map((l) => <option key={l} value={l}>{l || "Nivel: todos"}</option>)}
-          </select>
-          <input type="datetime-local" value={filters.from}
-            onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white" />
-          <input type="datetime-local" value={filters.to}
-            onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white" />
-          <input type="text" placeholder="Buscar en mensaje..." value={filters.q}
-            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white placeholder-slate-500 sm:col-span-2" />
-          <Button type="submit" disabled={searching}>
-            <Search size={14} className="mr-1.5 inline" /> {searching ? "Buscando..." : "Buscar"}
-          </Button>
-        </form>
-
-        {results.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            {searching ? "Buscando..." : "Sin resultados — ajustá los filtros y buscá."}
-          </p>
-        ) : (
-          <div className="space-y-1 max-h-96 overflow-y-auto">
-            {results.map((log) => (
-              <div key={log.id} className="text-xs font-mono bg-slate-700/30 px-3 py-2 rounded space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 shrink-0">{new Date(log.timestamp).toLocaleString("es-ES")}</span>
-                  <Badge color={levelColor(log.level)}>{log.level}</Badge>
-                  <span className="text-slate-300 truncate flex-1">{log.message}</span>
-                </div>
-                {log.fields && log.fields !== "{}" && (
-                  <div className="text-slate-600 pl-1 truncate">{log.fields}</div>
-                )}
+            {statsRes && (
+              <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
+                <Badge>{statsRes.stats.total} logs (últimas 24h)</Badge>
+                {Object.entries(statsRes.stats.byLevel).map(([lvl, count]) => (
+                  <Badge key={lvl} variant={levelVariant(lvl)}>{lvl}: {count}</Badge>
+                ))}
+                <span className="text-muted-foreground ml-auto">Retención: {statsRes.retentionDays} días</span>
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {hasMore && (
-          <div className="mt-3 text-center">
-            <Button variant="secondary" onClick={() => runSearch(offset + PAGE_SIZE)} disabled={searching}>
-              Cargar más
-            </Button>
-          </div>
-        )}
-      </Card>
-      )}
+            <form onSubmit={handleSearchSubmit} className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <Select value={level} onValueChange={setLevel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOG_LEVELS.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <Input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} />
+              <Input
+                type="text"
+                placeholder="Buscar en mensaje..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="sm:col-span-2"
+              />
+              <Button type="submit" disabled={search.isFetching}>
+                <Search size={14} className="mr-1.5" /> {search.isFetching ? "Buscando..." : "Buscar"}
+              </Button>
+            </form>
+
+            {results.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {search.isFetching ? "Buscando..." : submittedFilters ? "Sin resultados — ajustá los filtros y buscá." : "Elegí filtros y buscá."}
+              </p>
+            ) : (
+              <div className="space-y-1 max-h-96 overflow-y-auto">
+                {results.map((log) => (
+                  <div key={log.id} className="text-xs font-mono bg-secondary/30 px-3 py-2 rounded space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">{new Date(log.timestamp).toLocaleString("es-ES")}</span>
+                      <Badge variant={levelVariant(log.level)}>{log.level}</Badge>
+                      <span className="text-foreground/90 truncate flex-1">{log.message}</span>
+                    </div>
+                    {log.fields && log.fields !== "{}" && (
+                      <div className="text-muted-foreground/70 pl-1 truncate">{log.fields}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {search.hasNextPage && (
+              <div className="mt-3 text-center">
+                <Button variant="secondary" onClick={() => search.fetchNextPage()} disabled={search.isFetchingNextPage}>
+                  Cargar más
+                </Button>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

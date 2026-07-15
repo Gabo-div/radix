@@ -1,54 +1,55 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { api } from "../lib/api";
-import type { LibraryItem, LessonUsage } from "../types";
-import { extractWikiRefs } from "../lib/markdown";
-import { Card, Button } from "../components/ui";
-import MarkdownEditor from "../components/MarkdownEditor";
-import QuizQuestionsEditor from "../components/QuizQuestionsEditor";
-import FilePickerModal from "../components/common/FilePickerModal";
-import LessonPickerModal from "../components/common/LessonPickerModal";
-import { ArrowLeft, Save, Paperclip, BookOpen, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
+import type { QuizQuestion } from "@/types";
+import { extractWikiRefs } from "@/lib/markdown";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import MarkdownEditor from "@/components/MarkdownEditor";
+import QuizQuestionsEditor from "@/components/QuizQuestionsEditor";
+import FilePickerModal from "@/components/common/FilePickerModal";
+import LessonPickerModal from "@/components/common/LessonPickerModal";
+import { useCourse } from "@/hooks/useCourses";
+import { useLibrary } from "@/hooks/useLibrary";
+import { useAllLessons } from "@/hooks/useLessons";
+import { useQuiz, useCreateQuiz, useUpdateQuiz } from "@/hooks/useQuizzes";
+import { ArrowLeft, Save, Paperclip, BookOpen } from "lucide-react";
 
 export default function QuizEditor() {
   const { courseId, quizId } = useParams<{ courseId: string; quizId?: string }>();
   const isEditing = !!quizId;
   const navigate = useNavigate();
-  const [course, setCourse] = useState<any>(null);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [allLessons, setAllLessons] = useState<LessonUsage[]>([]);
+
+  const { data: course } = useCourse(courseId);
+  const { data: library = [] } = useLibrary();
+  const { data: allLessons = [] } = useAllLessons();
+  const { data: quiz, isLoading: loadingQuiz } = useQuiz(quizId);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [value, setValue] = useState(100);
-  const [questions, setQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
-  const [loadingQuiz, setLoadingQuiz] = useState(isEditing);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    if (!courseId) return;
-    api.getCourse(courseId).then((d) => setCourse(d.course)).catch(() => {});
-    api.getLibrary().then(setLibrary).catch(() => {});
-    api.getAllLessons().then(setAllLessons).catch(() => {});
-    if (quizId) {
-      api.getQuiz(quizId).then((q) => {
-        setTitle(q.title);
-        setDescription(q.description);
-        setValue(q.value);
-        setQuestions(q.questions);
-        setLoadingQuiz(false);
-      }).catch(() => setLoadingQuiz(false));
+    if (quiz) {
+      setTitle(quiz.title);
+      setDescription(quiz.description);
+      setValue(quiz.value);
+      setQuestions(quiz.questions);
     }
-  }, [courseId, quizId]);
+  }, [quiz]);
+
+  const createQuiz = useCreateQuiz();
+  const updateQuiz = useUpdateQuiz(quizId ?? "", courseId);
+  const saving = createQuiz.isPending || updateQuiz.isPending;
 
   const wikiRefs = useMemo(() => extractWikiRefs(description), [description]);
   const linkedItems = useMemo(() => library.filter((li) => wikiRefs.includes(li.id)), [wikiRefs, library]);
   const linkedLessons = useMemo(() => allLessons.filter((l) => wikiRefs.includes(l.lessonId)), [wikiRefs, allLessons]);
-
-  const showMsg = (text: string) => { setMsg(text); setTimeout(() => setMsg(""), 3000); };
 
   const insertWikiLink = (id: string) => {
     setDescription((prev) => prev + `[[${id}]]`);
@@ -56,25 +57,32 @@ export default function QuizEditor() {
     setShowLessonPicker(false);
   };
 
-  const handleSave = async () => {
-    if (!courseId || !title || !questions[0].text) { alert("Título y al menos una pregunta son obligatorios."); return; }
-    setSaving(true);
-    try {
-      if (isEditing && quizId) {
-        await api.updateQuiz(quizId, { title, description, value, questions });
-        showMsg("Cuestionario actualizado exitosamente");
-      } else {
-        await api.createQuiz({ courseId, title, description, value, questions });
-        showMsg("Cuestionario creado exitosamente");
-      }
-      setTimeout(() => navigate(`/courses/${courseId}?tab=quizzes`), 1000);
-    } catch (err) {
-      alert("Error: " + (err as Error).message);
+  const handleSave = () => {
+    if (!courseId || !title || !questions[0].text) {
+      toast.error("Título y al menos una pregunta son obligatorios.");
+      return;
     }
-    setSaving(false);
+
+    const onError = (err: unknown) => toast.error("Error: " + (err as Error).message);
+    const onSaved = (message: string) => {
+      toast.success(message);
+      setTimeout(() => navigate(`/courses/${courseId}?tab=quizzes`), 1000);
+    };
+
+    if (isEditing && quizId) {
+      updateQuiz.mutate({ title, description, value, questions }, {
+        onSuccess: () => onSaved("Cuestionario actualizado exitosamente"),
+        onError,
+      });
+    } else {
+      createQuiz.mutate({ courseId, title, description, value, questions }, {
+        onSuccess: () => onSaved("Cuestionario creado exitosamente"),
+        onError,
+      });
+    }
   };
 
-  if (loadingQuiz) return <p className="text-slate-400">Cargando cuestionario...</p>;
+  if (loadingQuiz) return <p className="text-muted-foreground">Cargando cuestionario...</p>;
 
   return (
     <div className="space-y-6">
@@ -85,42 +93,36 @@ export default function QuizEditor() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft size={16} /> Volver
           </Link>
-          <span className="text-slate-600">/</span>
-          <span className="text-sm text-slate-300">{course?.title || "Cargando..."}</span>
-          <span className="text-slate-600">/</span>
-          <h1 className="text-lg font-bold text-white">{isEditing ? "Editar Cuestionario" : "Nuevo Cuestionario"}</h1>
+          <span className="text-border">/</span>
+          <span className="text-sm text-muted-foreground">{course?.course.title || "Cargando..."}</span>
+          <span className="text-border">/</span>
+          <h1 className="text-lg font-bold text-foreground">{isEditing ? "Editar Cuestionario" : "Nuevo Cuestionario"}</h1>
         </div>
         <Button onClick={handleSave} disabled={saving} variant={saving ? "secondary" : "success"}>
-          <Save size={16} className="mr-1.5 inline" />
+          <Save size={16} />
           {saving ? "Guardando..." : isEditing ? "Actualizar Cuestionario" : "Guardar Cuestionario"}
         </Button>
       </div>
 
-      {msg && (
-        <div className="flex items-center gap-2 bg-emerald-900/30 border border-emerald-700 text-emerald-300 px-4 py-2 rounded-lg text-sm">
-          <CheckCircle size={16} /> {msg}
-        </div>
-      )}
-
       <div className="flex gap-6">
         <div className="flex-1 min-w-0 space-y-6">
           <div className="flex gap-3">
-            <input type="text" placeholder="Título del cuestionario" value={title}
+            <Input type="text" placeholder="Título del cuestionario" value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" required />
-            <div className="flex flex-col items-center justify-center bg-slate-800 border border-slate-700 rounded-xl px-4">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider">Valor</label>
-              <input type="number" min={1} value={value}
+              className="flex-1 h-auto rounded-xl px-5 py-4 text-xl font-bold" required />
+            <div className="flex flex-col items-center justify-center bg-secondary border border-input rounded-xl px-4">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Valor</label>
+              <Input type="number" min={1} value={value}
                 onChange={(e) => setValue(Number(e.target.value) || 0)}
-                className="w-16 bg-transparent text-center text-lg font-bold text-white focus:outline-none" />
+                className="w-16 h-auto border-0 bg-transparent px-0 text-center text-lg font-bold focus-visible:ring-0" />
             </div>
           </div>
 
           <Card>
-            <h2 className="text-sm font-medium text-slate-300 mb-4">Descripción (opcional)</h2>
+            <h2 className="text-sm font-medium text-muted-foreground mb-4">Descripción (opcional)</h2>
             <MarkdownEditor
               value={description}
               onChange={setDescription}
@@ -134,7 +136,7 @@ export default function QuizEditor() {
           </Card>
 
           <Card>
-            <h2 className="text-sm font-medium text-slate-300 mb-4">Preguntas</h2>
+            <h2 className="text-sm font-medium text-muted-foreground mb-4">Preguntas</h2>
             <QuizQuestionsEditor questions={questions} onChange={setQuestions} />
           </Card>
         </div>
@@ -142,17 +144,17 @@ export default function QuizEditor() {
         <div className="w-64 shrink-0 hidden lg:block space-y-6 sticky top-0 self-start">
           {linkedItems.length > 0 && (
             <Card>
-              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 <Paperclip size={14} /> Archivos Enlazados
               </h3>
               <div className="space-y-2">
                 {linkedItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
+                  <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-secondary/50">
                     <div className="flex-1 min-w-0">
-                      <p className="text-white truncate">{item.title}</p>
-                      <p className="text-slate-500 text-[10px]">{item.id}</p>
+                      <p className="text-foreground truncate">{item.title}</p>
+                      <p className="text-muted-foreground text-[10px]">{item.id}</p>
                     </div>
-                    <Link to={`/library/${item.id}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
+                    <Link to={`/library/${item.id}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>
@@ -161,17 +163,17 @@ export default function QuizEditor() {
 
           {linkedLessons.length > 0 && (
             <Card>
-              <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 <BookOpen size={14} /> Lecciones Enlazadas
               </h3>
               <div className="space-y-2">
                 {linkedLessons.map((lesson) => (
-                  <div key={lesson.lessonId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-slate-700/30">
+                  <div key={lesson.lessonId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-secondary/50">
                     <div className="flex-1 min-w-0">
-                      <p className="text-white truncate">{lesson.lessonTitle}</p>
-                      <p className="text-slate-500 text-[10px]">{lesson.courseTitle}</p>
+                      <p className="text-foreground truncate">{lesson.lessonTitle}</p>
+                      <p className="text-muted-foreground text-[10px]">{lesson.courseTitle}</p>
                     </div>
-                    <Link to={`/courses/${lesson.courseId}/lessons/${lesson.lessonId}`} className="text-indigo-400 hover:text-indigo-300 text-[10px] shrink-0">Ver</Link>
+                    <Link to={`/courses/${lesson.courseId}/lessons/${lesson.lessonId}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>

@@ -60,7 +60,7 @@ export const roleLabels: Record<Role, string> = {
 };
 
 export const roleColors: Record<Role, string> = {
-  admin: "text-emerald-400",
-  student: "text-indigo-400",
-  guest: "text-amber-400",
+  admin: "text-success",
+  student: "text-primary",
+  guest: "text-warning",
 };

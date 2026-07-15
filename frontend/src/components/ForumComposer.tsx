@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
-import { api } from "../lib/api";
-import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
-import { Button } from "./ui";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useLibrary } from "@/hooks/useLibrary";
+import { useAllLessons } from "@/hooks/useLessons";
+import { useCourseQuizzes } from "@/hooks/useQuizzes";
 import MarkdownEditor from "./MarkdownEditor";
 import FilePickerModal from "./common/FilePickerModal";
 import LessonPickerModal from "./common/LessonPickerModal";
@@ -27,20 +30,17 @@ export default function ForumComposer({ courseId, placeholder, submitLabel, requ
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [lessons, setLessons] = useState<LessonUsage[]>([]);
-  const [quizzes, setQuizzes] = useState<QuizUsage[]>([]);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
   const [showQuizPicker, setShowQuizPicker] = useState(false);
 
-  useEffect(() => {
-    api.getLibrary().then(setLibrary).catch(() => {});
-    api.getAllLessons().then(setLessons).catch(() => {});
-    api.getCourseQuizzes(courseId).then((qs) =>
-      setQuizzes(qs.map((q) => ({ quizId: q.id, courseId: q.courseId, quizTitle: q.title, courseTitle: "" })))
-    ).catch(() => {});
-  }, [courseId]);
+  const { data: library = [] } = useLibrary();
+  const { data: lessons = [] } = useAllLessons();
+  const { data: courseQuizzes = [] } = useCourseQuizzes(courseId);
+  const quizzes = useMemo(
+    () => courseQuizzes.map((q) => ({ quizId: q.id, courseId: q.courseId, quizTitle: q.title, courseTitle: "" })),
+    [courseQuizzes]
+  );
 
   const insertLink = (id: string) => {
     setBody((prev) => prev + `[[${id}]]`);
@@ -58,7 +58,7 @@ export default function ForumComposer({ courseId, placeholder, submitLabel, requ
       setTitle("");
       setBody("");
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     }
     setBusy(false);
   };
@@ -70,9 +70,8 @@ export default function ForumComposer({ courseId, placeholder, submitLabel, requ
       {showQuizPicker && <QuizPickerModal courseId={courseId} onSelect={insertLink} onClose={() => setShowQuizPicker(false)} />}
 
       {requireTitle && (
-        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus}
-          placeholder="Título del post"
-          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm font-medium text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500" />
+        <Input type="text" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus}
+          placeholder="Título del post" className="font-medium" />
       )}
 
       <MarkdownEditor
@@ -87,7 +86,7 @@ export default function ForumComposer({ courseId, placeholder, submitLabel, requ
         onAttachLessonClick={() => setShowLessonPicker(true)}
         onAttachQuizClick={() => setShowQuizPicker(true)}
       />
-      {!body && <p className="text-xs text-slate-500 -mt-1">{placeholder}</p>}
+      {!body && <p className="text-xs text-muted-foreground -mt-1">{placeholder}</p>}
 
       <div className="flex justify-end gap-2">
         {onCancel && <Button variant="ghost" onClick={onCancel}>Cancelar</Button>}

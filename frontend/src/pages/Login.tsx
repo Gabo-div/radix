@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 
 export default function Login() {
   const { login, loginGuest } = useAuth();
@@ -36,69 +40,54 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
       <div className="text-center mb-10">
-        <h1 className="text-4xl font-bold text-white mb-2">RADIX</h1>
-        <p className="text-slate-400 text-lg">Servidor de Borde — Amazonía</p>
-        <div className="mt-4 inline-block bg-black px-4 py-2 rounded-lg font-mono text-xs text-emerald-400">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground mb-1.5">RADIX</h1>
+        <p className="text-muted-foreground text-sm">Servidor de Borde — Amazonía</p>
+        <div className="mt-4 inline-block border border-border/60 bg-card px-3 py-1.5 rounded-md font-mono text-xs text-success/90">
           $ ./radix-server --env=edge --region=amazonia
         </div>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-slate-800 border-2 border-slate-700 rounded-xl p-8 w-full max-w-sm flex flex-col gap-4"
-      >
-        <div>
-          <label className="block text-sm text-slate-400 mb-1" htmlFor="email">
-            Correo electrónico
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-            placeholder="tucorreo@radix.local"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-1" htmlFor="password">
-            Contraseña
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-            placeholder="••••••••"
-          />
-        </div>
+      <Card className="w-full max-w-sm p-8">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <Label htmlFor="email" className="block mb-1.5">Correo electrónico</Label>
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tucorreo@radix.local"
+            />
+          </div>
+          <div>
+            <Label htmlFor="password" className="block mb-1.5">Contraseña</Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
 
-        {error && <p className="text-sm text-rose-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-lg px-4 py-2 transition-colors"
-        >
-          {loading ? "Ingresando..." : "Iniciar sesión"}
-        </button>
+          <Button type="submit" disabled={loading} className="mt-2">
+            {loading ? "Ingresando..." : "Iniciar sesión"}
+          </Button>
 
-        <button
-          type="button"
-          onClick={handleGuest}
-          className="flex items-center justify-center gap-2 text-sm text-amber-400 hover:text-amber-300 mt-2"
-        >
-          <Eye size={16} />
-          Entrar como invitado (solo lectura)
-        </button>
-      </form>
+          <Button type="button" variant="link" onClick={handleGuest} className="text-warning mt-2">
+            <Eye size={16} />
+            Entrar como invitado (solo lectura)
+          </Button>
+        </form>
+      </Card>
 
-      <p className="mt-10 text-xs text-slate-600">
+      <p className="mt-10 text-xs text-muted-foreground/60">
         Simulador de servidor periférico offline v1.0.0
       </p>
     </div>

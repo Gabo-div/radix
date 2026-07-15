@@ -26,30 +26,30 @@ export default function InlineMedia({ item }: Props) {
       );
     case "audio":
       return (
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 my-3">
+        <div className="bg-card rounded-xl p-4 border border-border my-3">
           <audio controls className="w-full" src={url} />
         </div>
       );
     case "image":
       return (
-        <div className="bg-slate-800 rounded-xl p-2 border border-slate-700 my-3 inline-block">
+        <div className="bg-card rounded-xl p-2 border border-border my-3 inline-block">
           <img src={url} alt={item.title} className="max-w-full max-h-[400px] rounded-lg object-contain" />
         </div>
       );
     case "pdf":
       return (
-        <div className="my-3 bg-slate-800 rounded-xl overflow-hidden border border-slate-700" style={{ height: "500px" }}>
+        <div className="my-3 bg-card rounded-xl overflow-hidden border border-border" style={{ height: "500px" }}>
           <iframe src={url} className="w-full h-full" title={item.title} />
         </div>
       );
     case "text":
       return (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 my-3 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-700/50 border-b border-slate-700">
-            <FileText size={14} className="text-indigo-400" />
-            <span className="text-xs text-slate-300">{item.title}</span>
+        <div className="bg-card rounded-xl border border-border my-3 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2 bg-secondary/50 border-b border-border">
+            <FileText size={14} className="text-primary" />
+            <span className="text-xs text-foreground/80">{item.title}</span>
           </div>
-          <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-[400px] p-4">
+          <pre className="text-sm text-foreground/80 font-mono whitespace-pre-wrap overflow-x-auto max-h-[400px] p-4">
             {textContent || "Cargando contenido..."}
           </pre>
         </div>
@@ -57,13 +57,13 @@ export default function InlineMedia({ item }: Props) {
     default:
       return (
         <a href={url} download
-          className="flex items-center gap-3 p-4 my-3 bg-slate-800 border border-slate-700 rounded-xl hover:border-indigo-500/50 transition-colors group">
-          <FileText size={24} className="text-slate-500 group-hover:text-indigo-400" />
+          className="flex items-center gap-3 p-4 my-3 bg-card border border-border rounded-xl hover:border-primary/50 transition-colors group">
+          <FileText size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
           <div className="flex-1">
-            <p className="text-sm text-white group-hover:text-indigo-300">{item.title}</p>
-            <p className="text-xs text-slate-500">{item.type} · {(item.sizeKB / 1024).toFixed(1)} MB</p>
+            <p className="text-sm text-foreground group-hover:text-primary transition-colors">{item.title}</p>
+            <p className="text-xs text-muted-foreground">{item.type} · {(item.sizeKB / 1024).toFixed(1)} MB</p>
           </div>
-          <Download size={16} className="text-slate-500" />
+          <Download size={16} className="text-muted-foreground" />
         </a>
       );
   }

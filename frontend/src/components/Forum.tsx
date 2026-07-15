@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { extractWikiRefs, stripWikiLinks } from "../lib/markdown";
-import type { ForumPost, LibraryItem, LessonUsage, QuizUsage } from "../types";
-import { Card } from "./ui";
+import { extractWikiRefs, stripWikiLinks } from "@/lib/markdown";
+import type { ForumPost, LibraryItem, LessonUsage, QuizUsage } from "@/types";
+import { Card } from "@/components/ui/card";
+import { useForumPosts, useForumLinks, useCreateForumPost } from "@/hooks/useForum";
 import ForumComposer from "./ForumComposer";
 import { Heart, MessageSquare, Paperclip, BookOpen, FileQuestion } from "lucide-react";
 
@@ -27,23 +27,15 @@ interface LinkBadge {
 // The forum tab is a list of threads only — each links to its own page
 // (ForumThread) which shows the root post and its full reply tree.
 export default function Forum({ courseId, canPost }: Props) {
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
-  const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
-  const [linkedQuizzes, setLinkedQuizzes] = useState<QuizUsage[]>([]);
+  const { data: posts = [] } = useForumPosts(courseId);
+  const { data: links } = useForumLinks(courseId);
+  const createPost = useCreateForumPost(courseId);
 
-  const load = () => {
-    api.getForumPosts(courseId).then(setPosts).catch(() => {});
-    // One course-wide bundle resolves every post's own [[id]] refs (ids are
-    // globally unique) — used here just to render link badges per post.
-    api.getForumLinks(courseId).then(({ libraryItems, lessons, quizzes }) => {
-      setLinkedItems(libraryItems);
-      setLinkedLessons(lessons);
-      setLinkedQuizzes(quizzes);
-    }).catch(() => {});
-  };
-
-  useEffect(() => { load(); }, [courseId]);
+  // One course-wide bundle resolves every post's own [[id]] refs (ids are
+  // globally unique) — used here just to render link badges per post.
+  const linkedItems = links?.libraryItems ?? [];
+  const linkedLessons = links?.lessons ?? [];
+  const linkedQuizzes = links?.quizzes ?? [];
 
   const itemMap = useMemo(() => {
     const m: Record<string, LibraryItem> = {};
@@ -89,17 +81,17 @@ export default function Forum({ courseId, canPost }: Props) {
             placeholder="Escribe un post para el foro del curso..."
             submitLabel="Publicar"
             requireTitle
-            onSubmit={async ({ title, body }) => { await api.createForumPost(courseId, { title, body }); load(); }}
+            onSubmit={async ({ title, body }) => { await createPost.mutateAsync({ title, body }); }}
           />
         </Card>
       )}
 
       <div className="flex flex-col space-y-3">
         {topLevel.map((post) => (
-          <Card key={post.id} className="hover:border-indigo-500/50 transition-colors">
+          <Card key={post.id} className="hover:border-primary/50 transition-colors">
             <Link to={`/courses/${courseId}/forum/${post.id}`} className="block">
-              <h3 className="text-base font-semibold text-white mb-1">{post.title}</h3>
-              <p className="text-sm text-slate-400 line-clamp-2 whitespace-pre-wrap">{stripWikiLinks(post.body)}</p>
+              <h3 className="text-base font-semibold text-foreground mb-1">{post.title}</h3>
+              <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-wrap">{stripWikiLinks(post.body)}</p>
             </Link>
             {linkBadges(post.body).length > 0 && (
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -107,17 +99,17 @@ export default function Forum({ courseId, canPost }: Props) {
                   const Icon = b.icon;
                   return (
                     <Link key={b.key} to={b.to} onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-slate-600 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 transition-colors">
+                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
                       <Icon size={12} /> {b.label}
                     </Link>
                   );
                 })}
               </div>
             )}
-            <Link to={`/courses/${courseId}/forum/${post.id}`} className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+            <Link to={`/courses/${courseId}/forum/${post.id}`} className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
               <span>{post.authorName}</span>
               <span className="flex items-center gap-1">
-                <Heart size={12} className={post.liked ? "fill-current text-rose-400" : ""} /> {post.likeCount}
+                <Heart size={12} className={post.liked ? "fill-current text-destructive" : ""} /> {post.likeCount}
               </span>
               <span className="flex items-center gap-1">
                 <MessageSquare size={12} /> {countReplies(posts, post.id)}
@@ -127,7 +119,7 @@ export default function Forum({ courseId, canPost }: Props) {
           </Card>
         ))}
         {posts.length === 0 && (
-          <p className="text-slate-500 text-sm">Nadie ha publicado en el foro todavía.</p>
+          <p className="text-muted-foreground text-sm">Nadie ha publicado en el foro todavía.</p>
         )}
       </div>
     </div>

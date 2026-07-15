@@ -1,34 +1,26 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { useAuth } from "../context/AuthContext";
-import { canTakeQuiz, canSeeQuiz, canEdit } from "../lib/rbac";
-import { extractToc } from "../lib/markdown";
-import type { TocEntry } from "../lib/markdown";
-import type { LibraryItem, LessonUsage, Quiz } from "../types";
-import { Card, Button } from "../components/ui";
-import WikiContent from "../components/WikiContent";
-import QuizTaker from "../components/QuizTaker";
-import LessonSidebar from "../components/layout/LessonSidebar";
+import { useAuth } from "@/context/AuthContext";
+import { canTakeQuiz, canSeeQuiz, canEdit } from "@/lib/rbac";
+import { extractToc } from "@/lib/markdown";
+import type { TocEntry } from "@/lib/markdown";
+import type { LibraryItem, LessonUsage } from "@/types";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useQuiz, useQuizLinks } from "@/hooks/useQuizzes";
+import WikiContent from "@/components/WikiContent";
+import QuizTaker from "@/components/QuizTaker";
+import LessonSidebar from "@/components/layout/LessonSidebar";
 import { ArrowLeft, Edit, Lock } from "lucide-react";
 
 export default function QuizViewer() {
   const { courseId, quizId } = useParams<{ courseId: string; quizId: string }>();
   const { currentUser } = useAuth();
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
-  const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!quizId) return;
-    setError("");
-    api.getQuiz(quizId).then(setQuiz).catch((err) => setError(err.message));
-    api.getQuizLinks(quizId).then(({ libraryItems, lessons }) => {
-      setLinkedItems(libraryItems);
-      setLinkedLessons(lessons);
-    }).catch(() => { });
-  }, [quizId]);
+  const { data: quiz, error } = useQuiz(quizId);
+  const { data: links } = useQuizLinks(quizId);
+  const linkedItems: LibraryItem[] = links?.libraryItems || [];
+  const linkedLessons: LessonUsage[] = links?.lessons || [];
 
   const isStudent = currentUser && canTakeQuiz(currentUser.role);
   const showQuiz = currentUser && canSeeQuiz(currentUser.role);
@@ -51,32 +43,32 @@ export default function QuizViewer() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+        <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={16} /> Volver al curso
         </Link>
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
-          <Lock size={32} className="text-slate-500" />
-          <p className="text-slate-300">No estás inscrito en este curso.</p>
+          <Lock size={32} className="text-muted-foreground" />
+          <p className="text-foreground/90">No estás inscrito en este curso.</p>
         </Card>
       </div>
     );
   }
 
-  if (!quiz) return <p className="text-slate-400">Cargando cuestionario...</p>;
+  if (!quiz) return <p className="text-muted-foreground">Cargando cuestionario...</p>;
 
   return (
     <div className="flex gap-6">
       <div className="flex-1 min-w-0 space-y-6">
-        <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+        <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={16} /> Volver al curso
         </Link>
 
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">{quiz.title}</h1>
+          <h1 className="text-xl font-semibold text-foreground">{quiz.title}</h1>
           {isAdmin && (
             <Link to={`/courses/${courseId}/quizzes/${quizId}/edit`}>
               <Button variant="secondary">
-                <Edit size={14} className="mr-1 inline" /> Editar
+                <Edit size={14} /> Editar
               </Button>
             </Link>
           )}

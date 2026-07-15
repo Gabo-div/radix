@@ -53,18 +53,18 @@ export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUs
           above: true,
           create() {
             const dom = document.createElement("div");
-            dom.className = "bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm max-w-xs";
+            dom.className = "bg-popover border border-border rounded-lg p-3 text-sm max-w-xs shadow-md";
             if (item) {
               dom.innerHTML = `
                 <div class="flex items-center gap-2 mb-2">
                   <span>${iconMap[item.type] || "📎"}</span>
-                  <span class="font-medium text-white">${item.title}</span>
+                  <span class="font-medium text-foreground">${item.title}</span>
                 </div>
-                <div class="text-xs text-slate-400 space-y-0.5">
-                  <div>Tipo: <span class="text-slate-300 capitalize">${item.type}</span></div>
-                  ${item.sizeKB ? `<div>Tamaño: <span class="text-slate-300">${item.sizeKB >= 1024 ? (item.sizeKB / 1024).toFixed(1) + " MB" : item.sizeKB + " KB"}</span></div>` : ""}
-                  ${item.duration ? `<div>Duración: <span class="text-slate-300">${item.duration}</span></div>` : ""}
-                  ${item.resolution ? `<div>Resolución: <span class="text-slate-300">${item.resolution}</span></div>` : ""}
+                <div class="text-xs text-muted-foreground space-y-0.5">
+                  <div>Tipo: <span class="text-foreground/80 capitalize">${item.type}</span></div>
+                  ${item.sizeKB ? `<div>Tamaño: <span class="text-foreground/80">${item.sizeKB >= 1024 ? (item.sizeKB / 1024).toFixed(1) + " MB" : item.sizeKB + " KB"}</span></div>` : ""}
+                  ${item.duration ? `<div>Duración: <span class="text-foreground/80">${item.duration}</span></div>` : ""}
+                  ${item.resolution ? `<div>Resolución: <span class="text-foreground/80">${item.resolution}</span></div>` : ""}
                 </div>
                 ${item.type === "image" ? `<img src="/api/v1/library/${item.id}/file?token=${token}" class="mt-2 max-w-[200px] max-h-[150px] rounded object-contain" />` : ""}
               `;
@@ -72,20 +72,20 @@ export function createWikiLinkExtensions(items: LibraryItem[], lessons: LessonUs
               dom.innerHTML = `
                 <div class="flex items-center gap-2 mb-2">
                   <span>📘</span>
-                  <span class="font-medium text-white">${lesson.lessonTitle}</span>
+                  <span class="font-medium text-foreground">${lesson.lessonTitle}</span>
                 </div>
-                <div class="text-xs text-slate-400">
-                  <div>Curso: <span class="text-slate-300">${lesson.courseTitle}</span></div>
+                <div class="text-xs text-muted-foreground">
+                  <div>Curso: <span class="text-foreground/80">${lesson.courseTitle}</span></div>
                 </div>
               `;
             } else if (quiz) {
               dom.innerHTML = `
                 <div class="flex items-center gap-2 mb-2">
                   <span>📝</span>
-                  <span class="font-medium text-white">${quiz.quizTitle}</span>
+                  <span class="font-medium text-foreground">${quiz.quizTitle}</span>
                 </div>
-                <div class="text-xs text-slate-400">
-                  <div>Curso: <span class="text-slate-300">${quiz.courseTitle}</span></div>
+                <div class="text-xs text-muted-foreground">
+                  <div>Curso: <span class="text-foreground/80">${quiz.courseTitle}</span></div>
                 </div>
               `;
             }

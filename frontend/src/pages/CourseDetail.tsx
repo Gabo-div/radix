@@ -1,10 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
-import type { Lesson, Quiz, CourseStudent, LibraryItem } from "../types";
 import { canCreateCourse } from "../lib/rbac";
-import { Card, Button, Badge } from "../components/ui";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { useCourse, useCourseResources, useEnrolledStudents, useEnrollStudent, useUnenrollStudent } from "@/hooks/useCourses";
+import { useCourseQuizzes } from "@/hooks/useQuizzes";
 import StudentPickerModal from "../components/common/StudentPickerModal";
 import Forum from "../components/Forum";
 import {
@@ -23,11 +28,6 @@ export default function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useAuth();
-  const [course, setCourse] = useState<{ course: any; lessons: Lesson[] } | null>(null);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [students, setStudents] = useState<CourseStudent[]>([]);
-  const [resources, setResources] = useState<LibraryItem[]>([]);
-  const [error, setError] = useState("");
   const [showStudentPicker, setShowStudentPicker] = useState(false);
 
   const tabParam = searchParams.get("tab");
@@ -35,50 +35,40 @@ export default function CourseDetail() {
     tabParam === "quizzes" || tabParam === "students" || tabParam === "resources" || tabParam === "forum"
       ? tabParam
       : "lessons";
-  const setTab = (t: Tab) => setSearchParams(t === "lessons" ? {} : { tab: t });
+  const setTab = (t: string) => setSearchParams(t === "lessons" ? {} : { tab: t });
 
-  const canEdit = currentUser && canCreateCourse(currentUser.role);
+  const canEdit = !!currentUser && canCreateCourse(currentUser.role);
 
-  const loadStudents = () => {
-    if (courseId) api.getEnrolledStudents(courseId).then(setStudents).catch(() => { });
-  };
+  const { data: course, error } = useCourse(courseId);
+  const { data: quizzes = [] } = useCourseQuizzes(courseId);
+  const { data: resources = [] } = useCourseResources(courseId);
+  const { data: students = [] } = useEnrolledStudents(courseId, tab === "students" && canEdit);
 
-  useEffect(() => {
-    if (!courseId) return;
-    setError("");
-    api.getCourse(courseId).then(setCourse).catch((err) => setError(err.message));
-    api.getCourseQuizzes(courseId).then(setQuizzes).catch(() => { });
-    api.getCourseResources(courseId).then(setResources).catch(() => { });
-  }, [courseId]);
-
-  useEffect(() => {
-    if (tab === "students" && canEdit) loadStudents();
-  }, [tab, canEdit, courseId]);
+  const enrollStudent = useEnrollStudent(courseId!);
+  const unenrollStudent = useUnenrollStudent(courseId!);
 
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to="/courses" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+        <Link to="/courses" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={16} /> Volver a cursos
         </Link>
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
-          <Lock size={32} className="text-slate-500" />
-          <p className="text-slate-300">No estás inscrito en este curso.</p>
+          <Lock size={32} className="text-muted-foreground" />
+          <p className="text-foreground/90">No estás inscrito en este curso.</p>
         </Card>
       </div>
     );
   }
 
-  if (!course) return <p className="text-slate-400">Cargando...</p>;
+  if (!course) return <p className="text-muted-foreground">Cargando...</p>;
 
   const handleEnroll = (userId: string) => {
-    if (!courseId) return;
-    api.enrollStudent(courseId, userId).then(loadStudents).catch((err) => alert(err.message));
+    enrollStudent.mutate(userId, { onError: (err) => toast.error((err as Error).message) });
   };
 
   const handleUnenroll = (userId: string) => {
-    if (!courseId) return;
-    api.unenrollStudent(courseId, userId).then(loadStudents).catch((err) => alert(err.message));
+    unenrollStudent.mutate(userId, { onError: (err) => toast.error((err as Error).message) });
   };
 
   return (
@@ -87,198 +77,178 @@ export default function CourseDetail() {
         <StudentPickerModal courseId={courseId} onSelect={handleEnroll} onClose={() => setShowStudentPicker(false)} />
       )}
 
-      <Link to="/courses" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+      <Link to="/courses" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft size={16} />
         Volver a cursos
       </Link>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">{course.course.title}</h1>
-          <p className="text-slate-400 mt-1">{course.course.description}</p>
+          <h1 className="text-xl font-semibold text-foreground">{course.course.title}</h1>
+          <p className="text-muted-foreground mt-1">{course.course.description}</p>
         </div>
         {canEdit && (
           tab === "lessons" ? (
             <Link to={`/courses/${courseId}/lessons/new`}>
-              <Button>
-                <PlusCircle size={16} className="mr-1.5 inline" />
-                Nueva Lección
-              </Button>
+              <Button><PlusCircle size={16} /> Nueva Lección</Button>
             </Link>
           ) : tab === "quizzes" ? (
             <Link to={`/courses/${courseId}/quizzes/new`}>
-              <Button>
-                <PlusCircle size={16} className="mr-1.5 inline" />
-                Nuevo Cuestionario
-              </Button>
+              <Button><PlusCircle size={16} /> Nuevo Cuestionario</Button>
             </Link>
           ) : tab === "students" ? (
             <Button onClick={() => setShowStudentPicker(true)}>
-              <PlusCircle size={16} className="mr-1.5 inline" />
-              Agregar Estudiante
+              <PlusCircle size={16} /> Agregar Estudiante
             </Button>
           ) : null
         )}
       </div>
 
-      <div className="flex border-b border-slate-700">
-        <button onClick={() => setTab("lessons")}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${tab === "lessons" ? "text-indigo-400 border-b-2 border-indigo-500" : "text-slate-400 hover:text-white"}`}>
-          <BookOpen size={14} /> Lecciones ({course.lessons.length})
-        </button>
-        <button onClick={() => setTab("quizzes")}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${tab === "quizzes" ? "text-indigo-400 border-b-2 border-indigo-500" : "text-slate-400 hover:text-white"}`}>
-          <FileQuestion size={14} /> Cuestionarios ({quizzes.length})
-        </button>
-        <button onClick={() => setTab("resources")}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${tab === "resources" ? "text-indigo-400 border-b-2 border-indigo-500" : "text-slate-400 hover:text-white"}`}>
-          <Paperclip size={14} /> Recursos ({resources.length})
-        </button>
-        <button onClick={() => setTab("forum")}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${tab === "forum" ? "text-indigo-400 border-b-2 border-indigo-500" : "text-slate-400 hover:text-white"}`}>
-          <MessageSquare size={14} /> Foro
-        </button>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="lessons"><BookOpen size={14} /> Lecciones</TabsTrigger>
+          <TabsTrigger value="quizzes"><FileQuestion size={14} /> Cuestionarios</TabsTrigger>
+          <TabsTrigger value="resources"><Paperclip size={14} /> Recursos</TabsTrigger>
+          <TabsTrigger value="forum"><MessageSquare size={14} /> Foro</TabsTrigger>
+          {canEdit && <TabsTrigger value="students"><Users size={14} /> Estudiantes</TabsTrigger>}
+        </TabsList>
+
+        <TabsContent value="lessons">
+          <div className="flex flex-col space-y-3">
+            {course.lessons.map((lesson, idx) => (
+              <div key={lesson.id} className="flex items-center gap-2">
+                <Link to={`/courses/${courseId}/lessons/${lesson.id}`} className="flex-1">
+                  <Card className="flex items-center justify-between hover:border-primary/50 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary/15 rounded-full flex items-center justify-center text-xs text-primary font-semibold">
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-foreground">{lesson.title}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {lesson.quizId ? "Con evaluación" : "Solo texto"}
+                        </p>
+                      </div>
+                    </div>
+                    <Play size={16} className="text-muted-foreground" />
+                  </Card>
+                </Link>
+                {canEdit && (
+                  <Link to={`/courses/${courseId}/lessons/${lesson.id}/edit`}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+                    title="Editar lección">
+                    <Edit size={16} />
+                  </Link>
+                )}
+              </div>
+            ))}
+            {course.lessons.length === 0 && (
+              <p className="text-muted-foreground text-sm">Este curso aún no tiene lecciones.</p>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="quizzes">
+          <div className="flex flex-col space-y-3">
+            {quizzes.map((quiz, idx) => (
+              <div key={quiz.id} className="flex items-center gap-2">
+                <Link to={`/courses/${courseId}/quizzes/${quiz.id}`} className="flex-1">
+                  <Card className="flex items-center justify-between hover:border-primary/50 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary/15 rounded-full flex items-center justify-center text-xs text-primary font-semibold">
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-foreground">{quiz.title}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {quiz.lessonId ? "Vinculado a una lección" : "Independiente"} · {quiz.questions.length} preguntas · Vale {quiz.value} pts
+                        </p>
+                      </div>
+                    </div>
+                    <Play size={16} className="text-muted-foreground" />
+                  </Card>
+                </Link>
+                {canEdit && (
+                  <Link to={`/courses/${courseId}/quizzes/${quiz.id}/edit`}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+                    title="Editar cuestionario">
+                    <Edit size={16} />
+                  </Link>
+                )}
+              </div>
+            ))}
+            {quizzes.length === 0 && (
+              <p className="text-muted-foreground text-sm">Este curso aún no tiene cuestionarios.</p>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="resources">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {resources.map((item) => {
+              const Icon = typeIcon[item.type] || File;
+              return (
+                <Link key={item.id} to={`/library/${item.id}`}>
+                  <Card className="flex items-start gap-4 h-full hover:border-primary/50 transition-colors cursor-pointer">
+                    <Icon size={28} className="text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium text-foreground truncate">{item.title}</h3>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <Badge>{item.type}</Badge>
+                        <Badge>{item.category}</Badge>
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
+            {resources.length === 0 && (
+              <p className="text-muted-foreground text-sm col-span-full">Ninguna lección o cuestionario de este curso enlaza archivos todavía.</p>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="forum">
+          {courseId && <Forum courseId={courseId} canPost={!!currentUser && currentUser.role !== "guest"} />}
+        </TabsContent>
+
         {canEdit && (
-          <button onClick={() => setTab("students")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${tab === "students" ? "text-indigo-400 border-b-2 border-indigo-500" : "text-slate-400 hover:text-white"}`}>
-            <Users size={14} /> Estudiantes ({students.length})
-          </button>
+          <TabsContent value="students">
+            <Card>
+              {students.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Ningún estudiante inscrito todavía.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Puntos</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {students.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="text-foreground">{s.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{s.email}</TableCell>
+                        <TableCell className="text-foreground/90">{s.points}</TableCell>
+                        <TableCell className="text-right">
+                          <button onClick={() => handleUnenroll(s.id)}
+                            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-destructive transition-colors"
+                            title="Quitar del curso">
+                            <X size={14} />
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
+          </TabsContent>
         )}
-      </div>
-
-      {tab === "lessons" && (
-        <div className="flex flex-col space-y-3">
-          {course.lessons.map((lesson, idx) => (
-            <div key={lesson.id} className="flex items-center gap-2">
-              <Link to={`/courses/${courseId}/lessons/${lesson.id}`} className="flex-1">
-                <Card className="flex items-center justify-between hover:border-indigo-500/50 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-xs text-slate-400 font-medium">
-                      {idx + 1}
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium text-white">{lesson.title}</h3>
-                      <p className="text-xs text-slate-500">
-                        {lesson.quizId ? "Con evaluación" : "Solo texto"}
-                      </p>
-                    </div>
-                  </div>
-                  <Play size={16} className="text-slate-500" />
-                </Card>
-              </Link>
-              {canEdit && (
-                <Link to={`/courses/${courseId}/lessons/${lesson.id}/edit`}
-                  className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-indigo-300 transition-colors"
-                  title="Editar lección">
-                  <Edit size={16} />
-                </Link>
-              )}
-            </div>
-          ))}
-          {course.lessons.length === 0 && (
-            <p className="text-slate-500 text-sm">Este curso aún no tiene lecciones.</p>
-          )}
-        </div>
-      )}
-
-      {tab === "quizzes" && (
-        <div className="flex flex-col space-y-3">
-          {quizzes.map((quiz, idx) => (
-            <div key={quiz.id} className="flex items-center gap-2">
-              <Link to={`/courses/${courseId}/quizzes/${quiz.id}`} className="flex-1">
-                <Card className="flex items-center justify-between hover:border-indigo-500/50 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-xs text-slate-400 font-medium">
-                      {idx + 1}
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium text-white">{quiz.title}</h3>
-                      <p className="text-xs text-slate-500">
-                        {quiz.lessonId ? "Vinculado a una lección" : "Independiente"} · {quiz.questions.length} preguntas · Vale {quiz.value} pts
-                      </p>
-                    </div>
-                  </div>
-                  <Play size={16} className="text-slate-500" />
-                </Card>
-              </Link>
-              {canEdit && (
-                <Link to={`/courses/${courseId}/quizzes/${quiz.id}/edit`}
-                  className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-indigo-300 transition-colors"
-                  title="Editar cuestionario">
-                  <Edit size={16} />
-                </Link>
-              )}
-            </div>
-          ))}
-          {quizzes.length === 0 && (
-            <p className="text-slate-500 text-sm">Este curso aún no tiene cuestionarios.</p>
-          )}
-        </div>
-      )}
-
-      {tab === "resources" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {resources.map((item) => {
-            const Icon = typeIcon[item.type] || File;
-            return (
-              <Link key={item.id} to={`/library/${item.id}`}>
-                <Card className="flex items-start gap-4 h-full hover:border-indigo-500/50 transition-colors cursor-pointer">
-                  <Icon size={28} className="text-indigo-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-white truncate">{item.title}</h3>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge>{item.type}</Badge>
-                      <Badge>{item.category}</Badge>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
-            );
-          })}
-          {resources.length === 0 && (
-            <p className="text-slate-500 text-sm col-span-full">Ninguna lección o cuestionario de este curso enlaza archivos todavía.</p>
-          )}
-        </div>
-      )}
-
-      {tab === "forum" && courseId && (
-        <Forum courseId={courseId} canPost={!!currentUser && currentUser.role !== "guest"} />
-      )}
-
-      {tab === "students" && canEdit && (
-        <Card>
-          {students.length === 0 ? (
-            <p className="text-slate-500 text-sm">Ningún estudiante inscrito todavía.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
-                  <th className="py-2 pr-4 font-medium">Nombre</th>
-                  <th className="py-2 pr-4 font-medium">Email</th>
-                  <th className="py-2 pr-4 font-medium">Puntos</th>
-                  <th className="py-2 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-700/50 last:border-0">
-                    <td className="py-2.5 pr-4 text-white">{s.name}</td>
-                    <td className="py-2.5 pr-4 text-slate-400">{s.email}</td>
-                    <td className="py-2.5 pr-4 text-slate-300">{s.points}</td>
-                    <td className="py-2.5 text-right">
-                      <button onClick={() => handleUnenroll(s.id)}
-                        className="p-1.5 rounded hover:bg-slate-700 text-slate-500 hover:text-red-400 transition-colors"
-                        title="Quitar del curso">
-                        <X size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
-      )}
+      </Tabs>
     </div>
   );
 }

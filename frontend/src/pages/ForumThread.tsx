@@ -1,38 +1,23 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { useAuth } from "../context/AuthContext";
-import type { ForumPost, LibraryItem, LessonUsage, QuizUsage } from "../types";
-import { Card } from "../components/ui";
-import ForumPostItem from "../components/ForumPostItem";
+import { useAuth } from "@/context/AuthContext";
+import type { LibraryItem, LessonUsage, QuizUsage } from "@/types";
+import { Card } from "@/components/ui/card";
+import { useForumPosts, useForumLinks } from "@/hooks/useForum";
+import ForumPostItem from "@/components/ForumPostItem";
 import { ArrowLeft, Lock } from "lucide-react";
 
 export default function ForumThread() {
   const { courseId, postId } = useParams<{ courseId: string; postId: string }>();
   const { currentUser } = useAuth();
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [linkedItems, setLinkedItems] = useState<LibraryItem[]>([]);
-  const [linkedLessons, setLinkedLessons] = useState<LessonUsage[]>([]);
-  const [linkedQuizzes, setLinkedQuizzes] = useState<QuizUsage[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
+  const { data: posts, error } = useForumPosts(courseId);
+  const { data: links } = useForumLinks(courseId);
 
-  const load = () => {
-    if (!courseId) return;
-    setError("");
-    api.getForumPosts(courseId)
-      .then((p) => { setPosts(p); setLoaded(true); })
-      .catch((err) => { setError(err.message); setLoaded(true); });
-    // Same course-wide link bundle the forum list uses — ids are globally
-    // unique, so it resolves every post's [[id]] refs, this thread's included.
-    api.getForumLinks(courseId).then(({ libraryItems, lessons, quizzes }) => {
-      setLinkedItems(libraryItems);
-      setLinkedLessons(lessons);
-      setLinkedQuizzes(quizzes);
-    }).catch(() => {});
-  };
-
-  useEffect(() => { load(); }, [courseId, postId]);
+  // Same course-wide link bundle the forum list uses — ids are globally
+  // unique, so it resolves every post's [[id]] refs, this thread's included.
+  const linkedItems = links?.libraryItems ?? [];
+  const linkedLessons = links?.lessons ?? [];
+  const linkedQuizzes = links?.quizzes ?? [];
 
   const itemMap = useMemo(() => {
     const m: Record<string, LibraryItem> = {};
@@ -57,32 +42,31 @@ export default function ForumThread() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+        <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={16} /> Volver al foro
         </Link>
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
-          <Lock size={32} className="text-slate-500" />
-          <p className="text-slate-300">No estás inscrito en este curso.</p>
+          <Lock size={32} className="text-muted-foreground" />
+          <p className="text-foreground/90">No estás inscrito en este curso.</p>
         </Card>
       </div>
     );
   }
 
-  if (!loaded) return <p className="text-slate-400">Cargando publicación...</p>;
+  if (!posts) return <p className="text-muted-foreground">Cargando publicación...</p>;
 
   const root = posts.find((p) => p.id === postId);
-  if (!root) return <p className="text-slate-400">Publicación no encontrada.</p>;
+  if (!root) return <p className="text-muted-foreground">Publicación no encontrada.</p>;
 
   return (
     <div className="space-y-4">
-      <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+      <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft size={16} /> Volver al foro
       </Link>
       <ForumPostItem
         post={root}
         posts={posts}
         canPost={canPost}
-        onChange={load}
         depth={0}
         itemMap={itemMap}
         lessonMap={lessonMap}
