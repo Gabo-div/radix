@@ -21,19 +21,26 @@ import (
 // sqld by ~2 orders of magnitude versus one INSERT per row.
 const maxBindParams = 500
 
-// skippedTable reports tables the backup must not touch:
+// internalTable reports tables no bulk operation may ever touch:
 //   - sqlite internals;
-//   - goose's own bookkeeping (migrations are applied by the app on boot, never
-//     restored from a dump — restoring them could downgrade the recorded version);
-//   - the FTS5 shadow tables of server_logs_fts, an external-content index
-//     rebuilt by the triggers on server_logs;
-//   - sync_log and server_logs: both are per-node operational history (the DTN
-//     queue of this edge server and its own log stream), not shared content, so
-//     merging another node's rows into them would be meaningless noise.
-func skippedTable(name string) bool {
+//   - goose's own bookkeeping (migrations are applied by the app on boot, so
+//     rewriting this table could downgrade the recorded version);
+//   - the FTS5 shadow tables of server_logs_fts, an external-content index the
+//     Go code never writes to — the triggers on server_logs keep it in sync.
+func internalTable(name string) bool {
 	return strings.HasPrefix(name, "sqlite_") ||
 		name == "goose_db_version" ||
-		strings.HasPrefix(name, "server_logs") ||
+		strings.HasPrefix(name, "server_logs_fts")
+}
+
+// skippedTable additionally excludes, from backups only, the two tables that
+// are per-node operational history rather than shared content: this edge
+// server's DTN queue and its own log stream. Merging another node's rows into
+// them would be meaningless noise. ClearTables does wipe them — flushing this
+// node's database means flushing its history too.
+func skippedTable(name string) bool {
+	return internalTable(name) ||
+		name == "server_logs" ||
 		name == "sync_log"
 }
 
@@ -48,6 +55,12 @@ func skippedTable(name string) bool {
 // `quizzes` ends up listed after `quiz_questions` even though it's the parent.
 // Importing in that order fails with "FOREIGN KEY constraint failed".
 func (s *Store) tableNames(ctx context.Context) ([]string, error) {
+	return s.listTables(ctx, skippedTable)
+}
+
+// listTables returns every table except those `skip` rejects, in FK-dependency
+// order.
+func (s *Store) listTables(ctx context.Context, skip func(string) bool) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid`)
 	if err != nil {
 		return nil, err
@@ -60,7 +73,7 @@ func (s *Store) tableNames(ctx context.Context) ([]string, error) {
 		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
-		if !skippedTable(name) {
+		if !skip(name) {
 			names = append(names, name)
 		}
 	}
@@ -278,6 +291,44 @@ func (s *Store) ImportTables(ctx context.Context, dumps []models.TableDump) ([]m
 		return nil, err
 	}
 	return results, nil
+}
+
+// ClearTables deletes every row of every table, leaving the schema (and the
+// applied-migration record) in place — the DB ends up as if it had just been
+// created. Returns rows deleted per table.
+//
+// Tables are emptied in reverse FK-dependency order, so a child is always gone
+// before its parent. Everything runs in one transaction: an error leaves the
+// data untouched. server_logs and sync_log go too (see skippedTable), and
+// deleting from server_logs fires the triggers that clean up its FTS index.
+func (s *Store) ClearTables(ctx context.Context) (map[string]int64, error) {
+	names, err := s.listTables(ctx, internalTable)
+	if err != nil {
+		return nil, fmt.Errorf("list tables: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	deleted := make(map[string]int64, len(names))
+	for i := len(names) - 1; i >= 0; i-- {
+		res, err := tx.ExecContext(ctx, "DELETE FROM "+quoteIdent(names[i]))
+		if err != nil {
+			return nil, fmt.Errorf("clear %s: %w", names[i], err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			n = 0 // driver can't report it; the DELETE still ran
+		}
+		deleted[names[i]] = n
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return deleted, nil
 }
 
 // insertRows adds dump's rows and returns how many were actually inserted;

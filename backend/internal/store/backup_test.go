@@ -26,28 +26,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	}
 	defer db.Close()
 	enforceForeignKeys(t, db)
-
-	// The schema comes from schema.sql, not database.Migrate: the local-only
-	// tursogo driver can't replay 00003's DROP COLUMN, and schema.sql is
-	// already the maintained flat snapshot of the same schema (it's what sqlc
-	// generates against).
-	schema, err := os.ReadFile(filepath.Join("..", "database", "schema.sql"))
-	if err != nil {
-		t.Fatalf("read schema: %v", err)
-	}
-	for _, stmt := range strings.Split(string(schema), ";") {
-		if strings.TrimSpace(stmt) == "" {
-			continue
-		}
-		// tursogo has no fts5 module; server_logs_fts is excluded from the
-		// backup anyway (it's rebuilt from server_logs by triggers).
-		if strings.Contains(stmt, "VIRTUAL TABLE") {
-			continue
-		}
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			t.Fatalf("exec schema stmt %q: %v", strings.TrimSpace(stmt), err)
-		}
-	}
+	applySchema(t, db)
 
 	s := store.New(db.DB)
 	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Ana", Email: "ana@radix.test", PasswordHash: "hash", Role: models.RoleStudent}); err != nil {
@@ -220,6 +199,93 @@ func TestImportOrdersByForeignKeys(t *testing.T) {
 	}
 	if position("courses") > position("quizzes") || position("quizzes") > position("quiz_questions") {
 		t.Errorf("orden incorrecto: %v", order)
+	}
+}
+
+// TestClearTables checks the flush leaves an empty database with its schema
+// intact.
+//
+// Unlike the other tests here it does NOT enable foreign keys: tursogo
+// segfaults inside its cgo layer (turso_connection_prepare_first) on this exact
+// workload — full schema + rows + a transaction full of DELETEs with
+// `foreign_keys = ON`. Reduced repros don't trigger it, and the same DELETEs run
+// fine with the pragma off, which is the driver's own default and therefore what
+// `go run ./cmd/flush` uses in local-only mode; remote mode never touches cgo.
+// The reverse-dependency delete order is the exact reverse of the list
+// TestImportOrdersByForeignKeys verifies parents-first, with FKs enforced.
+func TestClearTables(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, &config.Config{DBPath: filepath.Join(t.TempDir(), "test.db")})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+	applySchema(t, db)
+
+	s := store.New(db.DB)
+	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Ana", Email: "ana@radix.test", PasswordHash: "h", Role: models.RoleStudent}); err != nil {
+		t.Fatalf("add user: %v", err)
+	}
+	course := &models.Course{Title: "Redes", Description: "d", Category: "c"}
+	if err := s.AddCourse(ctx, course); err != nil {
+		t.Fatalf("add course: %v", err)
+	}
+	lesson := &models.Lesson{CourseID: course.ID, Title: "Intro", ContentText: "hola"}
+	if err := s.AddLesson(ctx, lesson); err != nil {
+		t.Fatalf("add lesson: %v", err)
+	}
+	if err := s.EnrollStudent(ctx, "u1", course.ID); err != nil {
+		t.Fatalf("enroll: %v", err)
+	}
+	// sync_log stays out of a backup but must be flushed like everything else.
+	if err := s.EnqueueSync(ctx, "TEST"); err != nil {
+		t.Fatalf("enqueue sync: %v", err)
+	}
+
+	deleted, err := s.ClearTables(ctx)
+	if err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	for _, table := range []string{"users", "courses", "lessons", "course_enrollments", "sync_log"} {
+		if deleted[table] == 0 {
+			t.Errorf("%s: no se borró ninguna fila (%v)", table, deleted)
+		}
+	}
+
+	// El esquema sigue ahí: se puede volver a insertar sin migrar de nuevo.
+	after, err := s.ExportTables(ctx)
+	if err != nil {
+		t.Fatalf("export tras flush: %v", err)
+	}
+	for _, dump := range after {
+		if len(dump.Rows) != 0 {
+			t.Errorf("%s quedó con %d filas", dump.Name, len(dump.Rows))
+		}
+	}
+	if err := s.AddCourse(ctx, &models.Course{Title: "Otro", Description: "d", Category: "c"}); err != nil {
+		t.Fatalf("insertar tras flush: %v", err)
+	}
+}
+
+// applySchema creates the tables from schema.sql instead of running
+// database.Migrate: the local-only tursogo driver can't replay 00003's DROP
+// COLUMN, and schema.sql is the maintained flat snapshot of the same schema
+// (it's what sqlc generates against). The FTS5 virtual table is skipped because
+// tursogo has no fts5 module — nothing here writes to it anyway, its triggers
+// do.
+func applySchema(t *testing.T, db *database.DB) {
+	t.Helper()
+	schema, err := os.ReadFile(filepath.Join("..", "database", "schema.sql"))
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	for _, stmt := range strings.Split(string(schema), ";") {
+		if strings.TrimSpace(stmt) == "" || strings.Contains(stmt, "VIRTUAL TABLE") {
+			continue
+		}
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			t.Fatalf("exec schema stmt %q: %v", strings.TrimSpace(stmt), err)
+		}
 	}
 }
 
