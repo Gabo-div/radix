@@ -12,8 +12,9 @@ import { useCourse, useCourseResources, useEnrolledStudents, useEnrollStudent, u
 import { useCourseQuizzes } from "@/hooks/useQuizzes";
 import StudentPickerModal from "../components/common/StudentPickerModal";
 import Forum from "../components/Forum";
+import BackLink from "../components/common/BackLink";
 import {
-  ArrowLeft, BookOpen, FileQuestion, Users, Paperclip, MessageSquare, PlusCircle, Play, Edit, Lock, X,
+  BookOpen, FileQuestion, Users, Paperclip, MessageSquare, PlusCircle, Play, Edit, Lock, X,
   FileVideo, FileAudio, FileImage, FileText, File,
 } from "lucide-react";
 
@@ -50,9 +51,7 @@ export default function CourseDetail() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to="/courses" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} /> Volver a cursos
-        </Link>
+        <BackLink fallback="/courses" />
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <Lock size={32} className="text-muted-foreground" />
           <p className="text-foreground/90">No estás inscrito en este curso.</p>
@@ -77,10 +76,7 @@ export default function CourseDetail() {
         <StudentPickerModal courseId={courseId} onSelect={handleEnroll} onClose={() => setShowStudentPicker(false)} />
       )}
 
-      <Link to="/courses" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft size={16} />
-        Volver a cursos
-      </Link>
+      <BackLink fallback="/courses" />
 
       <div className="flex items-center justify-between">
         <div>

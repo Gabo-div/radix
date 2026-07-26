@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { useLesson, useLessonLinks, useLessonUsage } from "@/hooks/useLessons";
 import LessonSidebar from "../components/layout/LessonSidebar";
 import WikiContent from "../components/WikiContent";
-import { ArrowLeft, Edit, Lock } from "lucide-react";
+import { Edit, Lock } from "lucide-react";
+import BackLink from "../components/common/BackLink";
 
 export default function LessonViewer() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
@@ -58,9 +59,7 @@ export default function LessonViewer() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} /> Volver al curso
-        </Link>
+        <BackLink fallback={`/courses/${courseId}`} />
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <Lock size={32} className="text-muted-foreground" />
           <p className="text-foreground/90">No estás inscrito en este curso.</p>
@@ -74,9 +73,7 @@ export default function LessonViewer() {
   return (
     <div className="flex gap-6">
       <div className="flex-1 min-w-0 space-y-6">
-        <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} /> Volver al curso
-        </Link>
+        <BackLink fallback={`/courses/${courseId}`} />
 
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground" id="top">{data.lesson.title}</h1>

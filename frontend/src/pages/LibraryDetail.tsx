@@ -8,8 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryItem, useLibraryItemUsage, useUpdateLibraryItem } from "@/hooks/useLibrary";
+import BackLink from "../components/common/BackLink";
 import {
-  ArrowLeft, Download, FileVideo, FileAudio, FileImage, FileText, Edit, CheckCircle, BookOpen,
+  Download, FileVideo, FileAudio, FileImage, FileText, Edit, CheckCircle, BookOpen,
 } from "lucide-react";
 
 const typeIcon: Record<string, typeof FileVideo> = {
@@ -57,9 +58,7 @@ export default function LibraryDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/library" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft size={16} /> Volver a biblioteca
-      </Link>
+      <BackLink fallback="/library" />
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

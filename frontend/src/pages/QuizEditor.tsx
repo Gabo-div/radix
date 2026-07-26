@@ -14,7 +14,8 @@ import { useCourse } from "@/hooks/useCourses";
 import { useLibrary } from "@/hooks/useLibrary";
 import { useAllLessons } from "@/hooks/useLessons";
 import { useQuiz, useCreateQuiz, useUpdateQuiz } from "@/hooks/useQuizzes";
-import { ArrowLeft, Save, Paperclip, BookOpen } from "lucide-react";
+import { Save, Paperclip, BookOpen } from "lucide-react";
+import BackLink from "../components/common/BackLink";
 
 export default function QuizEditor() {
   const { courseId, quizId } = useParams<{ courseId: string; quizId?: string }>();
@@ -93,9 +94,7 @@ export default function QuizEditor() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to={`/courses/${courseId}?tab=quizzes`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft size={16} /> Volver
-          </Link>
+          <BackLink fallback={`/courses/${courseId}?tab=quizzes`} />
           <span className="text-border">/</span>
           <span className="text-sm text-muted-foreground">{course?.course.title || "Cargando..."}</span>
           <span className="text-border">/</span>

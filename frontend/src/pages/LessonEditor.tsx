@@ -16,7 +16,8 @@ import QuizQuestionsEditor from "../components/QuizQuestionsEditor";
 import FilePickerModal from "../components/common/FilePickerModal";
 import LessonPickerModal from "../components/common/LessonPickerModal";
 import QuizPickerModal from "../components/common/QuizPickerModal";
-import { ArrowLeft, Save, FileQuestion, Paperclip, BookOpen } from "lucide-react";
+import { Save, FileQuestion, Paperclip, BookOpen } from "lucide-react";
+import BackLink from "../components/common/BackLink";
 
 export default function LessonEditor() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
@@ -117,9 +118,7 @@ export default function LessonEditor() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to={`/courses/${courseId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft size={16} /> Volver
-          </Link>
+          <BackLink fallback={`/courses/${courseId}`} />
           <span className="text-muted-foreground">/</span>
           <span className="text-sm text-foreground/90">{course?.course.title || "Cargando..."}</span>
           <span className="text-muted-foreground">/</span>

@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import type { LibraryItem, LessonUsage, QuizUsage } from "@/types";
 import { Card } from "@/components/ui/card";
 import { useForumPosts, useForumLinks } from "@/hooks/useForum";
 import ForumPostItem from "@/components/ForumPostItem";
-import { ArrowLeft, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
+import BackLink from "../components/common/BackLink";
 
 export default function ForumThread() {
   const { courseId, postId } = useParams<{ courseId: string; postId: string }>();
@@ -42,9 +43,7 @@ export default function ForumThread() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} /> Volver al foro
-        </Link>
+        <BackLink fallback={`/courses/${courseId}?tab=forum`} />
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <Lock size={32} className="text-muted-foreground" />
           <p className="text-foreground/90">No estás inscrito en este curso.</p>
@@ -60,9 +59,7 @@ export default function ForumThread() {
 
   return (
     <div className="space-y-4">
-      <Link to={`/courses/${courseId}?tab=forum`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft size={16} /> Volver al foro
-      </Link>
+      <BackLink fallback={`/courses/${courseId}?tab=forum`} />
       <ForumPostItem
         post={root}
         posts={posts}
