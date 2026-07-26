@@ -8,6 +8,7 @@ import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLesson, useLessonLinks, useLessonUsage } from "@/hooks/useLessons";
+import { readingWidthClass, useAppearance } from "../context/AppearanceContext";
 import LessonSidebar from "../components/layout/LessonSidebar";
 import WikiContent from "../components/WikiContent";
 import { Edit, Lock } from "lucide-react";
@@ -16,6 +17,7 @@ import BackLink from "../components/common/BackLink";
 export default function LessonViewer() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
   const { currentUser } = useAuth();
+  const { width } = useAppearance();
 
   const { data, error, isPending } = useLesson(courseId, lessonId);
   const { data: links } = useLessonLinks(lessonId);
@@ -87,7 +89,9 @@ export default function LessonViewer() {
         </div>
 
         <div className="flex w-full gap-4">
-          <div className="flex flex-col flex-1 gap-4">
+          {/* La anchura de lectura del panel de apariencia se aplica acá: es la
+              columna del contenido, no la página entera. */}
+          <div className={`flex flex-col flex-1 gap-4 ${readingWidthClass(width)}`}>
             <Card>
               <WikiContent text={lessonText} itemMap={itemMap} lessonMap={lessonMap} quizMap={quizMap} />
             </Card>

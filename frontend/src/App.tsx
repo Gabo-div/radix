@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AppearanceProvider } from "./context/AppearanceContext";
 import { getRedirectPath } from "./lib/rbac";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import RootLayout from "./components/layout/RootLayout";
@@ -72,10 +73,12 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-          <Toaster />
-        </AuthProvider>
+        <AppearanceProvider>
+          <AuthProvider>
+            <AppRoutes />
+            <Toaster />
+          </AuthProvider>
+        </AppearanceProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

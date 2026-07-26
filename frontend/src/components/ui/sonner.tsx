@@ -1,9 +1,11 @@
 import { Toaster as Sonner } from "sonner";
+import { useAppearance } from "../../context/AppearanceContext";
 
 function Toaster(props: React.ComponentProps<typeof Sonner>) {
+  const { isDark } = useAppearance();
   return (
     <Sonner
-      theme="dark"
+      theme={isDark ? "dark" : "light"}
       className="toaster group"
       position="top-right"
       toastOptions={{

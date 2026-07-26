@@ -5,7 +5,38 @@
 @tailwind utilities;
 
 @layer base {
+  /* Tema claro. El oscuro vive en .dark, que AppearanceContext pone y quita en
+     <html> (y el script de index.html adelanta antes del primer pintado). */
   :root {
+    --background: 0 0% 100%;
+    --foreground: 240 6% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 10%;
+    --primary: 234 72% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 12%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 42%;
+    --accent: 240 5% 93%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 64% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 90% 38%;
+    --warning-foreground: 0 0% 100%;
+    --border: 240 6% 88%;
+    --input: 240 6% 80%;
+    --ring: 234 72% 52%;
+    --radius: 0.625rem;
+    --scrollbar-thumb: 240 5% 78%;
+    --scrollbar-thumb-hover: 240 5% 66%;
+  }
+
+  .dark {
     --background: 240 6% 6%;
     --foreground: 0 0% 98%;
     --card: 240 5% 10%;
@@ -29,7 +60,8 @@
     --border: 240 6% 19%;
     --input: 240 6% 24%;
     --ring: 234 89% 74%;
-    --radius: 0.625rem;
+    --scrollbar-thumb: 240 5% 22%;
+    --scrollbar-thumb-hover: 240 5% 30%;
   }
 }
 
@@ -52,8 +84,88 @@
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(240 5% 22%); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(240 5% 30%); }
+::-webkit-scrollbar-thumb { background: hsl(var(--scrollbar-thumb)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--scrollbar-thumb-hover)); }
+
+/* Los radios del panel de apariencia son nativos: basta el color de acento. */
+input[type="radio"] {
+  accent-color: hsl(var(--primary));
+}
+
+/* Tipografía del contenido de una lección/cuestionario/post.
+ *
+ * Esto reemplaza a las clases `prose*` que había antes y que no hacían nada:
+ * @tailwindcss/typography nunca estuvo instalado, así que el markdown se
+ * renderizaba sin estilos. Todo lo de adentro se mide en em, y por eso el
+ * tamaño del panel de apariencia escala títulos, listas y tablas junto con el
+ * texto, en lugar de solo los párrafos. */
+.reading {
+  font-size: var(--reading-font, 1rem);
+  line-height: 1.7;
+}
+.reading-small {
+  --reading-font: 0.875rem;
+}
+.reading-standard {
+  --reading-font: 1rem;
+}
+.reading-large {
+  --reading-font: 1.125rem;
+}
+
+.reading h1 { font-size: 1.6em; }
+.reading h2 { font-size: 1.3em; }
+.reading h3 { font-size: 1.1em; }
+.reading h1, .reading h2, .reading h3 {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  line-height: 1.3;
+}
+.reading p, .reading ul, .reading ol, .reading blockquote, .reading pre, .reading table {
+  margin: 0.9em 0;
+}
+.reading ul, .reading ol { padding-left: 1.4em; }
+.reading ul { list-style: disc; }
+.reading ol { list-style: decimal; }
+.reading li { margin: 0.3em 0; }
+.reading strong { color: hsl(var(--foreground)); font-weight: 600; }
+.reading blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 1em;
+  color: hsl(var(--muted-foreground));
+}
+.reading code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.9em;
+  background: hsl(var(--secondary));
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.reading pre {
+  background: hsl(var(--secondary));
+  padding: 0.9em;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.reading pre code { background: none; padding: 0; }
+.reading table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+.reading th, .reading td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.45em 0.7em;
+  text-align: left;
+}
+.reading th {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.reading hr { border-color: hsl(var(--border)); margin: 1.5em 0; }
 
 .cm-wiki-link {
   background: hsl(var(--primary) / 0.12);

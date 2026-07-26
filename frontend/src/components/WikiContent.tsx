@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { splitWikiSegments } from "../lib/markdown";
+import { readingTextClass, useAppearance } from "../context/AppearanceContext";
 import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import InlineMedia from "./InlineMedia";
 import InlineLesson from "./InlineLesson";
@@ -23,9 +24,11 @@ const headingId = (children: ReactNode) =>
 // InlineMedia, lessons as InlineLesson) — shared by LessonViewer and QuizViewer.
 export default function WikiContent({ text, itemMap, lessonMap, quizMap = {} }: Props) {
   const segments = useMemo(() => splitWikiSegments(text), [text]);
+  // El tamaño sale del panel de apariencia (ver .reading en index.css).
+  const { textSize } = useAppearance();
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none text-foreground/80 leading-relaxed">
+    <div className={`${readingTextClass(textSize)} max-w-none text-foreground/80`}>
       {segments.map((seg, i) =>
         seg.type === "wiki" ? (
           (() => {
@@ -50,9 +53,9 @@ export default function WikiContent({ text, itemMap, lessonMap, quizMap = {} }: 
                 }
                 return <a href={href} className="text-primary hover:text-primary/80 underline">{children}</a>;
               },
-              h1: ({ children, ...props }) => <h1 id={headingId(children)} className="text-xl font-bold text-foreground mt-6 mb-3" {...props}>{children}</h1>,
-              h2: ({ children, ...props }) => <h2 id={headingId(children)} className="text-lg font-semibold text-foreground mt-5 mb-2" {...props}>{children}</h2>,
-              h3: ({ children, ...props }) => <h3 id={headingId(children)} className="text-base font-medium text-foreground mt-4 mb-2" {...props}>{children}</h3>,
+              h1: ({ children, ...props }) => <h1 id={headingId(children)} className="mt-6 mb-3" {...props}>{children}</h1>,
+              h2: ({ children, ...props }) => <h2 id={headingId(children)} className="mt-5 mb-2" {...props}>{children}</h2>,
+              h3: ({ children, ...props }) => <h3 id={headingId(children)} className="mt-4 mb-2" {...props}>{children}</h3>,
             }}
           >
             {seg.value}

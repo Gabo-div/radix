@@ -1,11 +1,27 @@
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RADIX - Educación Offline</title>
+    <script>
+      // Antes del primer pintado, para que un usuario con tema oscuro no vea un
+      // destello claro mientras carga el bundle. La misma clave que usa
+      // src/context/AppearanceContext.tsx, que es quien la escribe.
+      (function () {
+        try {
+          var pref = localStorage.getItem("radix_theme") || "auto";
+          var dark =
+            pref === "dark" ||
+            (pref === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {
+          /* localStorage bloqueado: queda el tema claro */
+        }
+      })();
+    </script>
   </head>
-  <body class="bg-slate-900 text-slate-100">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -5,6 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { createWikiLinkExtensions } from "../lib/codemirror-wiki";
+import { useAppearance } from "../context/AppearanceContext";
 import { preprocessWikiLinks } from "../lib/markdown";
 import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import ReactMarkdown from "react-markdown";
@@ -24,42 +25,59 @@ interface Props {
   onAttachQuizClick?: () => void;
 }
 
-// Token-matched editor theme — CodeMirror can't read CSS vars from Tailwind
-// classes, so the app palette (index.css :root) is mirrored here by hand.
-const radixEditorTheme = EditorView.theme(
-  {
-    "&": { backgroundColor: "transparent", height: "100%", fontSize: "14px", color: "hsl(0 0% 95% / 0.88)" },
-    ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, monospace" },
-    ".cm-content": { padding: "12px", caretColor: "hsl(0 0% 95%)" },
-    ".cm-cursor": { borderLeftColor: "hsl(0 0% 95%)" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "hsl(240 5% 24%)" },
-    ".cm-activeLine": { backgroundColor: "transparent" },
-    ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "hsl(240 4% 40%)" },
-    ".cm-activeLineGutter": { backgroundColor: "transparent" },
-  },
-  { dark: true }
-);
+// El tema del editor sale de los mismos tokens que el resto de la aplicación:
+// CodeMirror no lee clases de Tailwind, pero sí resuelve var() en un valor CSS,
+// así que apuntar a --foreground y compañía hace que el editor siga al tema sin
+// mantener una segunda paleta a mano. El flag `dark` no depende del color (que
+// ya cambia solo) sino de los estilos que CodeMirror decide por su cuenta, como
+// la barra de desplazamiento.
+const editorTheme = (dark: boolean) =>
+  EditorView.theme(
+    {
+      "&": {
+        backgroundColor: "transparent",
+        height: "100%",
+        fontSize: "14px",
+        color: "hsl(var(--foreground) / 0.88)",
+      },
+      ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, monospace" },
+      ".cm-content": { padding: "12px", caretColor: "hsl(var(--foreground))" },
+      ".cm-cursor": { borderLeftColor: "hsl(var(--foreground))" },
+      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+        backgroundColor: "hsl(var(--accent))",
+      },
+      ".cm-activeLine": { backgroundColor: "transparent" },
+      ".cm-gutters": {
+        backgroundColor: "transparent",
+        border: "none",
+        color: "hsl(var(--muted-foreground) / 0.7)",
+      },
+      ".cm-activeLineGutter": { backgroundColor: "transparent" },
+    },
+    { dark }
+  );
 
-const radixMarkdownHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: "hsl(0 0% 98%)", fontWeight: "600" },
-  { tag: tags.strong, color: "hsl(0 0% 98%)", fontWeight: "600" },
+const markdownHighlight = HighlightStyle.define([
+  { tag: tags.heading, color: "hsl(var(--foreground))", fontWeight: "600" },
+  { tag: tags.strong, color: "hsl(var(--foreground))", fontWeight: "600" },
   { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.link, color: "hsl(234 89% 74%)" },
-  { tag: tags.url, color: "hsl(234 89% 74%)" },
-  { tag: tags.monospace, color: "hsl(158 64% 52%)" },
-  { tag: tags.quote, color: "hsl(240 4% 58%)" },
-  { tag: tags.meta, color: "hsl(240 4% 58%)" },
-  { tag: tags.processingInstruction, color: "hsl(240 4% 58%)" },
+  { tag: tags.link, color: "hsl(var(--primary))" },
+  { tag: tags.url, color: "hsl(var(--primary))" },
+  { tag: tags.monospace, color: "hsl(var(--success))" },
+  { tag: tags.quote, color: "hsl(var(--muted-foreground))" },
+  { tag: tags.meta, color: "hsl(var(--muted-foreground))" },
+  { tag: tags.processingInstruction, color: "hsl(var(--muted-foreground))" },
 ]);
 
 export default function MarkdownEditor({ value, onChange, library, lessons = [], quizzes = [], showPreview, onTogglePreview, onAttachClick, onAttachLessonClick, onAttachQuizClick }: Props) {
   const viewRef = useRef<EditorView | null>(null);
+  const { isDark } = useAppearance();
   const extensions = useMemo(() => [
     markdown({ base: markdownLanguage }),
-    radixEditorTheme,
-    syntaxHighlighting(radixMarkdownHighlight),
+    editorTheme(isDark),
+    syntaxHighlighting(markdownHighlight),
     ...createWikiLinkExtensions(library, lessons, quizzes),
-  ], [library, lessons, quizzes]);
+  ], [library, lessons, quizzes, isDark]);
 
   const handleChange = useCallback((val: string) => onChange(val), [onChange]);
 
@@ -125,7 +143,7 @@ export default function MarkdownEditor({ value, onChange, library, lessons = [],
 
       <div className="border border-border rounded-lg overflow-hidden bg-card/50">
         {showPreview ? (
-          <div className="p-4 min-h-[300px] prose prose-invert prose-sm max-w-none text-foreground/80">
+          <div className="p-4 min-h-[300px] reading reading-standard max-w-none text-foreground/80">
             {value ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{preprocessWikiLinks(value, library, lessons, quizzes)}</ReactMarkdown>
             ) : (

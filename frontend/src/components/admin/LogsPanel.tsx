@@ -83,7 +83,7 @@ export default function LogsPanel() {
             <div
               ref={liveContainerRef}
               onScroll={handleLiveScroll}
-              className="bg-black rounded-lg p-3 font-mono text-xs leading-relaxed h-96 overflow-y-auto"
+              className="bg-secondary/60 rounded-lg p-3 font-mono text-xs leading-relaxed h-96 overflow-y-auto"
             >
               {logs.length === 0 && <span className="text-muted-foreground/60">[GO-SERVER] Esperando logs...</span>}
               {logs.map((line, i) => (

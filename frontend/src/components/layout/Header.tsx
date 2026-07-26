@@ -1,11 +1,24 @@
-import { LogOut, UserCheck } from "lucide-react";
+import { LogOut, UserCheck, Sun, Moon, SunMoon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useAppearance } from "../../context/AppearanceContext";
 import { roleLabels, roleColors } from "../../lib/rbac";
+
+// El panel de apariencia de la lección es el lugar completo para esto, pero el
+// tema tiene que poder cambiarse desde cualquier pantalla, así que acá va un
+// ciclo corto entre los tres estados.
+const THEME_CYCLE = {
+  auto: { next: "light", Icon: SunMoon, label: "Tema: automático" },
+  light: { next: "dark", Icon: Sun, label: "Tema: claro" },
+  dark: { next: "auto", Icon: Moon, label: "Tema: oscuro" },
+} as const;
 
 export default function Header() {
   const { currentUser, logout } = useAuth();
+  const { theme, setTheme } = useAppearance();
 
   if (!currentUser) return null;
+
+  const { next, Icon, label } = THEME_CYCLE[theme];
 
   return (
     <header className="h-14 bg-background border-b border-border/60 flex items-center justify-between px-6 shrink-0">
@@ -26,6 +39,14 @@ export default function Header() {
             {roleLabels[currentUser.role]}
           </span>
         </div>
+        <button
+          onClick={() => setTheme(next)}
+          title={label}
+          aria-label={label}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Icon size={16} />
+        </button>
         <button
           onClick={logout}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors"
