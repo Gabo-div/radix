@@ -524,9 +524,8 @@ func extractWikiRefs(text string) []string {
 // syncLessonLinks recomputes lesson_links from content_text — a materialized
 // cache of a lesson's [[id]] wiki-links kept in sync on every create/update so
 // forward/reverse lookups are indexed table reads instead of a LIKE scan over
-// every lesson body. Dangling refs (id matches neither a library item nor a
-// lesson) are silently dropped, same as the live-render behaviour ("no
-// encontrado").
+// every lesson body. Dangling refs (id matches no library item, lesson or quiz)
+// are silently dropped, same as the live-render behaviour ("no encontrado").
 func (s *Store) syncLessonLinks(ctx context.Context, q *dbgen.Queries, lessonID, contentText string) error {
 	if err := q.DeleteLessonLinks(ctx, lessonID); err != nil {
 		return err
@@ -537,6 +536,11 @@ func (s *Store) syncLessonLinks(ctx context.Context, q *dbgen.Queries, lessonID,
 			targetType = "library_item"
 		} else if _, err := q.GetLesson(ctx, ref); err == nil {
 			targetType = "lesson"
+		} else if _, err := q.GetQuiz(ctx, ref); err == nil {
+			// A lesson only shows the quizzes it links explicitly — the quiz
+			// attached through quizzes.lesson_id is not rendered in the lesson
+			// view, it lives in the course's "Cuestionarios" tab.
+			targetType = "quiz"
 		}
 		if targetType == "" {
 			continue
@@ -598,13 +602,13 @@ func (s *Store) GetAllLessons(ctx context.Context) ([]models.LessonUsage, error)
 	return all, nil
 }
 
-// GetLessonLinks resolves the library items and lessons that lessonID links to
-// via lesson_links — only what that one lesson actually references, not the
-// full library/lesson index.
-func (s *Store) GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, error) {
+// GetLessonLinks resolves the library items, lessons and quizzes that lessonID
+// links to via lesson_links — only what that one lesson actually references,
+// not the full library/lesson index.
+func (s *Store) GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, []models.QuizUsage, error) {
 	itemRows, err := s.queries.GetLinkedLibraryItems(ctx, lessonID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	items := make([]models.LibraryItem, len(itemRows))
 	for i, r := range itemRows {
@@ -618,7 +622,7 @@ func (s *Store) GetLessonLinks(ctx context.Context, lessonID string) ([]models.L
 
 	lessonRows, err := s.queries.GetLinkedLessons(ctx, lessonID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	lessons := make([]models.LessonUsage, len(lessonRows))
 	for i, r := range lessonRows {
@@ -629,7 +633,21 @@ func (s *Store) GetLessonLinks(ctx context.Context, lessonID string) ([]models.L
 			CourseTitle: r.CourseTitle,
 		}
 	}
-	return items, lessons, nil
+
+	quizRows, err := s.queries.GetLinkedQuizzes(ctx, lessonID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	quizzes := make([]models.QuizUsage, len(quizRows))
+	for i, r := range quizRows {
+		quizzes[i] = models.QuizUsage{
+			QuizID:      r.ID,
+			CourseID:    r.CourseID,
+			QuizTitle:   r.Title,
+			CourseTitle: r.CourseTitle,
+		}
+	}
+	return items, lessons, quizzes, nil
 }
 
 // GetLessonsLinkingTo finds lessons that link to targetID (a library item id

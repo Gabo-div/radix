@@ -151,12 +151,14 @@ func (h *Handler) GetLessonUsage(c *echo.Context) error {
 	return httpx.OK(c, http.StatusOK, usage)
 }
 
-// GetLessonLinks resolves the library items and lessons this lesson links to
-// via [[id]] wiki-links — scoped to just this lesson (backed by lesson_links),
-// so viewing a lesson doesn't require fetching the entire library/lesson index.
+// GetLessonLinks resolves the library items, lessons and quizzes this lesson
+// links to via [[id]] wiki-links — scoped to just this lesson (backed by
+// lesson_links), so viewing a lesson doesn't require fetching the entire
+// library/lesson index. The quizzes here are the only ones the lesson view
+// shows: the one attached through quizzes.lesson_id is not rendered there.
 func (h *Handler) GetLessonLinks(c *echo.Context) error {
 	id := c.Param("id")
-	items, lessons, err := h.Store.GetLessonLinks(c.Request().Context(), id)
+	items, lessons, quizzes, err := h.Store.GetLessonLinks(c.Request().Context(), id)
 	if err != nil {
 		return httpx.InternalError(c, "failed to load lesson links")
 	}
@@ -166,9 +168,13 @@ func (h *Handler) GetLessonLinks(c *echo.Context) error {
 	if lessons == nil {
 		lessons = []models.LessonUsage{}
 	}
+	if quizzes == nil {
+		quizzes = []models.QuizUsage{}
+	}
 	return httpx.OK(c, http.StatusOK, map[string]interface{}{
 		"libraryItems": items,
 		"lessons":      lessons,
+		"quizzes":      quizzes,
 	})
 }
 

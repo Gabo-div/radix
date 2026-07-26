@@ -1,15 +1,16 @@
 import { Link } from "react-router-dom";
-import { List, Paperclip, BookOpen } from "lucide-react";
-import type { LibraryItem, LessonUsage } from "../../types";
+import { List, Paperclip, BookOpen, FileQuestion } from "lucide-react";
+import type { LibraryItem, LessonUsage, QuizUsage } from "../../types";
 import type { TocEntry } from "../../lib/markdown";
 
 interface Props {
   toc: TocEntry[];
   linkedItems: LibraryItem[];
   relatedLessons?: LessonUsage[];
+  linkedQuizzes?: QuizUsage[];
 }
 
-export default function LessonSidebar({ toc, linkedItems, relatedLessons = [] }: Props) {
+export default function LessonSidebar({ toc, linkedItems, relatedLessons = [], linkedQuizzes = [] }: Props) {
   return (
     <aside className="space-y-6 sticky top-0">
       {toc.length > 0 && (
@@ -40,6 +41,25 @@ export default function LessonSidebar({ toc, linkedItems, relatedLessons = [] }:
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground truncate group-hover:text-primary transition-colors">{item.title}</p>
                   <p className="text-xs text-muted-foreground">{item.originalFilename || item.type}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {linkedQuizzes.length > 0 && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            <FileQuestion size={14} /> Cuestionarios Enlazados
+          </h3>
+          <div className="space-y-2">
+            {linkedQuizzes.map((quiz) => (
+              <Link key={quiz.quizId} to={`/courses/${quiz.courseId}/quizzes/${quiz.quizId}`}
+                className="flex items-center gap-2 p-2 bg-secondary/30 hover:bg-secondary/60 rounded-lg transition-colors group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground truncate group-hover:text-primary transition-colors">{quiz.quizTitle}</p>
+                  <p className="text-xs text-muted-foreground">{quiz.courseTitle}</p>
                 </div>
               </Link>
             ))}

@@ -15,7 +15,7 @@ datos que se parecen a los de uso real.
 |---|---|
 | Asignaturas | 9 (Sistemas Distribuidos, Robótica, Redes, Bases de Datos, Matemática Discreta, Física, Biología Amazónica, Programación en Go, Teología) |
 | Lecciones | 36, en markdown, con material incrustado y enlaces entre lecciones |
-| Cuestionarios | 45 (36 por tema + 9 exámenes finales), 153 preguntas |
+| Cuestionarios | 45 (36 por tema + 9 exámenes finales), 153 preguntas. Cada tema enlaza el suyo con `[[id]]`, que es lo que la vista de la lección muestra |
 | Foro | 48 publicaciones entre hilos y respuestas, con 151 "me gusta" |
 | Biblioteca | 35 archivos (imágenes, 2 videos, 7 lecturas escritas) |
 | Usuarios | 1 docente + 12 estudiantes |

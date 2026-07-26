@@ -413,18 +413,31 @@ def build_library(media_lock, uploads):
 
 
 def render_lesson(lesson, video_lock):
-    """Substitutes the {video} placeholder with a resolved YouTube link."""
+    """Fills in the {video} placeholder and links the tema's quiz.
+
+    The quiz link is appended here rather than written into every lesson's prose
+    because it's the same closing section in all of them. It has to be an
+    explicit [[id]]: the lesson view only shows the quizzes a lesson links, not
+    the one attached through quizzes.lesson_id.
+    """
     body = lesson["content"].strip()
-    if "{video}" not in body:
-        return body
-    found = video_lock.get(lesson["id"])
-    if not found:
-        return body.replace("{video}\n\n", "").replace("{video}", "")
-    link = (f"**Video recomendado:** [{found['title']}]"
-            f"(https://www.youtube.com/watch?v={found['id']})")
-    if found.get("author"):
-        link += f" — canal *{found['author']}*"
-    return body.replace("{video}", link)
+
+    if "{video}" in body:
+        found = video_lock.get(lesson["id"])
+        if found:
+            link = (f"**Video recomendado:** [{found['title']}]"
+                    f"(https://www.youtube.com/watch?v={found['id']})")
+            if found.get("author"):
+                link += f" — canal *{found['author']}*"
+            body = body.replace("{video}", link)
+        else:
+            body = body.replace("{video}\n\n", "").replace("{video}", "")
+
+    if lesson.get("quiz"):
+        body += ("\n\n## Evaluación\n\n"
+                 "Al terminar el tema, resolver el control correspondiente.\n\n"
+                 f"[[{lesson['quiz']['id']}]]")
+    return body
 
 
 def quiz_rows(quiz, course_id, lesson_id, questions_out):
@@ -541,9 +554,13 @@ def build_rows(media_lock, video_lock, uploads):
             return "quiz"
         return None
 
+    # A lesson may link a quiz (00013 widened lesson_links' CHECK) — that link
+    # is what the lesson view renders, since it no longer shows the quiz
+    # attached through quizzes.lesson_id. A quiz's own description still links
+    # only items and lessons, matching store.syncQuizLinks.
     for lesson in rows["lessons"]:
         for ref in dict.fromkeys(WIKI_REF.findall(lesson["content_text"])):
-            kind = target_type(ref)
+            kind = target_type(ref, allow_quiz=True)
             if kind and ref != lesson["id"]:
                 rows["lesson_links"].append({
                     "source_lesson_id": lesson["id"], "target_id": ref, "target_type": kind})

@@ -134,15 +134,20 @@ func TestSeedBackupImports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lecciones de c-sisdis: %v", err)
 	}
-	linked := 0
+	linkedItems := 0
 	for _, lesson := range lessons {
-		items, _, err := s.GetLessonLinks(ctx, lesson.ID)
+		items, _, quizzes, err := s.GetLessonLinks(ctx, lesson.ID)
 		if err != nil {
 			t.Fatalf("enlaces de %s: %v", lesson.ID, err)
 		}
-		linked += len(items)
+		linkedItems += len(items)
+		// Cada tema enlaza su control con [[id]]: es lo único que la vista de
+		// la lección muestra, ya no el adjunto por quizzes.lesson_id.
+		if len(quizzes) == 0 {
+			t.Errorf("%s no enlaza ningún cuestionario", lesson.ID)
+		}
 	}
-	if linked == 0 {
+	if linkedItems == 0 {
 		t.Error("ninguna lección de c-sisdis enlaza un archivo de la biblioteca")
 	}
 

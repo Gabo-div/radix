@@ -131,7 +131,7 @@ CREATE VIRTUAL TABLE server_logs_fts USING fts5(message, content='server_logs', 
 CREATE TABLE lesson_links (
     source_lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
     target_id        TEXT NOT NULL,
-    target_type      TEXT NOT NULL CHECK (target_type IN ('library_item', 'lesson')),
+    target_type      TEXT NOT NULL CHECK (target_type IN ('library_item', 'lesson', 'quiz')),
     PRIMARY KEY (source_lesson_id, target_id)
 );
 CREATE INDEX idx_lesson_links_target ON lesson_links(target_id);

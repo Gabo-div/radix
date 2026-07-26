@@ -20,6 +20,14 @@ JOIN courses ON courses.id = lessons.course_id
 WHERE lesson_links.source_lesson_id = ? AND lesson_links.target_type = 'lesson'
 ORDER BY lessons.rowid;
 
+-- name: GetLinkedQuizzes :many
+SELECT quizzes.id, quizzes.course_id, quizzes.title, courses.title AS course_title
+FROM lesson_links
+JOIN quizzes ON quizzes.id = lesson_links.target_id
+JOIN courses ON courses.id = quizzes.course_id
+WHERE lesson_links.source_lesson_id = ? AND lesson_links.target_type = 'quiz'
+ORDER BY quizzes.rowid;
+
 -- name: GetLessonsLinkingToTarget :many
 SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title
 FROM lesson_links

@@ -185,3 +185,47 @@ func (q *Queries) GetLinkedLibraryItems(ctx context.Context, sourceLessonID stri
 	}
 	return items, nil
 }
+
+const getLinkedQuizzes = `-- name: GetLinkedQuizzes :many
+SELECT quizzes.id, quizzes.course_id, quizzes.title, courses.title AS course_title
+FROM lesson_links
+JOIN quizzes ON quizzes.id = lesson_links.target_id
+JOIN courses ON courses.id = quizzes.course_id
+WHERE lesson_links.source_lesson_id = ? AND lesson_links.target_type = 'quiz'
+ORDER BY quizzes.rowid
+`
+
+type GetLinkedQuizzesRow struct {
+	ID          string
+	CourseID    string
+	Title       string
+	CourseTitle string
+}
+
+func (q *Queries) GetLinkedQuizzes(ctx context.Context, sourceLessonID string) ([]GetLinkedQuizzesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getLinkedQuizzes, sourceLessonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLinkedQuizzesRow
+	for rows.Next() {
+		var i GetLinkedQuizzesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Title,
+			&i.CourseTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

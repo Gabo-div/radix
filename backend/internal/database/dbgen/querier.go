@@ -52,6 +52,7 @@ type Querier interface {
 	GetLikedPostIDsForCourse(ctx context.Context, arg GetLikedPostIDsForCourseParams) ([]string, error)
 	GetLinkedLessons(ctx context.Context, sourceLessonID string) ([]GetLinkedLessonsRow, error)
 	GetLinkedLibraryItems(ctx context.Context, sourceLessonID string) ([]GetLinkedLibraryItemsRow, error)
+	GetLinkedQuizzes(ctx context.Context, sourceLessonID string) ([]GetLinkedQuizzesRow, error)
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
 	GetQuizLinkedLessons(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLessonsRow, error)
 	GetQuizLinkedLibraryItems(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLibraryItemsRow, error)

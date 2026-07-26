@@ -46,7 +46,7 @@ type Store interface {
 	AddLesson(ctx context.Context, lesson *models.Lesson) error
 	UpdateLesson(ctx context.Context, lesson *models.Lesson) error
 	GetAllLessons(ctx context.Context) ([]models.LessonUsage, error)
-	GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, error)
+	GetLessonLinks(ctx context.Context, lessonID string) ([]models.LibraryItem, []models.LessonUsage, []models.QuizUsage, error)
 
 	GetQuiz(ctx context.Context, id string) (*models.Quiz, error)
 	AddQuiz(ctx context.Context, quiz *models.Quiz) error

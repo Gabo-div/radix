@@ -3,16 +3,19 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { extractWikiRefs } from "../lib/markdown";
+import type { QuizUsage } from "../types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCourse } from "@/hooks/useCourses";
 import { useLibrary } from "@/hooks/useLibrary";
 import { useAllLessons, useLesson, useAddLesson, useUpdateLesson } from "@/hooks/useLessons";
+import { useCourseQuizzes } from "@/hooks/useQuizzes";
 import MarkdownEditor from "../components/MarkdownEditor";
 import QuizQuestionsEditor from "../components/QuizQuestionsEditor";
 import FilePickerModal from "../components/common/FilePickerModal";
 import LessonPickerModal from "../components/common/LessonPickerModal";
+import QuizPickerModal from "../components/common/QuizPickerModal";
 import { ArrowLeft, Save, FileQuestion, Paperclip, BookOpen } from "lucide-react";
 
 export default function LessonEditor() {
@@ -23,6 +26,7 @@ export default function LessonEditor() {
   const { data: course } = useCourse(courseId);
   const { data: library = [] } = useLibrary();
   const { data: allLessons = [] } = useAllLessons();
+  const { data: courseQuizzes = [] } = useCourseQuizzes(courseId);
   const { data: lessonData, isPending: lessonPending } = useLesson(courseId, lessonId);
 
   const [title, setTitle] = useState("");
@@ -30,6 +34,7 @@ export default function LessonEditor() {
   const [showPreview, setShowPreview] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
+  const [showQuizPicker, setShowQuizPicker] = useState(false);
   const [showQuizSection, setShowQuizSection] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState([{ text: "", options: ["", "", "", ""], correctIndex: 0 }]);
 
@@ -55,11 +60,27 @@ export default function LessonEditor() {
     () => allLessons.filter((l) => wikiRefs.includes(l.lessonId) && l.lessonId !== lessonId),
     [wikiRefs, allLessons, lessonId]
   );
+  // Los cuestionarios enlazados con [[id]] son los únicos que la lección
+  // muestra al leerse (el adjunto por lesson_id va en la pestaña del curso).
+  const quizUsages = useMemo<QuizUsage[]>(
+    () => courseQuizzes.map((q) => ({
+      quizId: q.id,
+      courseId: q.courseId,
+      quizTitle: q.title,
+      courseTitle: course?.course.title ?? "",
+    })),
+    [courseQuizzes, course]
+  );
+  const linkedQuizzes = useMemo(
+    () => quizUsages.filter((q) => wikiRefs.includes(q.quizId)),
+    [wikiRefs, quizUsages]
+  );
 
   const insertWikiLink = (id: string) => {
     setContent((prev) => prev + `[[${id}]]`);
     setShowFilePicker(false);
     setShowLessonPicker(false);
+    setShowQuizPicker(false);
   };
 
   const handleSave = async () => {
@@ -89,6 +110,9 @@ export default function LessonEditor() {
       {showFilePicker && <FilePickerModal onSelect={insertWikiLink} onClose={() => setShowFilePicker(false)} />}
       {showLessonPicker && (
         <LessonPickerModal currentLessonId={lessonId} onSelect={insertWikiLink} onClose={() => setShowLessonPicker(false)} />
+      )}
+      {showQuizPicker && courseId && (
+        <QuizPickerModal courseId={courseId} onSelect={insertWikiLink} onClose={() => setShowQuizPicker(false)} />
       )}
 
       <div className="flex items-center justify-between">
@@ -120,10 +144,12 @@ export default function LessonEditor() {
               onChange={setContent}
               library={library}
               lessons={allLessons}
+              quizzes={quizUsages}
               showPreview={showPreview}
               onTogglePreview={() => setShowPreview(!showPreview)}
               onAttachClick={() => setShowFilePicker(true)}
               onAttachLessonClick={() => setShowLessonPicker(true)}
+              onAttachQuizClick={() => setShowQuizPicker(true)}
             />
           </Card>
 
@@ -156,6 +182,25 @@ export default function LessonEditor() {
                       <p className="text-muted-foreground text-[10px]">{item.id}</p>
                     </div>
                     <Link to={`/library/${item.id}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {linkedQuizzes.length > 0 && (
+            <Card>
+              <h3 className="flex items-center gap-2 text-xs font-semibold text-foreground/90 uppercase tracking-wider mb-3">
+                <FileQuestion size={14} /> Cuestionarios Enlazados
+              </h3>
+              <div className="space-y-2">
+                {linkedQuizzes.map((quiz) => (
+                  <div key={quiz.quizId} className="flex items-center gap-2 p-2 rounded-lg text-xs bg-secondary/30">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground truncate">{quiz.quizTitle}</p>
+                      <p className="text-muted-foreground text-[10px]">{quiz.quizId}</p>
+                    </div>
+                    <Link to={`/courses/${quiz.courseId}/quizzes/${quiz.quizId}`} className="text-primary hover:text-primary/80 text-[10px] shrink-0">Ver</Link>
                   </div>
                 ))}
               </div>
