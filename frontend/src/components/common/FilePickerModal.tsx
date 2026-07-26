@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLibrary, useAddLibraryItem } from "@/hooks/useLibrary";
 import { Upload, Search } from "lucide-react";
+import LibraryPreview from "../LibraryPreview";
 
 interface Props {
   onSelect: (fileId: string) => void;
@@ -70,6 +71,7 @@ export default function FilePickerModal({ onSelect, onClose }: Props) {
             {filtered.map((item) => (
               <button key={item.id} onClick={() => { onSelect(item.id); onClose(); }}
                 className="w-full flex items-center gap-3 p-3 bg-secondary/30 hover:bg-secondary/60 rounded-lg text-left transition-colors">
+                <LibraryPreview item={item} className="h-12 w-16 shrink-0 rounded-md" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground truncate">{item.title}</p>
                   <div className="flex gap-2 mt-1">

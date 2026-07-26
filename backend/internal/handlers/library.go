@@ -272,13 +272,25 @@ func (h *Handler) ServeLibraryFile(c *echo.Context) error {
 
 	c.Response().Header().Set("Content-Disposition",
 		fmt.Sprintf(`inline; filename="%s"`, item.OriginalFilename))
+	c.Response().Header().Set("Content-Type", contentType)
 
 	f, err := os.Open(item.FilePath)
 	if err != nil {
 		return httpx.InternalError(c, "cannot open file")
 	}
 	defer f.Close()
-	return c.Stream(http.StatusOK, contentType, f)
+
+	// http.ServeContent, not a plain copy: it answers Range requests, which is
+	// what lets a <video> seek at all and what a grid thumbnail needs to pull
+	// just the first frame instead of the whole file. It also handles
+	// If-Modified-Since/ETag on its own. The name is passed empty because the
+	// Content-Type above is already resolved from the stored mime type.
+	info, err := f.Stat()
+	if err != nil {
+		return httpx.InternalError(c, "cannot read file")
+	}
+	http.ServeContent(c.Response(), c.Request(), "", info.ModTime(), f)
+	return nil
 }
 
 func (h *Handler) UpdateLibraryItem(c *echo.Context) error {

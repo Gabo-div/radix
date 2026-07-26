@@ -9,27 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLibrary, useAddLibraryItem } from "@/hooks/useLibrary";
-import {
-  FileVideo, FileAudio, FileImage, FileText, File, Upload, Filter,
-} from "lucide-react";
-
-const typeIcon: Record<string, typeof FileVideo> = {
-  video: FileVideo,
-  audio: FileAudio,
-  image: FileImage,
-  pdf: FileText,
-  text: FileText,
-  document: File,
-};
-
-const typeColors: Record<string, string> = {
-  video: "text-destructive",
-  audio: "text-primary",
-  image: "text-success",
-  pdf: "text-destructive",
-  text: "text-primary",
-  document: "text-muted-foreground",
-};
+import LibraryPreview from "../components/LibraryPreview";
+import { Upload, Filter } from "lucide-react";
 
 const categories = [
   "Ciencias Naturales", "Matemáticas", "Historia", "Idiomas",
@@ -152,27 +133,24 @@ export default function Library() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {items.map((item) => {
-          const Icon = typeIcon[item.type] || File;
-          return (
-            <Link key={item.id} to={`/library/${item.id}`}>
-              <Card className="flex items-start gap-4 h-full hover:border-primary/50 transition-colors cursor-pointer">
-                <Icon size={32} className={typeColors[item.type] || "text-muted-foreground shrink-0"} />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-foreground truncate">{item.title}</h3>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <Badge>{item.type}</Badge>
-                    <Badge>{item.category}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {formatSize(item.sizeKB)}
-                    {item.resolution && ` · ${item.resolution}`}
-                  </p>
+        {items.map((item) => (
+          <Link key={item.id} to={`/library/${item.id}`}>
+            <Card className="flex h-full flex-col overflow-hidden p-0 hover:border-primary/50 transition-colors cursor-pointer">
+              <LibraryPreview item={item} className="aspect-video w-full border-b border-border" />
+              <div className="min-w-0 flex-1 p-4">
+                <h3 className="text-sm font-medium text-foreground truncate">{item.title}</h3>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <Badge>{item.type}</Badge>
+                  <Badge>{item.category}</Badge>
                 </div>
-              </Card>
-            </Link>
-          );
-        })}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {formatSize(item.sizeKB)}
+                  {item.resolution && ` · ${item.resolution}`}
+                </p>
+              </div>
+            </Card>
+          </Link>
+        ))}
         {items.length === 0 && (
           <p className="text-muted-foreground text-sm col-span-3">No hay archivos en la biblioteca.</p>
         )}
