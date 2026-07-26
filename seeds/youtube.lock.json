@@ -1,0 +1,218 @@
+{
+  "les-bd-01": {
+    "author": "Eliezer De León",
+    "id": "l5PDQtUVye8",
+    "query": "modelo entidad relación explicación base de datos",
+    "title": "MODELO ENTIDAD - RELACIÓN (CONCEPTOS BÁSICOS)"
+  },
+  "les-bd-02": {
+    "author": "TodoCode",
+    "id": "eVzmJv2B2wk",
+    "query": "SQL JOIN GROUP BY tutorial español",
+    "title": "💥 CONSULTAS SQL: ORDER y GROUP BY | CON EJERCICIOS PRÁCTICOS | BASES DE DATOS  ✅Explicación FÁCIL #9"
+  },
+  "les-bd-03": {
+    "author": "Jesús Domínguez Gutú",
+    "id": "QUWrKd9vK28",
+    "query": "normalización base de datos primera segunda tercera forma normal",
+    "title": "Normalización de bases de datos"
+  },
+  "les-bd-04": {
+    "author": "Always In Dev",
+    "id": "kv5fWx0Jb0I",
+    "query": "transacciones ACID base de datos explicación",
+    "title": "Transacciones ACID explicadas en 1 minuto 🧠"
+  },
+  "les-bio-01": {
+    "author": "NatureVista - Español",
+    "id": "DsvJ7iv_d7Y",
+    "query": "biodiversidad amazonía documental especies",
+    "title": "LA GRANDIOSA AMAZONIA | Un Viaje Extraordinario - Documental Completo"
+  },
+  "les-bio-02": {
+    "author": "Cuentos del Continente",
+    "id": "Rq35FB-y8zk",
+    "query": "río Amazonas ciclo del agua pulso de inundación",
+    "title": "Río Amazonas: El Más Caudaloso del Mundo 🌎🌊"
+  },
+  "les-bio-03": {
+    "author": "Reino Selva",
+    "id": "CZc8ijlNkZ8",
+    "query": "bosques inundables varzea igapo ecologia amazonica clase",
+    "title": "Recreé el ecosistema más extremo del Amazonas dentro de una habitación -- El secreto de Várzea Cap 1"
+  },
+  "les-bio-04": {
+    "author": "EcoCiencia",
+    "id": "rXaKB7l8t_I",
+    "query": "monitoreo comunitario conservación amazonía",
+    "title": "Monitoreo comunitario para la gobernanza territorial"
+  },
+  "les-fs-01": {
+    "author": "Matemáticas profe Alex",
+    "id": "Kz7_3wp5Wmc",
+    "query": "movimiento rectilíneo uniformemente acelerado ejercicios",
+    "title": "Movimiento Rectilíneo Uniformemente Acelerado o Variado MRUA MRUV | Ejemplo 1"
+  },
+  "les-fs-02": {
+    "author": "MateFacil - Física",
+    "id": "iLt6C1oxmlc",
+    "query": "leyes de Newton explicación ejemplos",
+    "title": "Leyes de Newton - EXPLICACIÓN COMPLETA con ejemplos"
+  },
+  "les-fs-03": {
+    "author": "física fit",
+    "id": "LUmyGcMOX88",
+    "query": "conservación de la energía mecánica péndulo",
+    "title": "Principio de conservación de la energía mecánica en un péndulo. Ejercicio resuelto. Bachillerato."
+  },
+  "les-fs-04": {
+    "author": "Jorge Cogollo",
+    "id": "EMTyhr9ntuQ",
+    "query": "ley de Ohm circuitos serie paralelo ejercicios",
+    "title": "EJERCICIO DE CIRCUITOS EN PARALELO - Resistencias en Paralelo - LEY DE OHM"
+  },
+  "les-go-01": {
+    "author": "ProCode Tv",
+    "id": "0ePdmmkUZNw",
+    "query": "curso Go golang variables tipos básico",
+    "title": "Curso Golang para Principiantes | Variables y Tipos de Dato"
+  },
+  "les-go-02": {
+    "author": "Roberto Morais",
+    "id": "s68gLZzUZnc",
+    "query": "Go structs métodos interfaces explicación",
+    "title": "Interfaces en Programación: Ejemplos en Java y Golang"
+  },
+  "les-go-03": {
+    "author": "Abstractio Naturae",
+    "id": "8wo5DBcefZM",
+    "query": "goroutines canales Go concurrencia tutorial",
+    "title": "Golang: Concurrencia en Go [Goroutines desde Cero]"
+  },
+  "les-go-04": {
+    "author": "JimcostDev",
+    "id": "a5ShJfMcNAA",
+    "query": "manejo de errores Go testing tutorial",
+    "title": "🧯 Manejo de Errores en Go: De err != nil a panic/recover"
+  },
+  "les-mt-01": {
+    "author": "Matemáticas profe Alex",
+    "id": "ZK8QUphO4MA",
+    "query": "lógica proposicional tablas de verdad ejercicios",
+    "title": "Tablas de verdad | Ejemplo 1"
+  },
+  "les-mt-02": {
+    "author": "Matemáticas profe Alex",
+    "id": "1EbYydBSmPE",
+    "query": "teoría de conjuntos operaciones diagramas de Venn",
+    "title": "Diagramas de Venn"
+  },
+  "les-mt-03": {
+    "author": "Los Profes De Ciencias",
+    "id": "VPLPSLYDoqk",
+    "query": "teoría de grafos camino euleriano puentes de Konigsberg",
+    "title": "El PROBLEMA de los PUENTES de Konigsberg  #matemáticas #curiosidades #grafos"
+  },
+  "les-mt-04": {
+    "author": "Daniel Carreón",
+    "id": "3RAvqpEvYFw",
+    "query": "permutaciones y combinaciones ejercicios resueltos",
+    "title": "DIFERENCIA ENTRE COMBINACIONES Y PERMUTACIONES  Super facil - Para principiantes"
+  },
+  "les-rb-01": {
+    "author": "Ingesaurio",
+    "id": "fC_G22KFwc4",
+    "query": "cinemática directa brazo robótico explicación",
+    "title": "Grados de Libertad (GDL) 🌀🔗"
+  },
+  "les-rb-02": {
+    "author": "ELECTRÓNICOS POR EL MUNDO",
+    "id": "BAfZWXbKrf0",
+    "query": "sensor ultrasónico HC-SR04 funcionamiento",
+    "title": "Arduino: Sensor Ultrasónico HC-SR04 Medir distancia en centímetros"
+  },
+  "les-rb-03": {
+    "author": "La Electrónica",
+    "id": "AjsgXdXP7LE",
+    "query": "PWM servomotor control ancho de pulso",
+    "title": "Circuito PWM, control de velocidad para motor | #CircuitoPWM #LaElectronicaGT"
+  },
+  "les-rb-04": {
+    "author": "Pildoras de programación",
+    "id": "ALObWeqPUZ0",
+    "query": "visión artificial umbralización detección de color OpenCV",
+    "title": "Segmentación de imágenes por color. #imagesegmentation #opencv #python"
+  },
+  "les-rd-01": {
+    "author": "Retro",
+    "id": "-QTNJws7PRg",
+    "query": "modelo OSI capas explicación",
+    "title": "✅ MODELO OSI EXPLICACION de las 7 capas ✅ | Que es el modelo Osi y cómo funcionan sus 7 capas?"
+  },
+  "les-rd-02": {
+    "author": "ProfeSantiago",
+    "id": "2yJiH5lV2NM",
+    "query": "subneteo IPv4 ejercicio resuelto",
+    "title": "Ejercicios SUBREDES ipv4 🌎 EJERCICIOS de subnetting RESUELTOS paso a paso [clase A B C]"
+  },
+  "les-rd-03": {
+    "author": "SYSCOM",
+    "id": "4iCN64EMwlY",
+    "query": "cableado estructurado par trenzado categorías",
+    "title": "T568A vs T568B- ¿Cuál es mejor?"
+  },
+  "les-rd-04": {
+    "author": "A Electronic",
+    "id": "DOVCnpnQO0s",
+    "query": "presupuesto de enlace radioenlace zona de Fresnel clase",
+    "title": "Radioenlace: línea de vista, zona de fresnel y conceptos básicos."
+  },
+  "les-sd-01": {
+    "author": "Amin Espinoza",
+    "id": "AGLpQWh_psQ",
+    "query": "qué es un sistema distribuido explicación",
+    "title": "¿Qué son los sistemas distribuidos?"
+  },
+  "les-sd-02": {
+    "author": "TheMegaSkyDark",
+    "id": "h-2M8zLDRa4",
+    "query": "llamada a procedimiento remoto RPC explicación",
+    "title": "Llamada a procedimiento remoto (RCP)"
+  },
+  "les-sd-03": {
+    "author": "Pablo Álvarez",
+    "id": "Z_YiyiOgfQI",
+    "query": "relojes lógicos de Lamport ejemplo",
+    "title": "Relojes lógicos de Lamport : Ejercicio 1 - Sincronización | Sistemas Distribuidos"
+  },
+  "les-sd-04": {
+    "author": "Netys-2022",
+    "id": "u9lgwYoCZEE",
+    "query": "delay tolerant network DTN store and forward",
+    "title": "#51# ProgDTN: Programmable Disruption-tolerant Networking"
+  },
+  "les-tg-01": {
+    "author": "Universidad Pontificia de México",
+    "id": "a11gEqFf_XM",
+    "query": "qué es la teología fe y razón introducción",
+    "title": "¿Qué es la TEOLOGÍA?"
+  },
+  "les-tg-02": {
+    "author": "Historias y Lecciones Bíblicas",
+    "id": "VDe3wLMPkFA",
+    "query": "canon bíblico géneros literarios hermenéutica explicación",
+    "title": "Géneros literarios en la Biblia"
+  },
+  "les-tg-03": {
+    "author": "BITE",
+    "id": "mRIIqCTzNTM",
+    "query": "concilios ecuménicos historia de la Iglesia Nicea",
+    "title": "CONCILIO de NICEA: Controversia sobre la NATURALEZA de CRISTO | BITE"
+  },
+  "les-tg-04": {
+    "author": "solidaridadtv",
+    "id": "V4rs0RRgVoU",
+    "query": "doctrina social de la Iglesia ecología integral Laudato si",
+    "title": "Laudato Si' Encíclica de la Doctrina Social de la Iglesia"
+  }
+}

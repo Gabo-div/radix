@@ -1,0 +1,170 @@
+{
+  "lib-bd-er": {
+    "commons_title": "File:Entity-relationship-diagram-luna-modeler.png",
+    "mime": "image/png",
+    "search": "entity relationship diagram database",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/0/01/Entity-relationship-diagram-luna-modeler.png"
+  },
+  "lib-bd-servidor": {
+    "commons_title": "File:Rack with varoius servers.jpg",
+    "mime": "image/jpeg",
+    "search": "database server rack",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Rack_with_varoius_servers.jpg/1280px-Rack_with_varoius_servers.jpg"
+  },
+  "lib-bio-anaconda": {
+    "commons_title": "File:Anaconda común (Eunectes murinus), Tierpark Hellabrunn, Múnich, Alemania, 2012-06-17, DD 01.JPG",
+    "mime": "image/jpeg",
+    "search": "Eunectes murinus green anaconda",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Anaconda_com%C3%BAn_%28Eunectes_murinus%29%2C_Tierpark_Hellabrunn%2C_M%C3%BAnich%2C_Alemania%2C_2012-06-17%2C_DD_01.JPG/1280px-Anaconda_com%C3%BAn_%28Eunectes_murinus%29%2C_Tierpark_Hellabrunn%2C_M%C3%BAnich%2C_Alemania%2C_2012-06-17%2C_DD_01.JPG"
+  },
+  "lib-bio-guacamayo": {
+    "commons_title": "File:Scarlet macaw (Ara macao cyanopterus) Copan.jpg",
+    "mime": "image/jpeg",
+    "search": "Ara macao scarlet macaw",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Scarlet_macaw_%28Ara_macao_cyanopterus%29_Copan.jpg/1280px-Scarlet_macaw_%28Ara_macao_cyanopterus%29_Copan.jpg"
+  },
+  "lib-bio-rio": {
+    "commons_title": "File:Amazon.A2002182.1405.1km.jpg",
+    "mime": "image/jpeg",
+    "search": "Amazon river aerial meander",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Amazon.A2002182.1405.1km.jpg/1280px-Amazon.A2002182.1405.1km.jpg"
+  },
+  "lib-bio-varzea": {
+    "commons_title": "File:Florestas de Várzea próximo ao lago Mamirauá 2018-10-21.jpg",
+    "mime": "image/jpeg",
+    "search": "varzea flooded forest Amazon",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Florestas_de_V%C3%A1rzea_pr%C3%B3ximo_ao_lago_Mamirau%C3%A1_2018-10-21.jpg/1280px-Florestas_de_V%C3%A1rzea_pr%C3%B3ximo_ao_lago_Mamirau%C3%A1_2018-10-21.jpg"
+  },
+  "lib-bio-victoria": {
+    "commons_title": "File:Victoria amazonica 03.jpg",
+    "mime": "image/jpeg",
+    "search": "Victoria amazonica giant water lily",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Victoria_amazonica_03.jpg/1280px-Victoria_amazonica_03.jpg"
+  },
+  "lib-fs-circuito": {
+    "commons_title": "File:Poynting vectors of DC circuit 1.svg",
+    "mime": "image/svg+xml",
+    "search": "simple electric circuit diagram resistor",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Poynting_vectors_of_DC_circuit_1.svg/1280px-Poynting_vectors_of_DC_circuit_1.svg.png"
+  },
+  "lib-fs-newton": {
+    "commons_title": "File:Portrait of Sir Isaac Newton, 1689.jpg",
+    "mime": "image/jpeg",
+    "search": "Isaac Newton portrait painting",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Portrait_of_Sir_Isaac_Newton%2C_1689.jpg/1280px-Portrait_of_Sir_Isaac_Newton%2C_1689.jpg"
+  },
+  "lib-fs-pendulo": {
+    "commons_title": "File:Quantum simple pendulum.webm",
+    "mime": "video/webm",
+    "search": "pendulum oscillation",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/c/c2/Quantum_simple_pendulum.webm"
+  },
+  "lib-go-gopher": {
+    "commons_title": "File:Go gopher mascot bw.png",
+    "mime": "image/png",
+    "search": "Go gopher mascot",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Go_gopher_mascot_bw.png/1280px-Go_gopher_mascot_bw.png"
+  },
+  "lib-mt-grafo": {
+    "commons_title": "File:Graph.traversal.example.png",
+    "mime": "image/png",
+    "search": "undirected graph example graph theory",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Graph.traversal.example.png"
+  },
+  "lib-mt-puentes": {
+    "commons_title": "File:Konigsberg with graph.png",
+    "mime": "image/png",
+    "search": "Seven Bridges of Konigsberg graph",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/e/e5/Konigsberg_with_graph.png"
+  },
+  "lib-mt-venn": {
+    "commons_title": "File:Venn diagram of subsets of three sets.png",
+    "mime": "image/png",
+    "search": "Venn diagram three sets",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/7/75/Venn_diagram_of_subsets_of_three_sets.png"
+  },
+  "lib-rb-brazo": {
+    "commons_title": "File:John Siegel making a 17ft long Robot Arm for NASA.jpg",
+    "mime": "image/jpeg",
+    "search": "industrial robot arm manipulator",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/John_Siegel_making_a_17ft_long_Robot_Arm_for_NASA.jpg/1280px-John_Siegel_making_a_17ft_long_Robot_Arm_for_NASA.jpg"
+  },
+  "lib-rb-sensor": {
+    "commons_title": "File:SparkFun HC-SR04 Ultrasonic-Sensor 13959-01a.jpg",
+    "mime": "image/jpeg",
+    "search": "ultrasonic sensor HC-SR04",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/9/99/SparkFun_HC-SR04_Ultrasonic-Sensor_13959-01a.jpg"
+  },
+  "lib-rb-servo": {
+    "commons_title": "File:Two hobby servo motors.jpg",
+    "mime": "image/jpeg",
+    "search": "hobby servo motor",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Two_hobby_servo_motors.jpg/1280px-Two_hobby_servo_motors.jpg"
+  },
+  "lib-rb-video": {
+    "commons_title": "File:NASA’s Curiosity Rover Frees Its Drill From a Rock (SVS31397).webm",
+    "mime": "video/webm",
+    "search": "robot arm moving",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/f/fb/NASA%E2%80%99s_Curiosity_Rover_Frees_Its_Drill_From_a_Rock_%28SVS31397%29.webm"
+  },
+  "lib-rd-antena": {
+    "commons_title": "File:10 Technological Advantages of Masts for a Nation.jpg",
+    "mime": "image/jpeg",
+    "search": "wireless antenna mast rural",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/10_Technological_Advantages_of_Masts_for_a_Nation.jpg/1280px-10_Technological_Advantages_of_Masts_for_a_Nation.jpg"
+  },
+  "lib-rd-osi": {
+    "commons_title": "File:OSI Network Layer -en.png",
+    "mime": "image/png",
+    "search": "OSI model layers diagram",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/OSI_Network_Layer_-en.png"
+  },
+  "lib-rd-rj45": {
+    "commons_title": "File:Cable stripper, cable tester (RJ45, RJ11), LSA-Tool and crimping tool.jpg",
+    "mime": "image/jpeg",
+    "search": "RJ45 connector twisted pair cable",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Cable_stripper%2C_cable_tester_%28RJ45%2C_RJ11%29%2C_LSA-Tool_and_crimping_tool.jpg/1280px-Cable_stripper%2C_cable_tester_%28RJ45%2C_RJ11%29%2C_LSA-Tool_and_crimping_tool.jpg"
+  },
+  "lib-sd-arquitectura": {
+    "commons_title": "File:Client-server model example (Web browsing) - en.png",
+    "mime": "image/png",
+    "search": "client server model diagram",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/f/fd/Client-server_model_example_%28Web_browsing%29_-_en.png"
+  },
+  "lib-sd-p2p": {
+    "commons_title": "File:IEEE 802.15.4 Star P2P.svg",
+    "mime": "image/svg+xml",
+    "search": "peer to peer network topology diagram",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/IEEE_802.15.4_Star_P2P.svg/1280px-IEEE_802.15.4_Star_P2P.svg.png"
+  },
+  "lib-sd-relojes": {
+    "commons_title": "File:Lamport-Uhr.svg",
+    "mime": "image/svg+xml",
+    "search": "Lamport timestamps diagram distributed",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Lamport-Uhr.svg/1280px-Lamport-Uhr.svg.png"
+  },
+  "lib-tg-aquino": {
+    "commons_title": "File:St-thomas-aquinas.jpg",
+    "mime": "image/jpeg",
+    "search": "Thomas Aquinas painting",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/St-thomas-aquinas.jpg/1280px-St-thomas-aquinas.jpg"
+  },
+  "lib-tg-codice": {
+    "commons_title": "File:Book of Lamentations on Codex sinaiticus.jpg",
+    "mime": "image/jpeg",
+    "search": "Codex Sinaiticus folio manuscript",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/Book_of_Lamentations_on_Codex_sinaiticus.jpg"
+  },
+  "lib-tg-concilio": {
+    "commons_title": "File:Nicaea icon.jpg",
+    "mime": "image/jpeg",
+    "search": "First Council of Nicaea icon",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/3/31/Nicaea_icon.jpg"
+  },
+  "lib-tg-mision": {
+    "commons_title": "File:Jesus posterior iglesia ya huerta.jpg",
+    "mime": "image/jpeg",
+    "search": "iglesia mision jesuitica Amazonas",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Jesus_posterior_iglesia_ya_huerta.jpg/1280px-Jesus_posterior_iglesia_ya_huerta.jpg"
+  }
+}
