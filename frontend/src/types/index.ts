@@ -167,3 +167,14 @@ export interface LogStatsResponse {
   stats: ServerLogStats;
   retentionDays: number;
 }
+
+export interface TableImport {
+  name: string;
+  inserted: number;
+  skipped: number;
+}
+
+export interface BackupImportResponse {
+  tables: TableImport[];
+  uploads: number;
+}

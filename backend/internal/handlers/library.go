@@ -220,7 +220,7 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		return httpx.InternalError(c, "failed to store item")
 	}
 
-	savePath := filepath.Join("uploads", fmt.Sprintf("%s_%s", newID, header.Filename))
+	savePath := filepath.Join(uploadsDir, fmt.Sprintf("%s_%s", newID, header.Filename))
 	dst, err := os.Create(savePath)
 	if err != nil {
 		return httpx.InternalError(c, "failed to save file")

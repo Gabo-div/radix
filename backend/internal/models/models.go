@@ -159,3 +159,21 @@ type ServerLogStats struct {
 	Total   int64            `json:"total"`
 	ByLevel map[string]int64 `json:"byLevel"`
 }
+
+// TableDump is one table's full contents as used by the database
+// export/import (see store.ExportTables). Rows are column-name -> value maps
+// rather than typed structs on purpose: the backup covers every table
+// generically, including ones added by future migrations.
+type TableDump struct {
+	Name string           `json:"name"`
+	Rows []map[string]any `json:"rows"`
+}
+
+// TableImport is the outcome of merging one TableDump into the database:
+// Skipped counts rows that collided with an existing row (same primary key or
+// UNIQUE) and were left alone — see store.ImportTables.
+type TableImport struct {
+	Name     string `json:"name"`
+	Inserted int    `json:"inserted"`
+	Skipped  int    `json:"skipped"`
+}

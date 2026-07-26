@@ -18,3 +18,15 @@ export function useForceSync() {
     },
   });
 }
+
+// An import replaces every table, so every cached query is stale — invalidate
+// the whole cache rather than listing keys that would drift out of date.
+export function useImportBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.importBackup(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}

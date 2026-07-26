@@ -62,6 +62,9 @@ type Store interface {
 
 	ListServerLogs(ctx context.Context, filter models.ServerLogFilter, search string, limit, offset int) ([]models.ServerLog, bool, error)
 	GetServerLogStats(ctx context.Context, from, to string) (models.ServerLogStats, error)
+
+	ExportTables(ctx context.Context) ([]models.TableDump, error)
+	ImportTables(ctx context.Context, dumps []models.TableDump) ([]models.TableImport, error)
 }
 
 type Handler struct {
@@ -137,6 +140,9 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 
 	api.GET("/monitor", h.GetMonitor, a.RequireRole("admin"))
 	api.POST("/monitor/sync", h.ForceSync, a.RequireRole("admin"))
+
+	api.GET("/backup/export", h.ExportBackup, a.RequireRole("admin"))
+	api.POST("/backup/import", h.ImportBackup, a.RequireRole("admin"))
 
 	api.GET("/logs", h.GetLogs)
 	api.GET("/logs/history", h.SearchLogs, a.RequireRole("admin"))

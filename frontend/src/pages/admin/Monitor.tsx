@@ -1,9 +1,19 @@
-import { HardDrive, Users, Radio, RefreshCw, CheckCircle } from "lucide-react";
+import { useRef, useState } from "react";
+import { HardDrive, Users, Radio, RefreshCw, CheckCircle, Database, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useMonitor, useForceSync } from "@/hooks/useMonitor";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { api } from "@/lib/api";
+import { useMonitor, useForceSync, useImportBackup } from "@/hooks/useMonitor";
 
 function formatKB(kb: number) {
   if (kb >= 1048576) return (kb / 1048576).toFixed(1) + " GB";
@@ -14,6 +24,25 @@ function formatKB(kb: number) {
 export default function Monitor() {
   const { data } = useMonitor();
   const forceSync = useForceSync();
+  const importBackup = useImportBackup();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const handleImport = () => {
+    if (!pendingFile) return;
+    importBackup.mutate(pendingFile, {
+      onSuccess: (res) => {
+        const inserted = res.tables.reduce((sum, t) => sum + t.inserted, 0);
+        const skipped = res.tables.reduce((sum, t) => sum + t.skipped, 0);
+        toast.success(
+          `Respaldo importado: ${inserted} registros nuevos, ${skipped} ya existentes, ${res.uploads} archivos`,
+          { icon: <CheckCircle className="size-4" /> }
+        );
+        setPendingFile(null);
+      },
+      onError: (err) => toast.error("Error al importar: " + (err as Error).message),
+    });
+  };
 
   const handleSync = () => {
     forceSync.mutate(undefined, {
@@ -72,6 +101,58 @@ export default function Monitor() {
           <div className="mt-3"><Badge variant="destructive">{data.syncQueue.transactionCount} pendientes</Badge></div>
         )}
       </Card>
+
+      <Card>
+        <h2 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+          <Database size={16} /> Respaldo de la Base de Datos
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          El respaldo incluye cursos, lecciones, cuestionarios, notas, usuarios, inscripciones, foro y los
+          archivos de la biblioteca, en un ZIP con las carpetas <span className="font-mono text-xs">data/</span> y{" "}
+          <span className="font-mono text-xs">uploads/</span>. No incluye la cola DTN ni los logs del servidor,
+          que son propios de este nodo. Al importar, los registros se agregan a los que ya existen: nada se borra.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary">
+            <a href={api.exportBackupUrl()} download>
+              <Download size={16} /> Exportar todo
+            </a>
+          </Button>
+          <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={importBackup.isPending}>
+            <Upload size={16} /> {importBackup.isPending ? "Importando..." : "Importar respaldo"}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = ""; // permite reelegir el mismo archivo
+              if (file) setPendingFile(file);
+            }}
+          />
+        </div>
+      </Card>
+
+      <Dialog open={!!pendingFile} onOpenChange={(open) => !open && setPendingFile(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Importar respaldo</DialogTitle>
+            <DialogDescription>
+              Se agregarán los registros de <span className="font-mono text-xs">{pendingFile?.name}</span> a los
+              que ya existen. Los que coincidan con uno actual (mismo identificador, o un correo ya usado) se
+              omiten y se conserva el registro local.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setPendingFile(null)}>Cancelar</Button>
+            <Button onClick={handleImport} disabled={importBackup.isPending}>
+              {importBackup.isPending ? "Importando..." : "Importar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <h2 className="text-sm font-medium text-muted-foreground mb-3">Información del Servidor</h2>

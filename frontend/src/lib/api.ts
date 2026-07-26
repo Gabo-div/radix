@@ -17,6 +17,7 @@ import type {
   LogSearchFilters,
   LogSearchResponse,
   LogStatsResponse,
+  BackupImportResponse,
 } from "../types";
 
 let _token: string | null = localStorage.getItem("radix_token");
@@ -162,6 +163,16 @@ export const api = {
   getMonitor: () => request<MonitorData>("/api/v1/monitor"),
 
   forceSync: () => request<ForceSyncResponse>("/api/v1/monitor/sync", { method: "POST" }),
+
+  // Plain URL instead of a fetch: the browser downloads the zip itself, so the
+  // token travels as a query param exactly like getLibraryFileUrl.
+  exportBackupUrl: () => `/api/v1/backup/export?token=${getToken()}`,
+
+  importBackup: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<BackupImportResponse>("/api/v1/backup/import", { method: "POST", body: fd });
+  },
 
   getLogs: () => request<string[]>("/api/v1/logs"),
 
