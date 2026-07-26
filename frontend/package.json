@@ -36,6 +36,11 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7"
   },
+  "overrides": {
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.6",
+    "@codemirror/language": "6.12.4"
+  },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
