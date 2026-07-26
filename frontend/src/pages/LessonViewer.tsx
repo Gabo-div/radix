@@ -8,8 +8,8 @@ import type { LibraryItem, LessonUsage, QuizUsage } from "../types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLesson, useLessonLinks, useLessonUsage } from "@/hooks/useLessons";
-import { readingWidthClass, useAppearance } from "../context/AppearanceContext";
 import LessonSidebar from "../components/layout/LessonSidebar";
+import ReadingLayout from "../components/layout/ReadingLayout";
 import WikiContent from "../components/WikiContent";
 import { Edit, Lock } from "lucide-react";
 import BackLink from "../components/common/BackLink";
@@ -17,7 +17,6 @@ import BackLink from "../components/common/BackLink";
 export default function LessonViewer() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
   const { currentUser } = useAuth();
-  const { width } = useAppearance();
 
   const { data, error, isPending } = useLesson(courseId, lessonId);
   const { data: links } = useLessonLinks(lessonId);
@@ -73,35 +72,27 @@ export default function LessonViewer() {
   if (isPending || !data) return <p className="text-muted-foreground">Cargando lección...</p>;
 
   return (
-    <div className="flex gap-6">
-      <div className="flex-1 min-w-0 space-y-6">
-        <BackLink fallback={`/courses/${courseId}`} />
+    <ReadingLayout
+      sidebar={
+        <LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={relatedLessons} linkedQuizzes={linkedQuizzes} />
+      }
+    >
+      <BackLink fallback={`/courses/${courseId}`} />
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground" id="top">{data.lesson.title}</h1>
-          {isAdmin && (
-            <Link to={`/courses/${courseId}/lessons/${lessonId}/edit`}>
-              <Button variant="secondary">
-                <Edit size={14} /> Editar
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        <div className="flex w-full gap-4">
-          {/* La anchura de lectura del panel de apariencia se aplica acá: es la
-              columna del contenido, no la página entera. */}
-          <div className={`flex flex-col flex-1 gap-4 ${readingWidthClass(width)}`}>
-            <Card>
-              <WikiContent text={lessonText} itemMap={itemMap} lessonMap={lessonMap} quizMap={quizMap} />
-            </Card>
-          </div>
-
-          <div className="min-w-64 shrink-0 hidden lg:block">
-            <LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={relatedLessons} linkedQuizzes={linkedQuizzes} />
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-foreground" id="top">{data.lesson.title}</h1>
+        {isAdmin && (
+          <Link to={`/courses/${courseId}/lessons/${lessonId}/edit`}>
+            <Button variant="secondary">
+              <Edit size={14} /> Editar
+            </Button>
+          </Link>
+        )}
       </div>
-    </div>
+
+      <Card>
+        <WikiContent text={lessonText} itemMap={itemMap} lessonMap={lessonMap} quizMap={quizMap} />
+      </Card>
+    </ReadingLayout>
   );
 }

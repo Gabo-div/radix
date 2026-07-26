@@ -55,17 +55,22 @@ const WIDTH_OPTIONS = [
   { value: "wide", label: "Ancho" },
 ] as const;
 
+const NAV_OPTIONS = [
+  { value: "sidebar", label: "Barra lateral" },
+  { value: "top", label: "Arriba" },
+] as const;
+
 const THEME_OPTIONS = [
   { value: "auto", label: "Automático" },
   { value: "light", label: "Claro" },
   { value: "dark", label: "Oscuro" },
 ] as const;
 
-// Panel de apariencia de la lección: tamaño de texto, anchura de lectura y
-// tema. Las tres preferencias se guardan y valen para toda la aplicación, no
-// solo para la lección abierta.
+// Panel de apariencia de la lección: tamaño de texto, anchura de lectura, tema
+// y dónde va la navegación. Las preferencias se guardan y valen para toda la
+// aplicación, no solo para la lección abierta.
 export default function AppearancePanel() {
-  const { theme, setTheme, textSize, setTextSize, width, setWidth } = useAppearance();
+  const { theme, setTheme, textSize, setTextSize, width, setWidth, navMode, setNavMode } = useAppearance();
   const [open, setOpen] = useState(true);
 
   return (
@@ -88,6 +93,7 @@ export default function AppearancePanel() {
           <RadioGroup title="Texto" name="apariencia-texto" options={TEXT_OPTIONS} value={textSize} onChange={setTextSize} />
           <RadioGroup title="Anchura" name="apariencia-anchura" options={WIDTH_OPTIONS} value={width} onChange={setWidth} />
           <RadioGroup title="Color" name="apariencia-color" options={THEME_OPTIONS} value={theme} onChange={setTheme} />
+          <RadioGroup title="Navegación" name="apariencia-nav" options={NAV_OPTIONS} value={navMode} onChange={setNavMode} />
         </div>
       )}
     </div>

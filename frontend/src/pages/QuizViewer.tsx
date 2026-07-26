@@ -11,6 +11,7 @@ import { useQuiz, useQuizLinks } from "@/hooks/useQuizzes";
 import WikiContent from "@/components/WikiContent";
 import QuizTaker from "@/components/QuizTaker";
 import LessonSidebar from "@/components/layout/LessonSidebar";
+import ReadingLayout from "@/components/layout/ReadingLayout";
 import { Edit, Lock } from "lucide-react";
 import BackLink from "../components/common/BackLink";
 
@@ -56,37 +57,29 @@ export default function QuizViewer() {
   if (!quiz) return <p className="text-muted-foreground">Cargando cuestionario...</p>;
 
   return (
-    <div className="flex gap-6">
-      <div className="flex-1 min-w-0 space-y-6">
-        <BackLink fallback={`/courses/${courseId}?tab=quizzes`} />
+    <ReadingLayout
+      sidebar={<LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={linkedLessons} />}
+    >
+      <BackLink fallback={`/courses/${courseId}?tab=quizzes`} />
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground">{quiz.title}</h1>
-          {isAdmin && (
-            <Link to={`/courses/${courseId}/quizzes/${quizId}/edit`}>
-              <Button variant="secondary">
-                <Edit size={14} /> Editar
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        <div className="flex w-full gap-4">
-          <div className="flex flex-col flex-1 gap-4">
-            {quiz.description && (
-              <Card>
-                <WikiContent text={quiz.description} itemMap={itemMap} lessonMap={lessonMap} />
-              </Card>
-            )}
-
-            <QuizTaker quiz={quiz} canSee={!!showQuiz} canSubmit={!!isStudent} />
-          </div>
-
-          <div className="min-w-64 shrink-0 hidden lg:block">
-            <LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={linkedLessons} />
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-foreground">{quiz.title}</h1>
+        {isAdmin && (
+          <Link to={`/courses/${courseId}/quizzes/${quizId}/edit`}>
+            <Button variant="secondary">
+              <Edit size={14} /> Editar
+            </Button>
+          </Link>
+        )}
       </div>
-    </div>
+
+      {quiz.description && (
+        <Card>
+          <WikiContent text={quiz.description} itemMap={itemMap} lessonMap={lessonMap} />
+        </Card>
+      )}
+
+      <QuizTaker quiz={quiz} canSee={!!showQuiz} canSubmit={!!isStudent} />
+    </ReadingLayout>
   );
 }
