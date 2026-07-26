@@ -18,8 +18,6 @@ import QuizEditor from "./pages/QuizEditor";
 import QuizViewer from "./pages/QuizViewer";
 import ForumThread from "./pages/ForumThread";
 import AdminPanel from "./pages/admin/AdminPanel";
-import Monitor from "./pages/admin/Monitor";
-import Logs from "./pages/admin/Logs";
 import NotFound from "./pages/NotFound";
 
 function HomeRedirect() {
@@ -50,8 +48,10 @@ function AppRoutes() {
         <Route path="courses/:courseId/quizzes/:quizId" element={<QuizViewer />} />
         <Route path="courses/:courseId/forum/:postId" element={<ForumThread />} />
         <Route path="admin" element={<ProtectedRoute role="admin"><AdminPanel /></ProtectedRoute>} />
-        <Route path="admin/monitor" element={<ProtectedRoute role="admin"><Monitor /></ProtectedRoute>} />
-        <Route path="admin/logs" element={<ProtectedRoute role="admin"><Logs /></ProtectedRoute>} />
+        {/* Monitor y Logs son pestañas del panel; estas dos rutas existen solo
+            para que un enlace guardado de antes siga funcionando. */}
+        <Route path="admin/monitor" element={<Navigate to="/admin?tab=monitor" replace />} />
+        <Route path="admin/logs" element={<Navigate to="/admin?tab=logs" replace />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

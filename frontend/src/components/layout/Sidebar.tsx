@@ -6,8 +6,6 @@ import {
   BookOpen,
   Library,
   Settings,
-  Monitor,
-  ScrollText,
 } from "lucide-react";
 import type { ElementType } from "react";
 
@@ -16,8 +14,6 @@ const iconMap: Record<string, ElementType> = {
   BookOpen,
   Library,
   Settings,
-  Monitor,
-  ScrollText,
 };
 
 export default function Sidebar() {

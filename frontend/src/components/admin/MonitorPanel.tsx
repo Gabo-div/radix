@@ -21,7 +21,7 @@ function formatKB(kb: number) {
   return kb + " KB";
 }
 
-export default function Monitor() {
+export default function MonitorPanel() {
   const { data } = useMonitor();
   const forceSync = useForceSync();
   const importBackup = useImportBackup();
@@ -53,8 +53,6 @@ export default function Monitor() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-foreground">Monitor del Servidor</h1>
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <div className="flex items-center gap-2 text-primary mb-2">

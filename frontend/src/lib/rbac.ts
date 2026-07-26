@@ -38,9 +38,9 @@ export function getSidebarItems(role: Role) {
   items.push({ label: "Cursos", path: "/courses", icon: "BookOpen" });
   if (role === "admin" || role === "student" || role === "guest") items.push({ label: "Biblioteca", path: "/library", icon: "Library" });
   if (role === "admin") {
+    // Monitor y Logs viven como pestañas dentro del panel, no como entradas
+    // propias del menú (ver pages/admin/AdminPanel.tsx).
     items.push({ label: "Panel Admin", path: "/admin", icon: "Settings" });
-    items.push({ label: "Monitor", path: "/admin/monitor", icon: "Monitor" });
-    items.push({ label: "Logs", path: "/admin/logs", icon: "ScrollText" });
   }
   return items;
 }

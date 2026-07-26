@@ -24,7 +24,7 @@ function levelVariant(level: string): "success" | "warning" | "destructive" | "s
   return "secondary";
 }
 
-export default function Logs() {
+export default function LogsPanel() {
   const { data: logs = [] } = useLiveLogs();
   const liveContainerRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
@@ -63,8 +63,6 @@ export default function Logs() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-foreground">Logs del Servidor</h1>
-
       <Tabs defaultValue="live">
         <TabsList>
           <TabsTrigger value="live">
