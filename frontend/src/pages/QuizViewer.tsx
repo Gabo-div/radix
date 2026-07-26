@@ -58,21 +58,23 @@ export default function QuizViewer() {
 
   return (
     <ReadingLayout
+      header={
+        <>
+          <BackLink fallback={`/courses/${courseId}?tab=quizzes`} />
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-xl font-semibold text-foreground">{quiz.title}</h1>
+            {isAdmin && (
+              <Link to={`/courses/${courseId}/quizzes/${quizId}/edit`}>
+                <Button variant="secondary">
+                  <Edit size={14} /> Editar
+                </Button>
+              </Link>
+            )}
+          </div>
+        </>
+      }
       sidebar={<LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={linkedLessons} />}
     >
-      <BackLink fallback={`/courses/${courseId}?tab=quizzes`} />
-
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-foreground">{quiz.title}</h1>
-        {isAdmin && (
-          <Link to={`/courses/${courseId}/quizzes/${quizId}/edit`}>
-            <Button variant="secondary">
-              <Edit size={14} /> Editar
-            </Button>
-          </Link>
-        )}
-      </div>
-
       {quiz.description && (
         <Card>
           <WikiContent text={quiz.description} itemMap={itemMap} lessonMap={lessonMap} />

@@ -32,7 +32,7 @@ export function canEdit(role: Role): boolean {
   return role === "admin";
 }
 
-export function getSidebarItems(role: Role) {
+export function getNavItems(role: Role) {
   const items: { label: string; path: string; icon: string }[] = [];
   if (role === "student") items.push({ label: "Dashboard", path: "/dashboard", icon: "LayoutDashboard" });
   items.push({ label: "Cursos", path: "/courses", icon: "BookOpen" });

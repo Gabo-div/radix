@@ -73,23 +73,25 @@ export default function LessonViewer() {
 
   return (
     <ReadingLayout
+      header={
+        <>
+          <BackLink fallback={`/courses/${courseId}`} />
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-xl font-semibold text-foreground" id="top">{data.lesson.title}</h1>
+            {isAdmin && (
+              <Link to={`/courses/${courseId}/lessons/${lessonId}/edit`}>
+                <Button variant="secondary">
+                  <Edit size={14} /> Editar
+                </Button>
+              </Link>
+            )}
+          </div>
+        </>
+      }
       sidebar={
         <LessonSidebar toc={toc} linkedItems={linkedItems} relatedLessons={relatedLessons} linkedQuizzes={linkedQuizzes} />
       }
     >
-      <BackLink fallback={`/courses/${courseId}`} />
-
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-foreground" id="top">{data.lesson.title}</h1>
-        {isAdmin && (
-          <Link to={`/courses/${courseId}/lessons/${lessonId}/edit`}>
-            <Button variant="secondary">
-              <Edit size={14} /> Editar
-            </Button>
-          </Link>
-        )}
-      </div>
-
       <Card>
         <WikiContent text={lessonText} itemMap={itemMap} lessonMap={lessonMap} quizMap={quizMap} />
       </Card>

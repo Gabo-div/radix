@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { List, Paperclip, BookOpen, FileQuestion } from "lucide-react";
 import type { LibraryItem, LessonUsage, QuizUsage } from "../../types";
 import type { TocEntry } from "../../lib/markdown";
-import AppearancePanel from "../common/AppearancePanel";
 
 interface Props {
   toc: TocEntry[];
@@ -14,8 +13,6 @@ interface Props {
 export default function LessonSidebar({ toc, linkedItems, relatedLessons = [], linkedQuizzes = [] }: Props) {
   return (
     <aside className="space-y-6 sticky top-0">
-      <AppearancePanel />
-
       {toc.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
           <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">

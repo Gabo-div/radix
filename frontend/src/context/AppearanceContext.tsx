@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 export type ThemePref = "auto" | "light" | "dark";
 export type TextSize = "small" | "standard" | "large";
 export type ReadingWidth = "standard" | "wide";
-export type NavMode = "sidebar" | "top";
 
 interface Appearance {
   theme: ThemePref;
@@ -13,9 +12,6 @@ interface Appearance {
   setTextSize: (v: TextSize) => void;
   width: ReadingWidth;
   setWidth: (v: ReadingWidth) => void;
-  /** Dónde vive la navegación: barra lateral propia o botones en el encabezado. */
-  navMode: NavMode;
-  setNavMode: (v: NavMode) => void;
   /** Tema resuelto: con "auto" ya resuelto contra la preferencia del sistema. */
   isDark: boolean;
 }
@@ -24,7 +20,6 @@ const KEYS = {
   theme: "radix_theme",
   textSize: "radix_text_size",
   width: "radix_reading_width",
-  navMode: "radix_nav_mode",
 } as const;
 
 const AppearanceContext = createContext<Appearance | null>(null);
@@ -49,9 +44,6 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   );
   const [width, setWidthState] = useState<ReadingWidth>(() =>
     read(KEYS.width, ["standard", "wide"] as const, "standard")
-  );
-  const [navMode, setNavModeState] = useState<NavMode>(() =>
-    read(KEYS.navMode, ["sidebar", "top"] as const, "sidebar")
   );
   const [systemDark, setSystemDark] = useState(prefersDark);
 
@@ -82,14 +74,10 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(KEYS.width, v);
     setWidthState(v);
   }, []);
-  const setNavMode = useCallback((v: NavMode) => {
-    localStorage.setItem(KEYS.navMode, v);
-    setNavModeState(v);
-  }, []);
 
   const value = useMemo(
-    () => ({ theme, setTheme, textSize, setTextSize, width, setWidth, navMode, setNavMode, isDark }),
-    [theme, setTheme, textSize, setTextSize, width, setWidth, navMode, setNavMode, isDark]
+    () => ({ theme, setTheme, textSize, setTextSize, width, setWidth, isDark }),
+    [theme, setTheme, textSize, setTextSize, width, setWidth, isDark]
   );
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
