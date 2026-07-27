@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"radix-backend/internal/clock"
 	"radix-backend/internal/database/dbgen"
 	"radix-backend/internal/models"
 )
@@ -29,16 +30,30 @@ type Store struct {
 	db      *sql.DB
 	queries *dbgen.Queries
 
+	// nodeID/hlc version every write so another edge server can tell which of
+	// two edits to the same row happened later — see internal/clock and
+	// migration 00014.
+	nodeID string
+	hlc    clock.HLC
+
 	mu       sync.RWMutex
 	sessions map[string]models.Session
 }
 
-func New(db *sql.DB) *Store {
+func New(db *sql.DB, nodeID string) *Store {
 	return &Store{
 		db:       db,
 		queries:  dbgen.New(db),
+		nodeID:   nodeID,
 		sessions: make(map[string]models.Session),
 	}
+}
+
+// version returns the (hlc, origin_node) pair to stamp on a write. Every
+// mutating store method calls it exactly once, so all the rows written by one
+// logical operation share a version.
+func (s *Store) version() (int64, string) {
+	return s.hlc.Now(), s.nodeID
 }
 
 func generateToken() string {
@@ -47,13 +62,17 @@ func generateToken() string {
 	return hex.EncodeToString(b)
 }
 
-func (s *Store) withTx(ctx context.Context, fn func(*dbgen.Queries) error) error {
+// withTx runs fn in one transaction. It hands over the raw *sql.Tx as well as
+// the generated queries because the operation log needs it: an op has to be
+// written in the same transaction as the change it describes (see logUpsert),
+// and reading a row back generically is not something sqlc can express.
+func (s *Store) withTx(ctx context.Context, fn func(*sql.Tx, *dbgen.Queries) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if err := fn(s.queries.WithTx(tx)); err != nil {
+	if err := fn(tx, s.queries.WithTx(tx)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -164,44 +183,77 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User,
 // logins mint their own "g_..." ID, seed data uses literal IDs) — the store
 // never generates a user ID, unlike the other Add* methods.
 func (s *Store) AddUser(ctx context.Context, user *models.User) error {
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.AddUser(ctx, dbgen.AddUserParams{
 			ID:           user.ID,
 			Name:         user.Name,
 			Email:        user.Email,
 			PasswordHash: user.PasswordHash,
 			Role:         string(user.Role),
+			Hlc:          hlc,
+			OriginNode:   node,
 		}); err != nil {
 			return err
 		}
-		for _, lessonID := range user.CompletedLessons {
-			if err := q.AddCompletedLesson(ctx, dbgen.AddCompletedLessonParams{UserID: user.ID, LessonID: lessonID}); err != nil {
-				return err
-			}
+		if err := s.logUpsert(ctx, tx, q, "users", map[string]any{"id": user.ID}); err != nil {
+			return err
 		}
-		return nil
+		return s.setCompletedLessons(ctx, tx, q, user.ID, user.CompletedLessons)
 	})
 }
 
 func (s *Store) UpdateUser(ctx context.Context, user *models.User) error {
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.UpdateUser(ctx, dbgen.UpdateUserParams{
-			Name: user.Name,
-			Role: string(user.Role),
-			ID:   user.ID,
+			Name:       user.Name,
+			Role:       string(user.Role),
+			Hlc:        hlc,
+			OriginNode: node,
+			ID:         user.ID,
 		}); err != nil {
 			return err
 		}
-		if err := q.DeleteCompletedLessons(ctx, user.ID); err != nil {
+		if err := s.logUpsert(ctx, tx, q, "users", map[string]any{"id": user.ID}); err != nil {
 			return err
 		}
-		for _, lessonID := range user.CompletedLessons {
-			if err := q.AddCompletedLesson(ctx, dbgen.AddCompletedLessonParams{UserID: user.ID, LessonID: lessonID}); err != nil {
-				return err
-			}
-		}
-		return nil
+		return s.setCompletedLessons(ctx, tx, q, user.ID, user.CompletedLessons)
 	})
+}
+
+// setCompletedLessons replaces the user's completed-lesson set. The rows are a
+// junction table with no version of their own, so removals have to travel as
+// delete ops or another node would keep re-adding what this one cleared.
+func (s *Store) setCompletedLessons(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, userID string, lessonIDs []string) error {
+	previous, err := q.GetCompletedLessonIDs(ctx, userID)
+	if err != nil {
+		return err
+	}
+	keep := make(map[string]bool, len(lessonIDs))
+	for _, id := range lessonIDs {
+		keep[id] = true
+	}
+	if err := q.DeleteCompletedLessons(ctx, userID); err != nil {
+		return err
+	}
+	for _, id := range previous {
+		if keep[id] {
+			continue
+		}
+		if err := s.logDelete(ctx, tx, q, "user_completed_lessons", map[string]any{"user_id": userID, "lesson_id": id}); err != nil {
+			return err
+		}
+	}
+	for _, id := range lessonIDs {
+		if err := q.AddCompletedLesson(ctx, dbgen.AddCompletedLessonParams{UserID: userID, LessonID: id}); err != nil {
+			return err
+		}
+		if err := s.logUpsert(ctx, tx, q, "user_completed_lessons", map[string]any{"user_id": userID, "lesson_id": id}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) CreateSession(userID, name string, role models.Role) string {
@@ -322,20 +374,28 @@ func (s *Store) GetLibraryItem(ctx context.Context, id string) (*models.LibraryI
 
 func (s *Store) AddLibraryItem(ctx context.Context, item models.LibraryItem) (string, error) {
 	item.ID = uuid.NewString()
-	err := s.queries.AddLibraryItem(ctx, dbgen.AddLibraryItemParams{
-		ID:               item.ID,
-		Title:            item.Title,
-		Type:             item.Type,
-		Category:         item.Category,
-		SizeKb:           int64(item.SizeKB),
-		MimeType:         item.MimeType,
-		OriginalFilename: item.OriginalFilename,
-		UploadedAt:       item.UploadedAt,
-		ModifiedAt:       item.ModifiedAt,
-		Duration:         nullString(item.Duration),
-		Resolution:       nullString(item.Resolution),
-		FilePath:         item.FilePath,
-		UploadedBy:       nullString(item.UploadedBy),
+	hlc, node := s.version()
+	err := s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.AddLibraryItem(ctx, dbgen.AddLibraryItemParams{
+			ID:               item.ID,
+			Title:            item.Title,
+			Type:             item.Type,
+			Category:         item.Category,
+			SizeKb:           int64(item.SizeKB),
+			MimeType:         item.MimeType,
+			OriginalFilename: item.OriginalFilename,
+			UploadedAt:       item.UploadedAt,
+			ModifiedAt:       item.ModifiedAt,
+			Duration:         nullString(item.Duration),
+			Resolution:       nullString(item.Resolution),
+			FilePath:         item.FilePath,
+			UploadedBy:       nullString(item.UploadedBy),
+			Hlc:              hlc,
+			OriginNode:       node,
+		}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "library_items", map[string]any{"id": item.ID})
 	})
 	if err != nil {
 		return "", err
@@ -344,16 +404,24 @@ func (s *Store) AddLibraryItem(ctx context.Context, item models.LibraryItem) (st
 }
 
 func (s *Store) UpdateLibraryItem(ctx context.Context, item *models.LibraryItem) error {
-	return s.queries.UpdateLibraryItem(ctx, dbgen.UpdateLibraryItemParams{
-		Title:            item.Title,
-		Category:         item.Category,
-		SizeKb:           int64(item.SizeKB),
-		MimeType:         item.MimeType,
-		OriginalFilename: item.OriginalFilename,
-		Duration:         nullString(item.Duration),
-		Resolution:       nullString(item.Resolution),
-		FilePath:         item.FilePath,
-		ID:               item.ID,
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.UpdateLibraryItem(ctx, dbgen.UpdateLibraryItemParams{
+			Title:            item.Title,
+			Category:         item.Category,
+			SizeKb:           int64(item.SizeKB),
+			MimeType:         item.MimeType,
+			OriginalFilename: item.OriginalFilename,
+			Duration:         nullString(item.Duration),
+			Resolution:       nullString(item.Resolution),
+			FilePath:         item.FilePath,
+			Hlc:              hlc,
+			OriginNode:       node,
+			ID:               item.ID,
+		}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "library_items", map[string]any{"id": item.ID})
 	})
 }
 
@@ -418,11 +486,19 @@ func (s *Store) GetCourse(ctx context.Context, id string) (*models.Course, error
 
 func (s *Store) AddCourse(ctx context.Context, course *models.Course) error {
 	course.ID = uuid.NewString()
-	return s.queries.AddCourse(ctx, dbgen.AddCourseParams{
-		ID:          course.ID,
-		Title:       course.Title,
-		Description: course.Description,
-		Category:    course.Category,
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.AddCourse(ctx, dbgen.AddCourseParams{
+			ID:          course.ID,
+			Title:       course.Title,
+			Description: course.Description,
+			Category:    course.Category,
+			Hlc:         hlc,
+			OriginNode:  node,
+		}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "courses", map[string]any{"id": course.ID})
 	})
 }
 
@@ -437,11 +513,23 @@ func (s *Store) IsEnrolled(ctx context.Context, userID, courseID string) (bool, 
 }
 
 func (s *Store) EnrollStudent(ctx context.Context, userID, courseID string) error {
-	return s.queries.EnrollStudent(ctx, dbgen.EnrollStudentParams{UserID: userID, CourseID: courseID})
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.EnrollStudent(ctx, dbgen.EnrollStudentParams{UserID: userID, CourseID: courseID}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "course_enrollments", map[string]any{"user_id": userID, "course_id": courseID})
+	})
 }
 
+// UnenrollStudent is the delete that most needs an op: enrolment gates access to
+// a course, so without one the next sync would quietly put the student back in.
 func (s *Store) UnenrollStudent(ctx context.Context, userID, courseID string) error {
-	return s.queries.UnenrollStudent(ctx, dbgen.UnenrollStudentParams{UserID: userID, CourseID: courseID})
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.UnenrollStudent(ctx, dbgen.UnenrollStudentParams{UserID: userID, CourseID: courseID}); err != nil {
+			return err
+		}
+		return s.logDelete(ctx, tx, q, "course_enrollments", map[string]any{"user_id": userID, "course_id": courseID})
+	})
 }
 
 func (s *Store) GetEnrolledStudents(ctx context.Context, courseID string) ([]models.CourseStudent, error) {
@@ -556,13 +644,19 @@ func (s *Store) syncLessonLinks(ctx context.Context, q *dbgen.Queries, lessonID,
 
 func (s *Store) AddLesson(ctx context.Context, lesson *models.Lesson) error {
 	lesson.ID = uuid.NewString()
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.AddLesson(ctx, dbgen.AddLessonParams{
 			ID:          lesson.ID,
 			CourseID:    lesson.CourseID,
 			Title:       lesson.Title,
 			ContentText: lesson.ContentText,
+			Hlc:         hlc,
+			OriginNode:  node,
 		}); err != nil {
+			return err
+		}
+		if err := s.logUpsert(ctx, tx, q, "lessons", map[string]any{"id": lesson.ID}); err != nil {
 			return err
 		}
 		return s.syncLessonLinks(ctx, q, lesson.ID, lesson.ContentText)
@@ -570,12 +664,18 @@ func (s *Store) AddLesson(ctx context.Context, lesson *models.Lesson) error {
 }
 
 func (s *Store) UpdateLesson(ctx context.Context, lesson *models.Lesson) error {
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.UpdateLesson(ctx, dbgen.UpdateLessonParams{
 			Title:       lesson.Title,
 			ContentText: lesson.ContentText,
+			Hlc:         hlc,
+			OriginNode:  node,
 			ID:          lesson.ID,
 		}); err != nil {
+			return err
+		}
+		if err := s.logUpsert(ctx, tx, q, "lessons", map[string]any{"id": lesson.ID}); err != nil {
 			return err
 		}
 		return s.syncLessonLinks(ctx, q, lesson.ID, lesson.ContentText)
@@ -744,7 +844,8 @@ func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 	if quiz.Value <= 0 {
 		quiz.Value = defaultQuizValue
 	}
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.AddQuiz(ctx, dbgen.AddQuizParams{
 			ID:          quiz.ID,
 			CourseID:    quiz.CourseID,
@@ -752,10 +853,15 @@ func (s *Store) AddQuiz(ctx context.Context, quiz *models.Quiz) error {
 			Title:       quiz.Title,
 			Description: quiz.Description,
 			Value:       int64(quiz.Value),
+			Hlc:         hlc,
+			OriginNode:  node,
 		}); err != nil {
 			return err
 		}
-		if err := addQuizQuestions(ctx, q, quiz.ID, quiz.Questions); err != nil {
+		if err := s.logUpsert(ctx, tx, q, "quizzes", map[string]any{"id": quiz.ID}); err != nil {
+			return err
+		}
+		if err := s.replaceQuizQuestions(ctx, tx, q, quiz, hlc, node); err != nil {
 			return err
 		}
 		return s.syncQuizLinks(ctx, q, quiz.ID, quiz.Description)
@@ -766,23 +872,55 @@ func (s *Store) UpdateQuiz(ctx context.Context, quiz *models.Quiz) error {
 	if quiz.Value <= 0 {
 		quiz.Value = defaultQuizValue
 	}
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.UpdateQuiz(ctx, dbgen.UpdateQuizParams{
 			Title:       quiz.Title,
 			Description: quiz.Description,
 			Value:       int64(quiz.Value),
+			Hlc:         hlc,
+			OriginNode:  node,
 			ID:          quiz.ID,
 		}); err != nil {
 			return err
 		}
-		if err := q.DeleteQuizQuestions(ctx, quiz.ID); err != nil {
+		if err := s.logUpsert(ctx, tx, q, "quizzes", map[string]any{"id": quiz.ID}); err != nil {
 			return err
 		}
-		if err := addQuizQuestions(ctx, q, quiz.ID, quiz.Questions); err != nil {
+		if err := s.replaceQuizQuestions(ctx, tx, q, quiz, hlc, node); err != nil {
 			return err
 		}
 		return s.syncQuizLinks(ctx, q, quiz.ID, quiz.Description)
 	})
+}
+
+// replaceQuizQuestions rewrites a quiz's questions and logs both halves. The
+// rewrite mints fresh ids for every question, so the removals have to travel as
+// delete ops: another node that only received the new ones would show the old
+// and the new side by side.
+func (s *Store) replaceQuizQuestions(ctx context.Context, tx *sql.Tx, q *dbgen.Queries, quiz *models.Quiz, hlc int64, node string) error {
+	previous, err := q.GetQuizQuestions(ctx, quiz.ID)
+	if err != nil {
+		return err
+	}
+	if err := q.DeleteQuizQuestions(ctx, quiz.ID); err != nil {
+		return err
+	}
+	for _, question := range previous {
+		if err := s.logDelete(ctx, tx, q, "quiz_questions", map[string]any{"id": question.ID}); err != nil {
+			return err
+		}
+	}
+	ids, err := addQuizQuestions(ctx, q, quiz.ID, quiz.Questions, hlc, node)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.logUpsert(ctx, tx, q, "quiz_questions", map[string]any{"id": id}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordQuizGrade sets userID's grade for quizID — a retake overwrites the
@@ -790,11 +928,19 @@ func (s *Store) UpdateQuiz(ctx context.Context, quiz *models.Quiz) error {
 // stored: GetUserCoursePoints/GetEnrolledStudents always sum quiz_grades live,
 // scoped to one course, so there's nothing to recompute here.
 func (s *Store) RecordQuizGrade(ctx context.Context, userID, quizID string, grade int) error {
-	return s.queries.UpsertQuizGrade(ctx, dbgen.UpsertQuizGradeParams{
-		UserID:   userID,
-		QuizID:   quizID,
-		Grade:    int64(grade),
-		GradedAt: time.Now().UTC().Format(time.RFC3339),
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.UpsertQuizGrade(ctx, dbgen.UpsertQuizGradeParams{
+			UserID:     userID,
+			QuizID:     quizID,
+			Grade:      int64(grade),
+			GradedAt:   time.Now().UTC().Format(time.RFC3339),
+			Hlc:        hlc,
+			OriginNode: node,
+		}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "quiz_grades", map[string]any{"user_id": userID, "quiz_id": quizID})
 	})
 }
 
@@ -809,24 +955,29 @@ func (s *Store) GetUserCoursePoints(ctx context.Context, userID, courseID string
 	return int(points), nil
 }
 
-func addQuizQuestions(ctx context.Context, q *dbgen.Queries, quizID string, questions []models.QuizQuestion) error {
+func addQuizQuestions(ctx context.Context, q *dbgen.Queries, quizID string, questions []models.QuizQuestion, hlc int64, node string) ([]string, error) {
+	ids := make([]string, 0, len(questions))
 	for i, question := range questions {
 		optionsJSON, err := json.Marshal(question.Options)
 		if err != nil {
-			return err
+			return ids, err
 		}
+		id := uuid.NewString()
 		if err := q.AddQuizQuestion(ctx, dbgen.AddQuizQuestionParams{
-			ID:           uuid.NewString(),
+			ID:           id,
 			QuizID:       quizID,
 			Ordinal:      int64(i),
 			Text:         question.Text,
 			OptionsJson:  string(optionsJSON),
 			CorrectIndex: int64(question.CorrectIndex),
+			Hlc:          hlc,
+			OriginNode:   node,
 		}); err != nil {
-			return err
+			return ids, err
 		}
+		ids = append(ids, id)
 	}
-	return nil
+	return ids, nil
 }
 
 // syncQuizLinks mirrors syncLessonLinks for quiz_links — a quiz's description
@@ -888,43 +1039,6 @@ func (s *Store) GetQuizLinks(ctx context.Context, quizID string) ([]models.Libra
 	return items, lessons, nil
 }
 
-// --- Sync log ---
-
-func (s *Store) GetSyncQueue(ctx context.Context) (models.SyncQueue, error) {
-	count, err := s.queries.CountSyncLog(ctx)
-	if err != nil {
-		return models.SyncQueue{}, err
-	}
-	logs, err := s.queries.ListSyncLog(ctx)
-	if err != nil {
-		return models.SyncQueue{}, err
-	}
-	return models.SyncQueue{TransactionCount: int(count), Logs: logs}, nil
-}
-
-func (s *Store) EnqueueSync(ctx context.Context, action string) error {
-	return s.queries.AddSyncLog(ctx, dbgen.AddSyncLogParams{
-		Action:    action,
-		CreatedAt: time.Now().Format(time.RFC3339),
-	})
-}
-
-func (s *Store) ClearSyncQueue(ctx context.Context) (int, error) {
-	var count int64
-	err := s.withTx(ctx, func(q *dbgen.Queries) error {
-		var err error
-		count, err = q.CountSyncLog(ctx)
-		if err != nil {
-			return err
-		}
-		return q.ClearSyncLog(ctx)
-	})
-	if err != nil {
-		return 0, err
-	}
-	return int(count), nil
-}
-
 // --- Server logs ---
 //
 // Durable, queryable counterpart to middleware.LogBuffer's in-memory tail.
@@ -958,7 +1072,7 @@ func (s *Store) AddServerLogs(ctx context.Context, logs []models.ServerLog) erro
 	if len(logs) == 0 {
 		return nil
 	}
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		for _, l := range logs {
 			if err := q.AddServerLog(ctx, dbgen.AddServerLogParams{
 				Timestamp: l.Timestamp,
@@ -1101,16 +1215,22 @@ func (s *Store) GetForumPost(ctx context.Context, id string) (*models.ForumPost,
 func (s *Store) AddForumPost(ctx context.Context, post *models.ForumPost) error {
 	post.ID = uuid.NewString()
 	post.CreatedAt = time.Now().UTC().Format(time.RFC3339)
-	return s.withTx(ctx, func(q *dbgen.Queries) error {
+	hlc, node := s.version()
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
 		if err := q.AddForumPost(ctx, dbgen.AddForumPostParams{
-			ID:        post.ID,
-			CourseID:  post.CourseID,
-			ParentID:  nullStringFromPtr(post.ParentID),
-			UserID:    post.UserID,
-			Title:     post.Title,
-			Body:      post.Body,
-			CreatedAt: post.CreatedAt,
+			ID:         post.ID,
+			CourseID:   post.CourseID,
+			ParentID:   nullStringFromPtr(post.ParentID),
+			UserID:     post.UserID,
+			Title:      post.Title,
+			Body:       post.Body,
+			CreatedAt:  post.CreatedAt,
+			Hlc:        hlc,
+			OriginNode: node,
 		}); err != nil {
+			return err
+		}
+		if err := s.logUpsert(ctx, tx, q, "forum_posts", map[string]any{"id": post.ID}); err != nil {
 			return err
 		}
 		return s.syncForumLinks(ctx, q, post.ID, post.Body)
@@ -1184,9 +1304,19 @@ func (s *Store) GetCourseForumLinks(ctx context.Context, courseID string) ([]mod
 }
 
 func (s *Store) LikePost(ctx context.Context, postID, userID string) error {
-	return s.queries.LikePost(ctx, dbgen.LikePostParams{PostID: postID, UserID: userID})
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.LikePost(ctx, dbgen.LikePostParams{PostID: postID, UserID: userID}); err != nil {
+			return err
+		}
+		return s.logUpsert(ctx, tx, q, "forum_likes", map[string]any{"post_id": postID, "user_id": userID})
+	})
 }
 
 func (s *Store) UnlikePost(ctx context.Context, postID, userID string) error {
-	return s.queries.UnlikePost(ctx, dbgen.UnlikePostParams{PostID: postID, UserID: userID})
+	return s.withTx(ctx, func(tx *sql.Tx, q *dbgen.Queries) error {
+		if err := q.UnlikePost(ctx, dbgen.UnlikePostParams{PostID: postID, UserID: userID}); err != nil {
+			return err
+		}
+		return s.logDelete(ctx, tx, q, "forum_likes", map[string]any{"post_id": postID, "user_id": userID})
+	})
 }

@@ -7,29 +7,17 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"radix-backend/internal/backupzip"
 	"radix-backend/internal/httpx"
-	"radix-backend/internal/models"
 )
 
-// Backup layout inside the zip (also the layout of the extracted folder, so a
-// backup can be inspected/edited by hand before being imported back):
-//
-//	manifest.json      metadata + row counts per table
-//	data/<table>.json  every row of that table, as an array of objects
-//	uploads/<file>     the library's uploaded files (library_items.file_path)
-const (
-	backupDataDir    = "data/"
-	backupUploadsDir = "uploads/"
-
-	// uploadsDir is where uploadFile stores library files on disk.
-	uploadsDir = "uploads"
-)
+// The archive layout, and the code that reads it back, live in
+// internal/backupzip — `cmd/seed -zip` imports a backup with no server running
+// and needs the same parser.
 
 type backupManifest struct {
 	ExportedAt string         `json:"exportedAt"`
@@ -47,7 +35,7 @@ func (h *Handler) ExportBackup(c *echo.Context) error {
 	if err != nil {
 		return httpx.InternalError(c, "failed to export database")
 	}
-	uploads, err := os.ReadDir(uploadsDir)
+	uploads, err := os.ReadDir(backupzip.UploadsDir)
 	if err != nil && !os.IsNotExist(err) {
 		return httpx.InternalError(c, "failed to read uploads folder")
 	}
@@ -72,11 +60,11 @@ func (h *Handler) ExportBackup(c *echo.Context) error {
 	// half-written backup must never look like a complete one.
 	zw := zip.NewWriter(c.Response())
 
-	if err := writeJSONEntry(zw, "manifest.json", manifest); err != nil {
+	if err := writeJSONEntry(zw, backupzip.ManifestName, manifest); err != nil {
 		return err
 	}
 	for _, dump := range dumps {
-		if err := writeJSONEntry(zw, backupDataDir+dump.Name+".json", dump.Rows); err != nil {
+		if err := writeJSONEntry(zw, backupzip.DataDir+dump.Name+".json", dump.Rows); err != nil {
 			return err
 		}
 	}
@@ -84,7 +72,7 @@ func (h *Handler) ExportBackup(c *echo.Context) error {
 		if entry.IsDir() {
 			continue
 		}
-		if err := writeFileEntry(zw, backupUploadsDir+entry.Name(), filepath.Join(uploadsDir, entry.Name())); err != nil {
+		if err := writeFileEntry(zw, backupzip.UploadsPrefix+entry.Name(), filepath.Join(backupzip.UploadsDir, entry.Name())); err != nil {
 			return err
 		}
 	}
@@ -133,7 +121,7 @@ func (h *Handler) ImportBackup(c *echo.Context) error {
 		return httpx.BadRequest(c, "not a valid zip file")
 	}
 
-	dumps, err := readDumps(zr)
+	dumps, err := backupzip.ReadDumps(zr)
 	if err != nil {
 		return httpx.BadRequest(c, err.Error())
 	}
@@ -150,104 +138,13 @@ func (h *Handler) ImportBackup(c *echo.Context) error {
 	// all-or-nothing. A file whose name is already there is overwritten (same
 	// name means the same library item id, so it's the same file), and nothing
 	// is ever deleted.
-	restored, err := restoreUploads(zr)
+	restored, err := backupzip.RestoreUploads(zr, backupzip.UploadsDir)
 	if err != nil {
 		return httpx.InternalError(c, "database imported but restoring uploads failed: "+err.Error())
 	}
-
-	h.Store.EnqueueSync(ctx, "IMPORT_BACKUP: "+header.Filename)
 
 	return httpx.OK(c, http.StatusOK, map[string]any{
 		"tables":  tables,
 		"uploads": restored,
 	})
-}
-
-func readDumps(zr *zip.Reader) ([]models.TableDump, error) {
-	var dumps []models.TableDump
-	for _, entry := range zr.File {
-		name := path.Clean(entry.Name)
-		if !strings.HasPrefix(name, backupDataDir) || !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		table := strings.TrimSuffix(strings.TrimPrefix(name, backupDataDir), ".json")
-		if table == "" || strings.Contains(table, "/") {
-			continue
-		}
-		rc, err := entry.Open()
-		if err != nil {
-			return nil, err
-		}
-		var rows []map[string]any
-		dec := json.NewDecoder(rc)
-		// Numbers stay exact (server_logs.id, quiz_questions.correct_index)
-		// instead of round-tripping through float64.
-		dec.UseNumber()
-		err = dec.Decode(&rows)
-		rc.Close()
-		if err != nil {
-			return nil, fmt.Errorf("invalid JSON in %s: %w", entry.Name, err)
-		}
-		for _, row := range rows {
-			for col, val := range row {
-				row[col] = normalizeJSONValue(val)
-			}
-		}
-		dumps = append(dumps, models.TableDump{Name: table, Rows: rows})
-	}
-	return dumps, nil
-}
-
-// normalizeJSONValue turns a decoded JSON value into something database/sql
-// can bind: json.Number is neither int64 nor float64, and would otherwise be
-// bound as text and rely on column affinity to become a number again.
-func normalizeJSONValue(val any) any {
-	num, ok := val.(json.Number)
-	if !ok {
-		return val
-	}
-	if i, err := num.Int64(); err == nil {
-		return i
-	}
-	if f, err := num.Float64(); err == nil {
-		return f
-	}
-	return num.String()
-}
-
-func restoreUploads(zr *zip.Reader) (int, error) {
-	count := 0
-	for _, entry := range zr.File {
-		if entry.FileInfo().IsDir() || !strings.HasPrefix(path.Clean(entry.Name), backupUploadsDir) {
-			continue
-		}
-		// filepath.Base defuses "uploads/../../etc/passwd" style entries.
-		name := filepath.Base(entry.Name)
-		if name == "." || name == string(filepath.Separator) {
-			continue
-		}
-		if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
-			return count, err
-		}
-		if err := extractTo(entry, filepath.Join(uploadsDir, name)); err != nil {
-			return count, err
-		}
-		count++
-	}
-	return count, nil
-}
-
-func extractTo(entry *zip.File, dstPath string) error {
-	rc, err := entry.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-	_, err = io.Copy(dst, rc)
-	return err
 }

@@ -28,7 +28,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	enforceForeignKeys(t, db)
 	applySchema(t, db)
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, "test-node")
 	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Ana", Email: "ana@radix.test", PasswordHash: "hash", Role: models.RoleStudent}); err != nil {
 		t.Fatalf("add user: %v", err)
 	}
@@ -40,10 +40,6 @@ func TestBackupRoundTrip(t *testing.T) {
 	if err := s.AddLesson(ctx, lesson); err != nil {
 		t.Fatalf("add lesson: %v", err)
 	}
-	if err := s.EnqueueSync(ctx, "TEST"); err != nil {
-		t.Fatalf("enqueue sync: %v", err)
-	}
-
 	before, err := s.ExportTables(ctx)
 	if err != nil {
 		t.Fatalf("export: %v", err)
@@ -52,8 +48,9 @@ func TestBackupRoundTrip(t *testing.T) {
 	if rowsIn["users"] != 1 || rowsIn["courses"] != 1 || rowsIn["lessons"] != 1 {
 		t.Fatalf("unexpected export counts: %v", rowsIn)
 	}
-	// Operational tables are per-node and must stay out of the backup.
-	for _, table := range []string{"sync_log", "server_logs"} {
+	// Operational tables are per-node and must stay out of the backup: this
+	// node's log stream, its operation log, and its view of its peers.
+	for _, table := range []string{"sync_ops", "sync_peers", "sync_readers", "server_logs"} {
 		if _, ok := rowsIn[table]; ok {
 			t.Fatalf("%s must not be exported", table)
 		}
@@ -66,8 +63,8 @@ func TestBackupRoundTrip(t *testing.T) {
 		t.Fatalf("re-import: %v", err)
 	}
 	for _, res := range results {
-		if res.Inserted != 0 || res.Skipped != len(rowsByTable(before)[res.Name]) {
-			t.Fatalf("re-import of %s: inserted=%d skipped=%d, want all skipped", res.Name, res.Inserted, res.Skipped)
+		if res.Applied != 0 || res.Skipped != len(rowsByTable(before)[res.Name]) {
+			t.Fatalf("re-import of %s: applied=%d skipped=%d, want all skipped", res.Name, res.Applied, res.Skipped)
 		}
 	}
 	after, err := s.ExportTables(ctx)
@@ -85,7 +82,12 @@ func TestBackupRoundTrip(t *testing.T) {
 		if dump.Name != "courses" {
 			continue
 		}
-		newCourse := map[string]any{"id": "c-nuevo", "title": "Robótica", "description": "Brazo", "category": "Robótica"}
+		newCourse := map[string]any{
+			"id": "c-nuevo", "title": "Robótica", "description": "Brazo", "category": "Robótica",
+			// Every row of a dump carries the same columns as the table (see
+			// insertRows), version pair included.
+			"hlc": int64(1), "origin_node": "otro-nodo",
+		}
 		incoming[i] = models.TableDump{Name: "courses", Rows: append([]map[string]any{newCourse}, dump.Rows...)}
 	}
 	results, err = s.ImportTables(ctx, incoming)
@@ -97,8 +99,8 @@ func TestBackupRoundTrip(t *testing.T) {
 		if res.Name == "courses" {
 			want = 1
 		}
-		if res.Inserted != want {
-			t.Fatalf("merge import of %s: inserted=%d, want %d", res.Name, res.Inserted, want)
+		if res.Applied != want {
+			t.Fatalf("merge import of %s: applied=%d, want %d", res.Name, res.Applied, want)
 		}
 	}
 	merged, err := s.ExportTables(ctx)
@@ -149,6 +151,20 @@ func TestImportOrdersByForeignKeys(t *testing.T) {
 			course_id TEXT NOT NULL REFERENCES courses(id),
 			title TEXT NOT NULL
 		)`,
+		// An import also writes forwardable ops, so the log has to exist even in
+		// this cut-down schema.
+		`CREATE TABLE sync_ops (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			origin_node TEXT NOT NULL,
+			table_name TEXT NOT NULL,
+			pk_json TEXT NOT NULL,
+			op TEXT NOT NULL,
+			hlc INTEGER NOT NULL,
+			payload TEXT NOT NULL DEFAULT '{}',
+			label TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX idx_sync_ops_identity ON sync_ops(origin_node, table_name, pk_json, hlc)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
@@ -156,7 +172,7 @@ func TestImportOrdersByForeignKeys(t *testing.T) {
 		}
 	}
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, "test-node")
 	dumps := []models.TableDump{
 		{Name: "quiz_questions", Rows: []map[string]any{
 			{"id": "q1", "quiz_id": "qz1", "text": "¿Cuál es la capa de red?"},
@@ -174,8 +190,8 @@ func TestImportOrdersByForeignKeys(t *testing.T) {
 		t.Fatalf("import: %v", err)
 	}
 	for _, res := range results {
-		if res.Inserted != 1 {
-			t.Errorf("%s: inserted=%d, want 1", res.Name, res.Inserted)
+		if res.Applied != 1 {
+			t.Errorf("%s: applied=%d, want 1", res.Name, res.Applied)
 		}
 	}
 
@@ -222,7 +238,7 @@ func TestClearTables(t *testing.T) {
 	defer db.Close()
 	applySchema(t, db)
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, "test-node")
 	if err := s.AddUser(ctx, &models.User{ID: "u1", Name: "Ana", Email: "ana@radix.test", PasswordHash: "h", Role: models.RoleStudent}); err != nil {
 		t.Fatalf("add user: %v", err)
 	}
@@ -237,16 +253,14 @@ func TestClearTables(t *testing.T) {
 	if err := s.EnrollStudent(ctx, "u1", course.ID); err != nil {
 		t.Fatalf("enroll: %v", err)
 	}
-	// sync_log stays out of a backup but must be flushed like everything else.
-	if err := s.EnqueueSync(ctx, "TEST"); err != nil {
-		t.Fatalf("enqueue sync: %v", err)
-	}
+	// The writes above filled the operation log; it stays out of a backup but
+	// must be flushed like everything else.
 
 	deleted, err := s.ClearTables(ctx)
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	for _, table := range []string{"users", "courses", "lessons", "course_enrollments", "sync_log"} {
+	for _, table := range []string{"users", "courses", "lessons", "course_enrollments", "sync_ops"} {
 		if deleted[table] == 0 {
 			t.Errorf("%s: no se borró ninguna fila (%v)", table, deleted)
 		}

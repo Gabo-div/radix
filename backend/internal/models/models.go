@@ -122,9 +122,67 @@ type Course struct {
 	Category    string `json:"category"`
 }
 
+// SyncOp is one replayable change to one row: what the DTN queue holds and what
+// travels between edge servers. Payload carries the whole row for an upsert
+// (never a diff — applying it twice, or out of order relative to an unrelated
+// row, has to be safe) and is empty for a delete.
+//
+// Identity is (OriginNode, Table, PK, HLC), not Seq: Seq is local to whichever
+// node is holding the op, and changes when the op is forwarded.
+type SyncOp struct {
+	Seq        int64          `json:"seq"`
+	OriginNode string         `json:"originNode"`
+	Table      string         `json:"table"`
+	PK         string         `json:"pk"`
+	Op         string         `json:"op"`
+	HLC        int64          `json:"hlc"`
+	Payload    map[string]any `json:"payload"`
+	Label      string         `json:"label"`
+	CreatedAt  string         `json:"createdAt"`
+}
+
+// Op values for SyncOp.Op.
+const (
+	OpUpsert = "upsert"
+	OpDelete = "delete"
+)
+
+// SyncPeer is one node this server pulls from, with the cursor into that peer's
+// operation log and the outcome of the last attempt.
+type SyncPeer struct {
+	Peer       string `json:"peer"`
+	NodeID     string `json:"nodeId"`
+	LastSeq    int64  `json:"lastSeq"`
+	LastSyncAt string `json:"lastSyncAt"`
+	LastError  string `json:"lastError"`
+}
+
+// SyncQueue is the Monitor's view of the DTN queue: how many ops no peer has
+// confirmed reading yet, their labels (newest first), and the peer state.
 type SyncQueue struct {
-	TransactionCount int      `json:"transactionCount"`
-	Logs             []string `json:"logs"`
+	TransactionCount int        `json:"transactionCount"`
+	Logs             []string   `json:"logs"`
+	Peers            []SyncPeer `json:"peers"`
+}
+
+// LibraryFile is one library item's file on disk. Operations carry rows, not
+// bytes, so after applying them a node has to work out which files it now knows
+// about but doesn't have — see dtn.Syncer.
+type LibraryFile struct {
+	ID       string
+	FilePath string
+}
+
+// SyncResult is the outcome of one pull from one peer.
+type SyncResult struct {
+	Peer    string `json:"peer"`
+	NodeID  string `json:"nodeId"`
+	Pulled  int    `json:"pulled"`
+	Applied int    `json:"applied"`
+	Skipped int    `json:"skipped"`
+	// Files downloaded from this peer to catch up with the rows just applied.
+	Files int    `json:"files"`
+	Error string `json:"error,omitempty"`
 }
 
 type Session struct {
@@ -170,10 +228,11 @@ type TableDump struct {
 }
 
 // TableImport is the outcome of merging one TableDump into the database:
-// Skipped counts rows that collided with an existing row (same primary key or
-// UNIQUE) and were left alone — see store.ImportTables.
+// Applied counts rows that landed — inserted, or overwriting a local row whose
+// version was older — and Skipped the ones dropped because the local row won.
+// See store.ImportTables.
 type TableImport struct {
-	Name     string `json:"name"`
-	Inserted int    `json:"inserted"`
-	Skipped  int    `json:"skipped"`
+	Name    string `json:"name"`
+	Applied int    `json:"applied"`
+	Skipped int    `json:"skipped"`
 }

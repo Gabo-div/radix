@@ -1,0 +1,25 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # This file passes through envsubst on container start, which replaces every
+    # $NAME it finds — so it deliberately uses no nginx variables of its own.
+    # $uri would come out empty and break routing.
+
+    # Client-side routing: anything that isn't a real file is the SPA's problem,
+    # not a 404. (try_files would need $uri, hence error_page.)
+    error_page 404 =200 /index.html;
+
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        # The Logs page holds a poll open and media is served with Range
+        # requests; buffering the response would stall both.
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+        # Backend errors reach the client as themselves instead of being
+        # swallowed by the error_page above.
+        proxy_intercept_errors off;
+    }
+}

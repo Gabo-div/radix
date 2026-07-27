@@ -15,8 +15,10 @@ import (
 	"go.uber.org/zap"
 
 	"radix-backend/internal/auth"
+	"radix-backend/internal/backupzip"
 	"radix-backend/internal/config"
 	"radix-backend/internal/database"
+	"radix-backend/internal/dtn"
 	"radix-backend/internal/handlers"
 	"radix-backend/internal/middleware"
 	"radix-backend/internal/store"
@@ -45,9 +47,15 @@ func newSQLDB(db *database.DB) *sql.DB {
 
 // newStore loads persisted sessions on start and saves them on stop, so a
 // dev hot-reload (air) or a redeploy doesn't silently log everyone out —
-// see store.SaveSessions/LoadSessions.
+// see store.SaveSessions/LoadSessions. It also seeds the logical clock from
+// what's already stored, which has to happen before the first write: an edge
+// server rebooting with a rewound clock would otherwise stamp new rows with
+// versions that lose to its own older ones (store.SeedClock).
 func newStore(sqlDB *sql.DB, cfg *config.Config, logger *zap.Logger, lc fx.Lifecycle) *store.Store {
-	s := store.New(sqlDB)
+	s := store.New(sqlDB, cfg.NodeID)
+	if err := s.SeedClock(context.Background()); err != nil {
+		logger.Error("failed to seed the logical clock", zap.Error(err))
+	}
 	sessionsPath := filepath.Join(filepath.Dir(cfg.DBPath), "sessions.json")
 	if err := s.LoadSessions(sessionsPath); err != nil {
 		logger.Error("failed to load sessions", zap.Error(err))
@@ -80,6 +88,43 @@ func newLogPersister(s *store.Store, cfg *config.Config, logger *zap.Logger, lc 
 		},
 	})
 	return p
+}
+
+// newSyncer starts the peer-synchronisation loop. A node with no SYNC_PEERS
+// still builds one (POST /monitor/sync reports there's nothing to pull, and the
+// handlers hold the same interface either way) — it just never runs a round.
+func newSyncer(s *store.Store, cfg *config.Config, logger *zap.Logger, lc fx.Lifecycle) *dtn.Syncer {
+	syncer := dtn.New(s, logger, cfg.SyncPeers, cfg.SyncToken, backupzip.UploadsDir, 30*time.Second)
+
+	var cancel context.CancelFunc
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			if !syncer.Enabled() {
+				logger.Info("Sincronización entre nodos desactivada (SYNC_PEERS vacío)")
+				return nil
+			}
+			if cfg.SyncToken == "" {
+				logger.Warn("SYNC_PEERS configurado sin SYNC_TOKEN: los nodos pares rechazarán las peticiones")
+			}
+			logger.Info("Sincronización entre nodos activa",
+				zap.Strings("peers", cfg.SyncPeers),
+				zap.Duration("interval", cfg.SyncInterval))
+
+			// Own context, not the start hook's: that one is cancelled as soon
+			// as startup finishes, which would kill the loop immediately.
+			var ctx context.Context
+			ctx, cancel = context.WithCancel(context.Background())
+			go syncer.Run(ctx, cfg.SyncInterval)
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			if cancel != nil {
+				cancel()
+			}
+			return nil
+		},
+	})
+	return syncer
 }
 
 // newEcho wires routes/middleware and serves them via a plain *http.Server —
@@ -129,6 +174,7 @@ func main() {
 			fx.Annotate(newStore, fx.As(new(auth.Store)), fx.As(new(handlers.Store)), fx.As(fx.Self())),
 			newLogBuffer,
 			newLogPersister,
+			fx.Annotate(newSyncer, fx.As(new(handlers.Syncer)), fx.As(fx.Self())),
 			auth.New,
 			handlers.New,
 			newEcho,

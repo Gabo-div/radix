@@ -1,6 +1,6 @@
 -- name: AddForumPost :exec
-INSERT INTO forum_posts (id, course_id, parent_id, user_id, title, body, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO forum_posts (id, course_id, parent_id, user_id, title, body, created_at, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetForumPost :one
 SELECT * FROM forum_posts WHERE id = ?;

@@ -62,7 +62,7 @@ func main() {
 		log.Fatalf("run migrations: %v", err)
 	}
 
-	deleted, err := store.New(db.DB).ClearTables(ctx)
+	deleted, err := store.New(db.DB, cfg.NodeID).ClearTables(ctx)
 	if err != nil {
 		log.Fatalf("flush database: %v", err)
 	}

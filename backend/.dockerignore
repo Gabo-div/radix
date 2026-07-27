@@ -1,0 +1,13 @@
+# Runtime state must never end up baked into an image: the test network is
+# supposed to start from nothing but the seed zip.
+data/
+uploads/
+tmp/
+*.db
+*.db-*
+sessions.json
+.env
+.env.b
+.air.toml
+Dockerfile
+.dockerignore

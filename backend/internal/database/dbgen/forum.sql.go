@@ -11,18 +11,20 @@ import (
 )
 
 const addForumPost = `-- name: AddForumPost :exec
-INSERT INTO forum_posts (id, course_id, parent_id, user_id, title, body, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO forum_posts (id, course_id, parent_id, user_id, title, body, created_at, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddForumPostParams struct {
-	ID        string
-	CourseID  string
-	ParentID  sql.NullString
-	UserID    string
-	Title     string
-	Body      string
-	CreatedAt string
+	ID         string
+	CourseID   string
+	ParentID   sql.NullString
+	UserID     string
+	Title      string
+	Body       string
+	CreatedAt  string
+	Hlc        int64
+	OriginNode string
 }
 
 func (q *Queries) AddForumPost(ctx context.Context, arg AddForumPostParams) error {
@@ -34,12 +36,14 @@ func (q *Queries) AddForumPost(ctx context.Context, arg AddForumPostParams) erro
 		arg.Title,
 		arg.Body,
 		arg.CreatedAt,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
 
 const getForumPost = `-- name: GetForumPost :one
-SELECT id, course_id, parent_id, user_id, title, body, created_at FROM forum_posts WHERE id = ?
+SELECT id, course_id, parent_id, user_id, title, body, created_at, hlc, origin_node FROM forum_posts WHERE id = ?
 `
 
 func (q *Queries) GetForumPost(ctx context.Context, id string) (ForumPost, error) {
@@ -53,6 +57,8 @@ func (q *Queries) GetForumPost(ctx context.Context, id string) (ForumPost, error
 		&i.Title,
 		&i.Body,
 		&i.CreatedAt,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }

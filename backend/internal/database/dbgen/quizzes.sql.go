@@ -11,7 +11,8 @@ import (
 )
 
 const addQuiz = `-- name: AddQuiz :exec
-INSERT INTO quizzes (id, course_id, lesson_id, title, description, value) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO quizzes (id, course_id, lesson_id, title, description, value, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddQuizParams struct {
@@ -21,6 +22,8 @@ type AddQuizParams struct {
 	Title       string
 	Description string
 	Value       int64
+	Hlc         int64
+	OriginNode  string
 }
 
 func (q *Queries) AddQuiz(ctx context.Context, arg AddQuizParams) error {
@@ -31,13 +34,15 @@ func (q *Queries) AddQuiz(ctx context.Context, arg AddQuizParams) error {
 		arg.Title,
 		arg.Description,
 		arg.Value,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
 
 const addQuizQuestion = `-- name: AddQuizQuestion :exec
-INSERT INTO quiz_questions (id, quiz_id, ordinal, text, options_json, correct_index)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO quiz_questions (id, quiz_id, ordinal, text, options_json, correct_index, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddQuizQuestionParams struct {
@@ -47,6 +52,8 @@ type AddQuizQuestionParams struct {
 	Text         string
 	OptionsJson  string
 	CorrectIndex int64
+	Hlc          int64
+	OriginNode   string
 }
 
 func (q *Queries) AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams) error {
@@ -57,6 +64,8 @@ func (q *Queries) AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams
 		arg.Text,
 		arg.OptionsJson,
 		arg.CorrectIndex,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
@@ -71,7 +80,7 @@ func (q *Queries) DeleteQuizQuestions(ctx context.Context, quizID string) error 
 }
 
 const getQuiz = `-- name: GetQuiz :one
-SELECT id, course_id, lesson_id, title, description, value FROM quizzes WHERE id = ?
+SELECT id, course_id, lesson_id, title, description, value, hlc, origin_node FROM quizzes WHERE id = ?
 `
 
 func (q *Queries) GetQuiz(ctx context.Context, id string) (Quiz, error) {
@@ -84,12 +93,14 @@ func (q *Queries) GetQuiz(ctx context.Context, id string) (Quiz, error) {
 		&i.Title,
 		&i.Description,
 		&i.Value,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }
 
 const getQuizQuestions = `-- name: GetQuizQuestions :many
-SELECT id, quiz_id, ordinal, text, options_json, correct_index FROM quiz_questions WHERE quiz_id = ? ORDER BY ordinal
+SELECT id, quiz_id, ordinal, text, options_json, correct_index, hlc, origin_node FROM quiz_questions WHERE quiz_id = ? ORDER BY ordinal
 `
 
 func (q *Queries) GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error) {
@@ -108,6 +119,8 @@ func (q *Queries) GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQu
 			&i.Text,
 			&i.OptionsJson,
 			&i.CorrectIndex,
+			&i.Hlc,
+			&i.OriginNode,
 		); err != nil {
 			return nil, err
 		}
@@ -123,7 +136,7 @@ func (q *Queries) GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQu
 }
 
 const getQuizzesForCourse = `-- name: GetQuizzesForCourse :many
-SELECT id, course_id, lesson_id, title, description, value FROM quizzes WHERE course_id = ? ORDER BY rowid
+SELECT id, course_id, lesson_id, title, description, value, hlc, origin_node FROM quizzes WHERE course_id = ? ORDER BY rowid
 `
 
 func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error) {
@@ -142,6 +155,8 @@ func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Q
 			&i.Title,
 			&i.Description,
 			&i.Value,
+			&i.Hlc,
+			&i.OriginNode,
 		); err != nil {
 			return nil, err
 		}
@@ -157,13 +172,15 @@ func (q *Queries) GetQuizzesForCourse(ctx context.Context, courseID string) ([]Q
 }
 
 const updateQuiz = `-- name: UpdateQuiz :exec
-UPDATE quizzes SET title = ?, description = ?, value = ? WHERE id = ?
+UPDATE quizzes SET title = ?, description = ?, value = ?, hlc = ?, origin_node = ? WHERE id = ?
 `
 
 type UpdateQuizParams struct {
 	Title       string
 	Description string
 	Value       int64
+	Hlc         int64
+	OriginNode  string
 	ID          string
 }
 
@@ -172,6 +189,8 @@ func (q *Queries) UpdateQuiz(ctx context.Context, arg UpdateQuizParams) error {
 		arg.Title,
 		arg.Description,
 		arg.Value,
+		arg.Hlc,
+		arg.OriginNode,
 		arg.ID,
 	)
 	return err

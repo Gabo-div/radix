@@ -5,4 +5,5 @@ SELECT * FROM courses ORDER BY rowid;
 SELECT * FROM courses WHERE id = ?;
 
 -- name: AddCourse :exec
-INSERT INTO courses (id, title, description, category) VALUES (?, ?, ?, ?);
+INSERT INTO courses (id, title, description, category, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?);

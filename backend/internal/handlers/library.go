@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"radix-backend/internal/backupzip"
 	"radix-backend/internal/httpx"
 	"radix-backend/internal/models"
 	"radix-backend/internal/store"
@@ -179,7 +180,6 @@ func (h *Handler) CreateLibraryItem(c *echo.Context) error {
 	if err != nil {
 		return httpx.InternalError(c, "failed to create item")
 	}
-	h.Store.EnqueueSync(ctx, "ADD_LIBRARY_ITEM: "+stored.Title)
 	return httpx.OK(c, http.StatusCreated, stored)
 }
 
@@ -220,7 +220,7 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		return httpx.InternalError(c, "failed to store item")
 	}
 
-	savePath := filepath.Join(uploadsDir, fmt.Sprintf("%s_%s", newID, header.Filename))
+	savePath := filepath.Join(backupzip.UploadsDir, fmt.Sprintf("%s_%s", newID, header.Filename))
 	dst, err := os.Create(savePath)
 	if err != nil {
 		return httpx.InternalError(c, "failed to save file")
@@ -248,16 +248,20 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		return httpx.InternalError(c, "failed to store item")
 	}
 
-	h.Store.EnqueueSync(ctx, "UPLOAD_FILE: "+stored.Title)
 	return httpx.OK(c, http.StatusCreated, stored)
 }
 
 func (h *Handler) ServeLibraryFile(c *echo.Context) error {
-	id := c.Param("id")
-	item, err := h.Store.GetLibraryItem(c.Request().Context(), id)
+	item, err := h.Store.GetLibraryItem(c.Request().Context(), c.Param("id"))
 	if err != nil {
 		return httpx.NotFound(c, "item not found")
 	}
+	return h.serveFile(c, item)
+}
+
+// serveFile writes one library item's bytes to the response. Shared with the
+// peer-synchronisation route, which serves the same file to another node.
+func (h *Handler) serveFile(c *echo.Context, item *models.LibraryItem) error {
 	if item.FilePath == "" {
 		return httpx.NotFound(c, "no file uploaded for this item")
 	}
@@ -319,6 +323,5 @@ func (h *Handler) UpdateLibraryItem(c *echo.Context) error {
 	if err := h.Store.UpdateLibraryItem(ctx, item); err != nil {
 		return httpx.InternalError(c, "failed to update item")
 	}
-	h.Store.EnqueueSync(ctx, "UPDATE_LIBRARY_ITEM: "+id)
 	return httpx.OK(c, http.StatusOK, item)
 }

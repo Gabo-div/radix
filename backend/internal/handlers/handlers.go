@@ -56,9 +56,10 @@ type Store interface {
 	GetQuizzesForCourse(ctx context.Context, courseID string) ([]*models.Quiz, error)
 	GetQuizLinks(ctx context.Context, quizID string) ([]models.LibraryItem, []models.LessonUsage, error)
 
+	NodeID() string
 	GetSyncQueue(ctx context.Context) (models.SyncQueue, error)
-	EnqueueSync(ctx context.Context, action string) error
-	ClearSyncQueue(ctx context.Context) (int, error)
+	OpsSince(ctx context.Context, cursor int64, limit int) ([]models.SyncOp, error)
+	RecordReader(ctx context.Context, nodeID string, cursor int64) error
 
 	ListServerLogs(ctx context.Context, filter models.ServerLogFilter, search string, limit, offset int) ([]models.ServerLog, bool, error)
 	GetServerLogStats(ctx context.Context, from, to string) (models.ServerLogStats, error)
@@ -67,14 +68,31 @@ type Store interface {
 	ImportTables(ctx context.Context, dumps []models.TableDump) ([]models.TableImport, error)
 }
 
+// Syncer runs a synchronisation round on demand — the interface is declared
+// here, like Store, so the handlers don't depend on the dtn package.
+type Syncer interface {
+	Enabled() bool
+	Round(ctx context.Context) []models.SyncResult
+}
+
 type Handler struct {
 	Store            Store
 	LogBuffer        *middleware.LogBuffer
 	LogRetentionDays int
+	Syncer           Syncer
+	// SyncToken is the shared secret a peer presents to read this node's
+	// operation log. Empty disables that endpoint entirely.
+	SyncToken string
 }
 
-func New(s Store, logBuffer *middleware.LogBuffer, cfg *config.Config) *Handler {
-	return &Handler{Store: s, LogBuffer: logBuffer, LogRetentionDays: cfg.LogRetentionDays}
+func New(s Store, logBuffer *middleware.LogBuffer, cfg *config.Config, syncer Syncer) *Handler {
+	return &Handler{
+		Store:            s,
+		LogBuffer:        logBuffer,
+		LogRetentionDays: cfg.LogRetentionDays,
+		Syncer:           syncer,
+		SyncToken:        cfg.SyncToken,
+	}
 }
 
 // requireCourseAccess enforces that students only access courses they're
@@ -140,6 +158,11 @@ func (h *Handler) RegisterRoutes(api *echo.Group, a *auth.Auth) {
 
 	api.GET("/monitor", h.GetMonitor, a.RequireRole("admin"))
 	api.POST("/monitor/sync", h.ForceSync, a.RequireRole("admin"))
+
+	// Peer-to-peer: read-only, authenticated with the shared sync token rather
+	// than a user session (see GetSyncOps).
+	api.GET("/sync/ops", h.GetSyncOps)
+	api.GET("/sync/file/:id", h.GetSyncFile)
 
 	api.GET("/backup/export", h.ExportBackup, a.RequireRole("admin"))
 	api.POST("/backup/import", h.ImportBackup, a.RequireRole("admin"))

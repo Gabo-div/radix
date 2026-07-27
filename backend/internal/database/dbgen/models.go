@@ -13,6 +13,8 @@ type Course struct {
 	Title       string
 	Description string
 	Category    string
+	Hlc         int64
+	OriginNode  string
 }
 
 type CourseEnrollment struct {
@@ -32,13 +34,15 @@ type ForumLink struct {
 }
 
 type ForumPost struct {
-	ID        string
-	CourseID  string
-	ParentID  sql.NullString
-	UserID    string
-	Title     string
-	Body      string
-	CreatedAt string
+	ID         string
+	CourseID   string
+	ParentID   sql.NullString
+	UserID     string
+	Title      string
+	Body       string
+	CreatedAt  string
+	Hlc        int64
+	OriginNode string
 }
 
 type Lesson struct {
@@ -46,6 +50,8 @@ type Lesson struct {
 	CourseID    string
 	Title       string
 	ContentText string
+	Hlc         int64
+	OriginNode  string
 }
 
 type LessonLink struct {
@@ -68,6 +74,8 @@ type LibraryItem struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 }
 
 type Quiz struct {
@@ -77,13 +85,17 @@ type Quiz struct {
 	Title       string
 	Description string
 	Value       int64
+	Hlc         int64
+	OriginNode  string
 }
 
 type QuizGrade struct {
-	UserID   string
-	QuizID   string
-	Grade    int64
-	GradedAt string
+	UserID     string
+	QuizID     string
+	Grade      int64
+	GradedAt   string
+	Hlc        int64
+	OriginNode string
 }
 
 type QuizLink struct {
@@ -99,6 +111,8 @@ type QuizQuestion struct {
 	Text         string
 	OptionsJson  string
 	CorrectIndex int64
+	Hlc          int64
+	OriginNode   string
 }
 
 type ServerLog struct {
@@ -113,10 +127,30 @@ type ServerLogsFt struct {
 	Message string
 }
 
-type SyncLog struct {
-	ID        int64
-	Action    string
-	CreatedAt string
+type SyncOp struct {
+	Seq        int64
+	OriginNode string
+	TableName  string
+	PkJson     string
+	Op         string
+	Hlc        int64
+	Payload    string
+	Label      string
+	CreatedAt  string
+}
+
+type SyncPeer struct {
+	Peer       string
+	NodeID     string
+	LastSeq    int64
+	LastSyncAt string
+	LastError  string
+}
+
+type SyncReader struct {
+	NodeID   string
+	AckedSeq int64
+	LastSeen string
 }
 
 type User struct {
@@ -125,6 +159,8 @@ type User struct {
 	Email        string
 	PasswordHash string
 	Role         string
+	Hlc          int64
+	OriginNode   string
 }
 
 type UserCompletedLesson struct {

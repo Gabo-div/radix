@@ -86,7 +86,6 @@ func (h *Handler) CreateForumPost(c *echo.Context) error {
 	if err := h.Store.AddForumPost(ctx, post); err != nil {
 		return httpx.InternalError(c, "failed to create post")
 	}
-	h.Store.EnqueueSync(ctx, "ADD_FORUM_POST: "+post.ID)
 
 	post.AuthorName = author.Name
 	post.AuthorRole = author.Role

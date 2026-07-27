@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"radix-backend/internal/backupzip"
 	"radix-backend/internal/config"
 	"radix-backend/internal/database"
 	"radix-backend/internal/store"
@@ -17,7 +18,7 @@ import (
 const seedZip = "../../../seeds/radix-seed-backup.zip"
 
 // TestSeedBackupImports runs the shipped seed zip through the real import path
-// (readDumps -> store.ImportTables) and checks the content actually landed:
+// (backupzip.ReadDumps -> store.ImportTables) and checks the content actually landed:
 // every course with its four lessons, every quiz with its questions, the
 // [[id]] links resolved, and grades attached to real students. It is the check
 // that keeps the seed zip and the schema from drifting apart — regenerate the
@@ -35,7 +36,7 @@ func TestSeedBackupImports(t *testing.T) {
 	}
 	defer zr.Close()
 
-	dumps, err := readDumps(&zr.Reader)
+	dumps, err := backupzip.ReadDumps(&zr.Reader)
 	if err != nil {
 		t.Fatalf("leer dumps: %v", err)
 	}
@@ -47,16 +48,16 @@ func TestSeedBackupImports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("importar: %v", err)
 	}
-	inserted := map[string]int{}
+	applied := map[string]int{}
 	for _, res := range results {
-		inserted[res.Name] = res.Inserted
+		applied[res.Name] = res.Applied
 		if res.Skipped != 0 {
 			t.Errorf("%s: %d filas omitidas en una base vacía", res.Name, res.Skipped)
 		}
 	}
 	// Operational tables must not travel in a content backup.
 	for _, table := range []string{"sync_log", "server_logs"} {
-		if _, ok := inserted[table]; ok {
+		if _, ok := applied[table]; ok {
 			t.Errorf("el zip no debería traer %s", table)
 		}
 	}
@@ -176,8 +177,8 @@ func TestSeedBackupImports(t *testing.T) {
 		t.Fatalf("reimportar: %v", err)
 	}
 	for _, res := range again {
-		if res.Inserted != 0 {
-			t.Errorf("%s: %d filas insertadas al reimportar, se esperaba 0", res.Name, res.Inserted)
+		if res.Applied != 0 {
+			t.Errorf("%s: %d filas aplicadas al reimportar, se esperaba 0", res.Name, res.Applied)
 		}
 	}
 }
@@ -186,6 +187,14 @@ func TestSeedBackupImports(t *testing.T) {
 // schema.sql. Not database.Migrate: the local-only tursogo driver rejects
 // 00003's DROP COLUMN and has no fts5 module (see store's backup_test.go).
 func newTestStore(t *testing.T) *store.Store {
+	t.Helper()
+	return newNodeStore(t, "test-node")
+}
+
+// newNodeStore is the same, with an explicit node id — what the peer
+// synchronisation tests need, since a node's identity is what its writes are
+// stamped with.
+func newNodeStore(t *testing.T, nodeID string) *store.Store {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, &config.Config{DBPath: filepath.Join(t.TempDir(), "test.db")})
@@ -217,5 +226,5 @@ func newTestStore(t *testing.T) *store.Store {
 	if err := db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&on); err != nil || on != 1 {
 		t.Fatalf("foreign_keys sigue desactivado (%v, err=%v)", on, err)
 	}
-	return store.New(db.DB)
+	return store.New(db.DB, nodeID)
 }

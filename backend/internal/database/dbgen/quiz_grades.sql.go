@@ -29,16 +29,20 @@ func (q *Queries) GetUserCoursePoints(ctx context.Context, arg GetUserCoursePoin
 }
 
 const upsertQuizGrade = `-- name: UpsertQuizGrade :exec
-INSERT INTO quiz_grades (user_id, quiz_id, grade, graded_at)
-VALUES (?, ?, ?, ?)
-ON CONFLICT (user_id, quiz_id) DO UPDATE SET grade = excluded.grade, graded_at = excluded.graded_at
+INSERT INTO quiz_grades (user_id, quiz_id, grade, graded_at, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id, quiz_id) DO UPDATE SET
+    grade = excluded.grade, graded_at = excluded.graded_at,
+    hlc = excluded.hlc, origin_node = excluded.origin_node
 `
 
 type UpsertQuizGradeParams struct {
-	UserID   string
-	QuizID   string
-	Grade    int64
-	GradedAt string
+	UserID     string
+	QuizID     string
+	Grade      int64
+	GradedAt   string
+	Hlc        int64
+	OriginNode string
 }
 
 func (q *Queries) UpsertQuizGrade(ctx context.Context, arg UpsertQuizGradeParams) error {
@@ -47,6 +51,8 @@ func (q *Queries) UpsertQuizGrade(ctx context.Context, arg UpsertQuizGradeParams
 		arg.QuizID,
 		arg.Grade,
 		arg.GradedAt,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }

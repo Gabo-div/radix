@@ -20,12 +20,19 @@ type Querier interface {
 	AddQuizLink(ctx context.Context, arg AddQuizLinkParams) error
 	AddQuizQuestion(ctx context.Context, arg AddQuizQuestionParams) error
 	AddServerLog(ctx context.Context, arg AddServerLogParams) error
-	AddSyncLog(ctx context.Context, arg AddSyncLogParams) error
+	// OR IGNORE is the idempotency: an op already known by identity
+	// (origin_node, table_name, pk_json, hlc) is a no-op, which is what stops an op
+	// from being applied twice or bouncing between two nodes forever.
+	AddSyncOp(ctx context.Context, arg AddSyncOpParams) error
 	AddUser(ctx context.Context, arg AddUserParams) error
-	ClearSyncLog(ctx context.Context) error
+	// The log doubles as the tombstone table: an upsert arriving after a delete of
+	// the same row at an equal or newer version must not resurrect it.
+	CountDeletesNotOlderThan(ctx context.Context, arg CountDeletesNotOlderThanParams) (int64, error)
 	CountServerLogsByLevel(ctx context.Context, arg CountServerLogsByLevelParams) ([]CountServerLogsByLevelRow, error)
 	CountServerLogsTotal(ctx context.Context, arg CountServerLogsTotalParams) (int64, error)
-	CountSyncLog(ctx context.Context) (int64, error)
+	// Ops no peer has confirmed reading yet. With no known reader that's every op,
+	// which is the honest answer: nothing has been delivered anywhere.
+	CountUnackedOps(ctx context.Context) (int64, error)
 	DeleteCompletedLessons(ctx context.Context, userID string) error
 	DeleteLessonLinks(ctx context.Context, sourceLessonID string) error
 	DeleteOldServerLogs(ctx context.Context, timestamp string) (int64, error)
@@ -58,17 +65,32 @@ type Querier interface {
 	GetQuizLinkedLibraryItems(ctx context.Context, sourceQuizID string) ([]GetQuizLinkedLibraryItemsRow, error)
 	GetQuizQuestions(ctx context.Context, quizID string) ([]QuizQuestion, error)
 	GetQuizzesForCourse(ctx context.Context, courseID string) ([]Quiz, error)
+	GetSyncPeer(ctx context.Context, peer string) (SyncPeer, error)
 	GetUnenrolledStudents(ctx context.Context, courseID string) ([]GetUnenrolledStudentsRow, error)
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByRole(ctx context.Context, role string) (User, error)
 	GetUserCoursePoints(ctx context.Context, arg GetUserCoursePointsParams) (interface{}, error)
+	HasSyncOp(ctx context.Context, arg HasSyncOpParams) (int64, error)
 	IsEnrolled(ctx context.Context, arg IsEnrolledParams) (int64, error)
 	LikePost(ctx context.Context, arg LikePostParams) error
+	// Inventory of the library's files, used by peer synchronisation to work out
+	// which ones this node knows about but does not hold. Items with no file are
+	// filtered in Go rather than in a WHERE here.
+	//
+	// Keep this comment ASCII: a non-ASCII character in a query comment makes sqlc
+	// truncate the generated SQL by the extra bytes (an em dash here produced
+	// "SELECT id, file_path FROM library_ite").
+	ListLibraryFiles(ctx context.Context) ([]ListLibraryFilesRow, error)
 	ListServerLogs(ctx context.Context, arg ListServerLogsParams) ([]ServerLog, error)
-	ListSyncLog(ctx context.Context) ([]string, error)
+	ListSyncPeers(ctx context.Context) ([]SyncPeer, error)
+	MaxOpSeq(ctx context.Context) (interface{}, error)
+	OpsSince(ctx context.Context, arg OpsSinceParams) ([]SyncOp, error)
+	RecordSyncPeer(ctx context.Context, arg RecordSyncPeerParams) error
+	RecordSyncReader(ctx context.Context, arg RecordSyncReaderParams) error
 	SearchServerLogs(ctx context.Context, arg SearchServerLogsParams) ([]ServerLog, error)
 	TotalDiskKB(ctx context.Context) (interface{}, error)
+	UnackedOpLabels(ctx context.Context, limit int64) ([]string, error)
 	UnenrollStudent(ctx context.Context, arg UnenrollStudentParams) error
 	UnlikePost(ctx context.Context, arg UnlikePostParams) error
 	UpdateLesson(ctx context.Context, arg UpdateLessonParams) error

@@ -24,7 +24,8 @@ func (q *Queries) AddCompletedLesson(ctx context.Context, arg AddCompletedLesson
 }
 
 const addUser = `-- name: AddUser :exec
-INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)
+INSERT INTO users (id, name, email, password_hash, role, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddUserParams struct {
@@ -33,6 +34,8 @@ type AddUserParams struct {
 	Email        string
 	PasswordHash string
 	Role         string
+	Hlc          int64
+	OriginNode   string
 }
 
 func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) error {
@@ -42,6 +45,8 @@ func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) error {
 		arg.Email,
 		arg.PasswordHash,
 		arg.Role,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
@@ -83,7 +88,7 @@ func (q *Queries) GetCompletedLessonIDs(ctx context.Context, userID string) ([]s
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, email, password_hash, role FROM users WHERE id = ?
+SELECT id, name, email, password_hash, role, hlc, origin_node FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -95,12 +100,14 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, role FROM users WHERE email = ?
+SELECT id, name, email, password_hash, role, hlc, origin_node FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -112,12 +119,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }
 
 const getUserByRole = `-- name: GetUserByRole :one
-SELECT id, name, email, password_hash, role FROM users WHERE role = ? LIMIT 1
+SELECT id, name, email, password_hash, role, hlc, origin_node FROM users WHERE role = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByRole(ctx context.Context, role string) (User, error) {
@@ -129,21 +138,31 @@ func (q *Queries) GetUserByRole(ctx context.Context, role string) (User, error) 
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }
 
 const updateUser = `-- name: UpdateUser :exec
-UPDATE users SET name = ?, role = ? WHERE id = ?
+UPDATE users SET name = ?, role = ?, hlc = ?, origin_node = ? WHERE id = ?
 `
 
 type UpdateUserParams struct {
-	Name string
-	Role string
-	ID   string
+	Name       string
+	Role       string
+	Hlc        int64
+	OriginNode string
+	ID         string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.ExecContext(ctx, updateUser, arg.Name, arg.Role, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateUser,
+		arg.Name,
+		arg.Role,
+		arg.Hlc,
+		arg.OriginNode,
+		arg.ID,
+	)
 	return err
 }

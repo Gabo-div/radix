@@ -104,6 +104,11 @@ func (a *Auth) Middleware() echo.MiddlewareFunc {
 			if path == "/api/v1/auth/login" || path == "/api/v1/auth/guest" {
 				return next(c)
 			}
+			// Peer synchronisation has no user behind it: those handlers check
+			// the shared sync token themselves (handlers.GetSyncOps).
+			if strings.HasPrefix(path, "/api/v1/sync/") {
+				return next(c)
+			}
 
 			var token string
 			auth := c.Request().Header.Get("Authorization")

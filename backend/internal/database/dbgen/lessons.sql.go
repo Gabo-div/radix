@@ -11,7 +11,8 @@ import (
 )
 
 const addLesson = `-- name: AddLesson :exec
-INSERT INTO lessons (id, course_id, title, content_text) VALUES (?, ?, ?, ?)
+INSERT INTO lessons (id, course_id, title, content_text, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type AddLessonParams struct {
@@ -19,6 +20,8 @@ type AddLessonParams struct {
 	CourseID    string
 	Title       string
 	ContentText string
+	Hlc         int64
+	OriginNode  string
 }
 
 func (q *Queries) AddLesson(ctx context.Context, arg AddLessonParams) error {
@@ -27,6 +30,8 @@ func (q *Queries) AddLesson(ctx context.Context, arg AddLessonParams) error {
 		arg.CourseID,
 		arg.Title,
 		arg.ContentText,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
@@ -74,7 +79,7 @@ func (q *Queries) GetAllLessonsWithCourse(ctx context.Context) ([]GetAllLessonsW
 }
 
 const getLesson = `-- name: GetLesson :one
-SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, quizzes.id AS quiz_id
+SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, lessons.hlc, lessons.origin_node, quizzes.id AS quiz_id
 FROM lessons
 LEFT JOIN quizzes ON quizzes.lesson_id = lessons.id
 WHERE lessons.id = ?
@@ -85,6 +90,8 @@ type GetLessonRow struct {
 	CourseID    string
 	Title       string
 	ContentText string
+	Hlc         int64
+	OriginNode  string
 	QuizID      sql.NullString
 }
 
@@ -96,13 +103,15 @@ func (q *Queries) GetLesson(ctx context.Context, id string) (GetLessonRow, error
 		&i.CourseID,
 		&i.Title,
 		&i.ContentText,
+		&i.Hlc,
+		&i.OriginNode,
 		&i.QuizID,
 	)
 	return i, err
 }
 
 const getLessonsForCourse = `-- name: GetLessonsForCourse :many
-SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, quizzes.id AS quiz_id
+SELECT lessons.id, lessons.course_id, lessons.title, lessons.content_text, lessons.hlc, lessons.origin_node, quizzes.id AS quiz_id
 FROM lessons
 LEFT JOIN quizzes ON quizzes.lesson_id = lessons.id
 WHERE lessons.course_id = ?
@@ -114,6 +123,8 @@ type GetLessonsForCourseRow struct {
 	CourseID    string
 	Title       string
 	ContentText string
+	Hlc         int64
+	OriginNode  string
 	QuizID      sql.NullString
 }
 
@@ -131,6 +142,8 @@ func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]G
 			&i.CourseID,
 			&i.Title,
 			&i.ContentText,
+			&i.Hlc,
+			&i.OriginNode,
 			&i.QuizID,
 		); err != nil {
 			return nil, err
@@ -147,16 +160,24 @@ func (q *Queries) GetLessonsForCourse(ctx context.Context, courseID string) ([]G
 }
 
 const updateLesson = `-- name: UpdateLesson :exec
-UPDATE lessons SET title = ?, content_text = ? WHERE id = ?
+UPDATE lessons SET title = ?, content_text = ?, hlc = ?, origin_node = ? WHERE id = ?
 `
 
 type UpdateLessonParams struct {
 	Title       string
 	ContentText string
+	Hlc         int64
+	OriginNode  string
 	ID          string
 }
 
 func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) error {
-	_, err := q.db.ExecContext(ctx, updateLesson, arg.Title, arg.ContentText, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateLesson,
+		arg.Title,
+		arg.ContentText,
+		arg.Hlc,
+		arg.OriginNode,
+		arg.ID,
+	)
 	return err
 }

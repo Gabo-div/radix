@@ -11,5 +11,27 @@ services:
       - turso-data:/var/lib/sqld
     restart: unless-stopped
 
+  # Second edge server's database, for trying peer synchronisation on one
+  # machine. Not started by default:
+  #
+  #   docker compose --profile peer up -d
+  #
+  # It's a separate sqld with its own volume, not a replica — the two nodes are
+  # meant to diverge and then reconcile through the operation log, which is the
+  # whole point. See "Two nodes on one machine" in the README.
+  turso-db-b:
+    profiles: ["peer"]
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    container_name: radix-turso-db-b
+    environment:
+      SQLD_NODE: primary
+    ports:
+      - "8081:8080"
+      - "5002:5001"
+    volumes:
+      - turso-data-b:/var/lib/sqld
+    restart: unless-stopped
+
 volumes:
   turso-data:
+  turso-data-b:

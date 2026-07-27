@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -56,7 +55,6 @@ func (h *Handler) CreateQuiz(c *echo.Context) error {
 		return httpx.InternalError(c, "failed to create quiz")
 	}
 
-	h.Store.EnqueueSync(ctx, "ADD_QUIZ: "+quiz.ID)
 	return httpx.OK(c, http.StatusCreated, quiz)
 }
 
@@ -112,7 +110,6 @@ func (h *Handler) UpdateQuiz(c *echo.Context) error {
 	if err := h.Store.UpdateQuiz(ctx, quiz); err != nil {
 		return httpx.InternalError(c, "failed to update quiz")
 	}
-	h.Store.EnqueueSync(ctx, "UPDATE_QUIZ: "+id)
 	return httpx.OK(c, http.StatusOK, quiz)
 }
 
@@ -224,8 +221,6 @@ func (h *Handler) SubmitQuiz(c *echo.Context) error {
 	if err != nil {
 		return httpx.InternalError(c, "failed to load points")
 	}
-
-	h.Store.EnqueueSync(ctx, fmt.Sprintf("SUBMIT_QUIZ: %s | Score: %d%% | Grade: %d/%d", quizID, score, grade, quiz.Value))
 
 	return httpx.OK(c, http.StatusOK, map[string]interface{}{
 		"score":       score,

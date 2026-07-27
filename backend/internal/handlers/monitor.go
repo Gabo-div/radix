@@ -23,14 +23,3 @@ func (h *Handler) GetMonitor(c *echo.Context) error {
 		"syncQueue":   syncQ,
 	})
 }
-
-func (h *Handler) ForceSync(c *echo.Context) error {
-	synced, err := h.Store.ClearSyncQueue(c.Request().Context())
-	if err != nil {
-		return httpx.InternalError(c, "failed to sync")
-	}
-	return httpx.OK(c, http.StatusOK, map[string]interface{}{
-		"synced":  synced,
-		"message": "Sincronización oportunista completada exitosamente",
-	})
-}

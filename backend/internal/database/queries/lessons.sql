@@ -12,10 +12,11 @@ LEFT JOIN quizzes ON quizzes.lesson_id = lessons.id
 WHERE lessons.id = ?;
 
 -- name: AddLesson :exec
-INSERT INTO lessons (id, course_id, title, content_text) VALUES (?, ?, ?, ?);
+INSERT INTO lessons (id, course_id, title, content_text, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: UpdateLesson :exec
-UPDATE lessons SET title = ?, content_text = ? WHERE id = ?;
+UPDATE lessons SET title = ?, content_text = ?, hlc = ?, origin_node = ? WHERE id = ?;
 
 -- name: GetAllLessonsWithCourse :many
 SELECT lessons.id, lessons.course_id, lessons.title, courses.title AS course_title

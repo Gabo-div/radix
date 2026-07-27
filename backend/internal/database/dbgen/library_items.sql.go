@@ -13,8 +13,9 @@ import (
 const addLibraryItem = `-- name: AddLibraryItem :exec
 INSERT INTO library_items (
     id, title, type, category, size_kb, mime_type, original_filename,
-    uploaded_at, modified_at, duration, resolution, file_path, uploaded_by
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    uploaded_at, modified_at, duration, resolution, file_path, uploaded_by,
+    hlc, origin_node
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddLibraryItemParams struct {
@@ -31,6 +32,8 @@ type AddLibraryItemParams struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 }
 
 func (q *Queries) AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) error {
@@ -48,12 +51,14 @@ func (q *Queries) AddLibraryItem(ctx context.Context, arg AddLibraryItemParams) 
 		arg.Resolution,
 		arg.FilePath,
 		arg.UploadedBy,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
 
 const getCourseLibraryResources = `-- name: GetCourseLibraryResources :many
-SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, library_items.hlc, library_items.origin_node, users.name AS uploaded_by_name
 FROM library_items
 LEFT JOIN users ON library_items.uploaded_by = users.id
 WHERE library_items.id IN (
@@ -89,6 +94,8 @@ type GetCourseLibraryResourcesRow struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 	UploadedByName   sql.NullString
 }
 
@@ -115,6 +122,8 @@ func (q *Queries) GetCourseLibraryResources(ctx context.Context, arg GetCourseLi
 			&i.Resolution,
 			&i.FilePath,
 			&i.UploadedBy,
+			&i.Hlc,
+			&i.OriginNode,
 			&i.UploadedByName,
 		); err != nil {
 			return nil, err
@@ -131,7 +140,7 @@ func (q *Queries) GetCourseLibraryResources(ctx context.Context, arg GetCourseLi
 }
 
 const getLibraryItem = `-- name: GetLibraryItem :one
-SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name FROM library_items
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, library_items.hlc, library_items.origin_node, users.name AS uploaded_by_name FROM library_items
 LEFT JOIN users ON library_items.uploaded_by = users.id
 WHERE library_items.id = ?
 `
@@ -150,6 +159,8 @@ type GetLibraryItemRow struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 	UploadedByName   sql.NullString
 }
 
@@ -170,13 +181,15 @@ func (q *Queries) GetLibraryItem(ctx context.Context, id string) (GetLibraryItem
 		&i.Resolution,
 		&i.FilePath,
 		&i.UploadedBy,
+		&i.Hlc,
+		&i.OriginNode,
 		&i.UploadedByName,
 	)
 	return i, err
 }
 
 const getLibraryItems = `-- name: GetLibraryItems :many
-SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name FROM library_items
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, library_items.hlc, library_items.origin_node, users.name AS uploaded_by_name FROM library_items
 LEFT JOIN users ON library_items.uploaded_by = users.id
 ORDER BY library_items.rowid
 `
@@ -195,6 +208,8 @@ type GetLibraryItemsRow struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 	UploadedByName   sql.NullString
 }
 
@@ -221,8 +236,49 @@ func (q *Queries) GetLibraryItems(ctx context.Context) ([]GetLibraryItemsRow, er
 			&i.Resolution,
 			&i.FilePath,
 			&i.UploadedBy,
+			&i.Hlc,
+			&i.OriginNode,
 			&i.UploadedByName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryFiles = `-- name: ListLibraryFiles :many
+SELECT id, file_path FROM library_items
+`
+
+type ListLibraryFilesRow struct {
+	ID       string
+	FilePath string
+}
+
+// Inventory of the library's files, used by peer synchronisation to work out
+// which ones this node knows about but does not hold. Items with no file are
+// filtered in Go rather than in a WHERE here.
+//
+// Keep this comment ASCII: a non-ASCII character in a query comment makes sqlc
+// truncate the generated SQL by the extra bytes (an em dash here produced
+// "SELECT id, file_path FROM library_ite").
+func (q *Queries) ListLibraryFiles(ctx context.Context) ([]ListLibraryFilesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLibraryFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLibraryFilesRow
+	for rows.Next() {
+		var i ListLibraryFilesRow
+		if err := rows.Scan(&i.ID, &i.FilePath); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -250,7 +306,7 @@ func (q *Queries) TotalDiskKB(ctx context.Context) (interface{}, error) {
 const updateLibraryItem = `-- name: UpdateLibraryItem :exec
 UPDATE library_items SET
     title = ?, category = ?, size_kb = ?, mime_type = ?, original_filename = ?,
-    duration = ?, resolution = ?, file_path = ?
+    duration = ?, resolution = ?, file_path = ?, hlc = ?, origin_node = ?
 WHERE id = ?
 `
 
@@ -263,6 +319,8 @@ type UpdateLibraryItemParams struct {
 	Duration         sql.NullString
 	Resolution       sql.NullString
 	FilePath         string
+	Hlc              int64
+	OriginNode       string
 	ID               string
 }
 
@@ -276,6 +334,8 @@ func (q *Queries) UpdateLibraryItem(ctx context.Context, arg UpdateLibraryItemPa
 		arg.Duration,
 		arg.Resolution,
 		arg.FilePath,
+		arg.Hlc,
+		arg.OriginNode,
 		arg.ID,
 	)
 	return err

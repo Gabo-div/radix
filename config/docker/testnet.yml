@@ -1,0 +1,144 @@
+# Red de prueba: varios servidores de borde completos (base de datos + backend +
+# frontend) hablando entre sí, en una sola máquina.
+#
+#   docker compose -f config/docker/testnet.yml up --build          # 2 nodos
+#   docker compose -f config/docker/testnet.yml --profile three up  # 3 nodos
+#   docker compose -f config/docker/testnet.yml down                # no queda nada
+#
+# Nada de esto es persistente y es a propósito: ningún volumen con nombre, los
+# datos de sqld y los archivos subidos viven en tmpfs, y cada arranque vuelve a
+# importar el mismo zip semilla. Para volver al estado inicial se apaga y se
+# levanta otra vez.
+#
+# Solo se publican los puertos de los frontends y de los backends. Las bases de
+# datos no salen de la red del compose: se llega a ellas únicamente a través de
+# su propio backend, igual que en el equipo real.
+#
+#   Nodo A   http://localhost:5173   backend en :1323
+#   Nodo B   http://localhost:5174   backend en :1324
+#   Nodo C   http://localhost:5175   backend en :1325   (perfil "three")
+#
+# Credenciales: cualquier correo @radix.edu del zip semilla con la contraseña
+# radix2024. El docente es elena.vasquez@radix.edu.
+
+name: radix-testnet
+
+x-db: &db
+  image: ghcr.io/tursodatabase/libsql-server:latest
+  environment:
+    SQLD_NODE: primary
+  # En RAM: al apagar el contenedor no queda rastro de la base.
+  tmpfs:
+    - /var/lib/sqld
+  restart: "no"
+
+x-backend: &backend
+  build:
+    context: ../../backend
+    dockerfile: Dockerfile
+  image: radix-testnet-backend
+  volumes:
+    # Solo de lectura y como entrada, no como estado: cada nodo arranca con el
+    # mismo contenido y desde ahí divergen.
+    - ../../seeds/radix-seed-backup.zip:/seed/radix-seed-backup.zip:ro
+  tmpfs:
+    - /app/uploads
+  restart: "no"
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  CORS_ORIGINS: "*"
+  SEED_ZIP: /seed/radix-seed-backup.zip
+  # Compartido por todos los nodos: es lo que autentica GET /sync/ops entre
+  # ellos. Un secreto de juguete para un entorno de juguete.
+  SYNC_TOKEN: ${SYNC_TOKEN:-radix-testnet}
+  # Mucho más corto que los 60 s por defecto, para no quedarse mirando la
+  # pantalla esperando a que pase algo.
+  SYNC_INTERVAL_SECONDS: 15
+
+x-frontend: &frontend
+  build:
+    context: ../../frontend
+    dockerfile: Dockerfile
+  image: radix-testnet-frontend
+  restart: "no"
+
+services:
+  # ---------------------------------------------------------------- nodo A ---
+  db-a:
+    <<: *db
+
+  backend-a:
+    <<: *backend
+    depends_on: [db-a]
+    environment:
+      <<: *backend-env
+      NODE_ID: edge-a
+      TURSO_URL: http://db-a:8080
+      SYNC_PEERS: http://backend-b:1323
+    ports:
+      - "1323:1323"
+
+  frontend-a:
+    <<: *frontend
+    depends_on: [backend-a]
+    environment:
+      BACKEND_URL: http://backend-a:1323
+    ports:
+      - "5173:80"
+
+  # ---------------------------------------------------------------- nodo B ---
+  db-b:
+    <<: *db
+
+  backend-b:
+    <<: *backend
+    depends_on: [db-b]
+    environment:
+      <<: *backend-env
+      NODE_ID: central
+      TURSO_URL: http://db-b:8080
+      SYNC_PEERS: http://backend-a:1323
+    ports:
+      - "1324:1323"
+
+  frontend-b:
+    <<: *frontend
+    depends_on: [backend-b]
+    environment:
+      BACKEND_URL: http://backend-b:1323
+    ports:
+      - "5174:80"
+
+  # ---------------------------------------------------------------- nodo C ---
+  # Tercer nodo, opcional (--profile three). Solo tira de B, y B no sabe que C
+  # existe: así se ve que lo escrito en A llega a C sin que A y C se hablen
+  # nunca, que es lo que un respaldo ZIP no puede hacer. La contrapartida es que
+  # el enlace de C es de una sola dirección — lo que se escriba en C se queda
+  # ahí. Para que sea bidireccional hay que agregar http://backend-c:1323 a
+  # SYNC_PEERS de backend-b, y entonces B avisa de un nodo caído cada 15 s
+  # cuando se levanta el entorno sin este perfil.
+  db-c:
+    <<: *db
+    profiles: ["three"]
+
+  backend-c:
+    <<: *backend
+    profiles: ["three"]
+    depends_on: [db-c]
+    environment:
+      <<: *backend-env
+      NODE_ID: edge-c
+      TURSO_URL: http://db-c:8080
+      SYNC_PEERS: http://backend-b:1323
+    ports:
+      - "1325:1323"
+
+  frontend-c:
+    <<: *frontend
+    profiles: ["three"]
+    depends_on: [backend-c]
+    environment:
+      BACKEND_URL: http://backend-c:1323
+    ports:
+      - "5175:80"

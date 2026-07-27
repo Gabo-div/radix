@@ -33,15 +33,18 @@ func internalTable(name string) bool {
 		strings.HasPrefix(name, "server_logs_fts")
 }
 
-// skippedTable additionally excludes, from backups only, the two tables that
-// are per-node operational history rather than shared content: this edge
-// server's DTN queue and its own log stream. Merging another node's rows into
-// them would be meaningless noise. ClearTables does wipe them — flushing this
-// node's database means flushing its history too.
+// skippedTable additionally excludes, from backups only, the tables that are
+// per-node operational state rather than shared content: this edge server's log
+// stream and everything sync_* (the operation log, the cursors into its peers,
+// and how far its readers have got). Those describe this node's relationship
+// with its neighbours; importing another node's copy would be meaningless, and
+// letting a peer write rows into them through an import would be a hole.
+// ClearTables does wipe them — flushing this node's database means flushing its
+// history too.
 func skippedTable(name string) bool {
 	return internalTable(name) ||
 		name == "server_logs" ||
-		name == "sync_log"
+		strings.HasPrefix(name, "sync_")
 }
 
 // tableNames lists the backed-up tables in FK-dependency order: a parent
@@ -199,11 +202,26 @@ func (s *Store) exportTable(ctx context.Context, name string) (models.TableDump,
 	}
 	defer rows.Close()
 
-	cols, err := rows.Columns()
+	scanned, err := scanRowMaps(rows)
 	if err != nil {
 		return dump, err
 	}
+	if len(scanned) > 0 {
+		dump.Rows = scanned
+	}
+	return dump, nil
+}
 
+// scanRowMaps reads a `SELECT *` result into column-name → value maps. Shared by
+// the backup export and the operation log, which both need a row without
+// knowing its shape.
+func scanRowMaps(rows *sql.Rows) ([]map[string]any, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var out []map[string]any
 	for rows.Next() {
 		vals := make([]any, len(cols))
 		ptrs := make([]any, len(cols))
@@ -211,7 +229,7 @@ func (s *Store) exportTable(ctx context.Context, name string) (models.TableDump,
 			ptrs[i] = &vals[i]
 		}
 		if err := rows.Scan(ptrs...); err != nil {
-			return dump, err
+			return nil, err
 		}
 		row := make(map[string]any, len(cols))
 		for i, col := range cols {
@@ -224,21 +242,27 @@ func (s *Store) exportTable(ctx context.Context, name string) (models.TableDump,
 				row[col] = vals[i]
 			}
 		}
-		dump.Rows = append(dump.Rows, row)
+		out = append(out, row)
 	}
-	return dump, rows.Err()
+	return out, rows.Err()
 }
 
-// ImportTables merges dumps into the existing data — nothing is deleted. Rows
-// go in with INSERT OR IGNORE, so a row that collides with one already there
-// (same primary key, or a UNIQUE like users.email / the one-quiz-per-lesson
-// index) is skipped and the local row wins. Re-importing the same backup is
-// therefore a no-op, and importing another node's backup adds only what's
-// missing here.
+// ImportTables merges dumps into the existing data — nothing is deleted.
+//
+// A row that collides with one already here is resolved by version, not by
+// arrival: the incoming row replaces the local one when its (hlc, origin_node)
+// pair is greater, and is dropped otherwise (see insertRows). That's what makes
+// this a real merge between edge servers rather than "whoever wrote first keeps
+// it" — an edit made on another node now actually lands. Re-importing the same
+// backup is still a no-op, since equal versions don't overwrite.
+//
+// Tables with no version columns (the junction tables: enrolments, likes, wiki
+// links) keep the old skip-on-collision behaviour: they hold set membership, so
+// there is no field an incoming row could update.
 //
 // Everything runs in one transaction: unknown tables/columns or a foreign key
 // violation abort the whole import, never half of it. The per-table
-// inserted/skipped counts are what gets reported back to the caller.
+// applied/skipped counts are what gets reported back to the caller.
 func (s *Store) ImportTables(ctx context.Context, dumps []models.TableDump) ([]models.TableImport, error) {
 	names, err := s.tableNames(ctx)
 	if err != nil {
@@ -247,6 +271,10 @@ func (s *Store) ImportTables(ctx context.Context, dumps []models.TableDump) ([]m
 	order := make(map[string]int, len(names))
 	for i, name := range names {
 		order[name] = i
+	}
+	plans, err := s.mergePlans(ctx, names)
+	if err != nil {
+		return nil, err
 	}
 
 	pending := make([]models.TableDump, 0, len(dumps))
@@ -275,22 +303,63 @@ func (s *Store) ImportTables(ctx context.Context, dumps []models.TableDump) ([]m
 	// ordering alone already satisfies every cross-table foreign key.
 	tx.ExecContext(ctx, "PRAGMA defer_foreign_keys = ON")
 
+	q := s.queries.WithTx(tx)
 	results := make([]models.TableImport, 0, len(pending))
 	for _, dump := range pending {
-		inserted, err := insertRows(ctx, tx, dump)
+		applied, written, err := insertRows(ctx, tx, dump, plans[dump.Name])
 		if err != nil {
 			return nil, fmt.Errorf("import %s: %w", dump.Name, err)
 		}
+		// A zip is a snapshot, but what it brings in still has to reach this
+		// node's own peers — otherwise content imported on the central server
+		// would stop there, and every edge would need the file by hand. Each row
+		// keeps its own version and origin, so the op is a forward, not a claim
+		// that this node authored it.
+		for _, row := range written {
+			if err := s.logImportedRow(ctx, q, dump.Name, plans[dump.Name], row); err != nil {
+				return nil, fmt.Errorf("log import of %s: %w", dump.Name, err)
+			}
+		}
 		results = append(results, models.TableImport{
-			Name:     dump.Name,
-			Inserted: inserted,
-			Skipped:  len(dump.Rows) - inserted,
+			Name:    dump.Name,
+			Applied: applied,
+			Skipped: len(dump.Rows) - applied,
 		})
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+
+	// Everything just seen is now part of this node's history: the next local
+	// write has to sort after it, or an edit made here would lose to the data it
+	// was made on top of. Versions we rejected count too — they were still
+	// observed. Deliberately after the commit, so a failed import doesn't move
+	// the clock.
+	s.hlc.Observe(maxHLC(pending))
 	return results, nil
+}
+
+// maxHLC finds the highest version in the dumps, ignoring rows without one.
+func maxHLC(dumps []models.TableDump) int64 {
+	var highest int64
+	for _, dump := range dumps {
+		for _, row := range dump.Rows {
+			// The dumps come from JSON, where the same column can arrive as
+			// int64 or float64 depending on the decoder; anything else (a
+			// hand-edited zip with a string) is ignored rather than guessed at.
+			switch v := row[hlcColumn].(type) {
+			case int64:
+				if v > highest {
+					highest = v
+				}
+			case float64:
+				if int64(v) > highest {
+					highest = int64(v)
+				}
+			}
+		}
+	}
+	return highest
 }
 
 // ClearTables deletes every row of every table, leaving the schema (and the
@@ -331,11 +400,26 @@ func (s *Store) ClearTables(ctx context.Context) (map[string]int64, error) {
 	return deleted, nil
 }
 
-// insertRows adds dump's rows and returns how many were actually inserted;
-// the rest collided with existing rows and were ignored.
-func insertRows(ctx context.Context, tx *sql.Tx, dump models.TableDump) (int, error) {
+// insertRows merges dump's rows and returns how many were applied — inserted,
+// or overwritten because the incoming version was newer. The rest lost to the
+// local row (or collided with a unique constraint) and were left alone.
+//
+// Rows are classified here in Go rather than left to one clever SQL statement,
+// because the obvious statement doesn't work: `INSERT OR IGNORE ... ON CONFLICT
+// DO UPDATE` parses fine and then silently does nothing on a conflict — the OR
+// IGNORE swallows it before the upsert is reached. Dropping OR IGNORE instead
+// would make a collision on a non-key unique (two nodes that independently
+// created the same student, so same users.email with different ids) abort the
+// whole import, which is a regression: today those rows are skipped. So the
+// split is deliberate — new rows go in with OR IGNORE, and only rows already
+// present locally take the upsert path.
+// The second return value is the rows it tried to write, which is what the
+// caller turns into forwardable ops. A row that OR IGNORE dropped on a unique
+// constraint is in there too: this node couldn't store it, but the payload is
+// still complete and a node further along may well be able to.
+func insertRows(ctx context.Context, tx *sql.Tx, dump models.TableDump, plan mergePlan) (int, []map[string]any, error) {
 	if len(dump.Rows) == 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 
 	cols := make([]string, 0, len(dump.Rows[0]))
@@ -344,31 +428,76 @@ func insertRows(ctx context.Context, tx *sql.Tx, dump models.TableDump) (int, er
 	}
 	sort.Strings(cols)
 
+	// Unversioned tables (the junction tables) have no field to overwrite:
+	// their rows are set membership, so a collision means "already a member".
+	if !plan.upsert() {
+		applied, err := execRows(ctx, tx, dump.Name, cols, dump.Rows, true, "")
+		return applied, dump.Rows, err
+	}
+
+	local, err := storedVersions(ctx, tx, dump.Name, plan)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	fresh := make([]map[string]any, 0, len(dump.Rows))
+	newer := make([]map[string]any, 0)
+	for _, row := range dump.Rows {
+		key, ok := rowKey(row, plan.pk)
+		current, exists := local[key]
+		switch {
+		case !ok || !exists:
+			fresh = append(fresh, row)
+		case versionOf(row).after(current):
+			newer = append(newer, row)
+		}
+	}
+
+	inserted, err := execRows(ctx, tx, dump.Name, cols, fresh, true, "")
+	if err != nil {
+		return inserted, nil, err
+	}
+	// The upsert's own WHERE repeats the comparison already made above. Kept as
+	// the authoritative rule: if the classification and the SQL ever disagree,
+	// the stricter one wins and no newer row is overwritten by an older one.
+	updated, err := execRows(ctx, tx, dump.Name, cols, newer, false, lastWriterWins(dump.Name, cols, plan))
+	return inserted + updated, append(fresh, newer...), err
+}
+
+// execRows runs the batched multi-row INSERT and reports how many rows the
+// database actually wrote.
+func execRows(ctx context.Context, tx *sql.Tx, table string, cols []string, rows []map[string]any, ignore bool, suffix string) (int, error) {
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
 	quoted := make([]string, len(cols))
 	for i, col := range cols {
 		quoted[i] = quoteIdent(col)
 	}
+	verb := "INSERT INTO "
+	if ignore {
+		verb = "INSERT OR IGNORE INTO "
+	}
+	prefix := verb + quoteIdent(table) + " (" + strings.Join(quoted, ",") + ") VALUES "
 	tuple := "(?" + strings.Repeat(",?", len(cols)-1) + ")"
-	// OR IGNORE is what makes an import a merge: a row already present here
-	// (by primary key or any UNIQUE constraint) is left alone.
-	prefix := "INSERT OR IGNORE INTO " + quoteIdent(dump.Name) + " (" + strings.Join(quoted, ",") + ") VALUES "
 
 	perBatch := maxBindParams / len(cols)
 	if perBatch < 1 {
 		perBatch = 1
 	}
 
-	inserted := 0
-	for start := 0; start < len(dump.Rows); start += perBatch {
-		end := min(start+perBatch, len(dump.Rows))
-		chunk := dump.Rows[start:end]
+	applied := 0
+	for start := 0; start < len(rows); start += perBatch {
+		end := min(start+perBatch, len(rows))
+		chunk := rows[start:end]
 
 		var b strings.Builder
 		b.WriteString(prefix)
 		args := make([]any, 0, len(chunk)*len(cols))
 		for i, row := range chunk {
 			if len(row) != len(cols) {
-				return inserted, fmt.Errorf("row %d has %d columns, expected %d", start+i, len(row), len(cols))
+				return applied, fmt.Errorf("row %d has %d columns, expected %d", start+i, len(row), len(cols))
 			}
 			if i > 0 {
 				b.WriteString(",")
@@ -377,22 +506,76 @@ func insertRows(ctx context.Context, tx *sql.Tx, dump models.TableDump) (int, er
 			for _, col := range cols {
 				val, ok := row[col]
 				if !ok {
-					return inserted, fmt.Errorf("row %d is missing column %q", start+i, col)
+					return applied, fmt.Errorf("row %d is missing column %q", start+i, col)
 				}
 				args = append(args, val)
 			}
 		}
+		b.WriteString(suffix)
 		res, err := tx.ExecContext(ctx, b.String(), args...)
 		if err != nil {
-			return inserted, err
+			return applied, err
 		}
 		// A driver that can't report RowsAffected would otherwise make every
 		// row look skipped; assume they all landed in that case.
 		if n, err := res.RowsAffected(); err == nil {
-			inserted += int(n)
+			applied += int(n)
 		} else {
-			inserted += len(chunk)
+			applied += len(chunk)
 		}
 	}
-	return inserted, nil
+	return applied, nil
+}
+
+// lastWriterWins builds the upsert clause for rows that already exist locally:
+//
+//	ON CONFLICT("id") DO UPDATE SET "title" = excluded."title", ...
+//	WHERE excluded."hlc" > "lessons"."hlc"
+//	   OR (excluded."hlc" = "lessons"."hlc" AND excluded."origin_node" > "lessons"."origin_node")
+//
+// The origin_node comparison only breaks an exact tie between two nodes that
+// wrote at the very same logical instant. It exists so the outcome is identical
+// on every node instead of depending on which one merged first — an arbitrary
+// but deterministic rule beats a consistent-looking one ("keep mine on a tie")
+// under which two nodes would each keep their own value and never agree again.
+func lastWriterWins(table string, cols []string, plan mergePlan) string {
+	if !plan.upsert() {
+		return ""
+	}
+
+	key := make(map[string]bool, len(plan.pk))
+	for _, col := range plan.pk {
+		key[col] = true
+	}
+	// Only columns actually present in this dump get assigned: setting a column
+	// the dump doesn't carry would write the table default over real data.
+	sets := make([]string, 0, len(cols))
+	for _, col := range cols {
+		if !key[col] {
+			sets = append(sets, quoteIdent(col)+" = excluded."+quoteIdent(col))
+		}
+	}
+	if len(sets) == 0 {
+		return ""
+	}
+
+	quotedPK := make([]string, len(plan.pk))
+	for i, col := range plan.pk {
+		quotedPK[i] = quoteIdent(col)
+	}
+
+	var (
+		local  = quoteIdent(table)
+		hlc    = quoteIdent(hlcColumn)
+		origin = quoteIdent(originColumn)
+	)
+	// Written as two scalar comparisons instead of SQLite's row-value form
+	// ((a,b) > (c,d)), which is equivalent but needs a newer SQLite than every
+	// driver in this project is guaranteed to be.
+	newer := "excluded." + hlc + " > " + local + "." + hlc +
+		" OR (excluded." + hlc + " = " + local + "." + hlc +
+		" AND excluded." + origin + " > " + local + "." + origin + ")"
+
+	return " ON CONFLICT(" + strings.Join(quotedPK, ",") + ") DO UPDATE SET " +
+		strings.Join(sets, ", ") + " WHERE " + newer
 }

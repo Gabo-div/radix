@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { HardDrive, Users, Radio, RefreshCw, CheckCircle, Database, Download, Upload } from "lucide-react";
+import { HardDrive, Users, Radio, RefreshCw, CheckCircle, Database, Download, Upload, Network } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,10 +32,10 @@ export default function MonitorPanel() {
     if (!pendingFile) return;
     importBackup.mutate(pendingFile, {
       onSuccess: (res) => {
-        const inserted = res.tables.reduce((sum, t) => sum + t.inserted, 0);
+        const applied = res.tables.reduce((sum, t) => sum + t.applied, 0);
         const skipped = res.tables.reduce((sum, t) => sum + t.skipped, 0);
         toast.success(
-          `Respaldo importado: ${inserted} registros nuevos, ${skipped} ya existentes, ${res.uploads} archivos`,
+          `Respaldo importado: ${applied} registros aplicados, ${skipped} descartados por ser más antiguos, ${res.uploads} archivos`,
           { icon: <CheckCircle className="size-4" /> }
         );
         setPendingFile(null);
@@ -46,7 +46,18 @@ export default function MonitorPanel() {
 
   const handleSync = () => {
     forceSync.mutate(undefined, {
-      onSuccess: () => toast.success("Sincronización oportunista completada", { icon: <CheckCircle className="size-4" /> }),
+      // Un nodo par caído no es un fallo de la operación: es el estado normal
+      // de este sistema. Se avisa, pero como advertencia y no como error.
+      onSuccess: (res) => {
+        const unreachable = res.results.filter((r) => r.error);
+        if (unreachable.length > 0) {
+          toast.warning(res.message, {
+            description: unreachable.map((r) => `${r.peer}: ${r.error}`).join(" · "),
+          });
+        } else {
+          toast.success(res.message, { icon: <CheckCircle className="size-4" /> });
+        }
+      },
       onError: (err) => toast.error("Error al sincronizar: " + (err as Error).message),
     });
   };
@@ -73,19 +84,23 @@ export default function MonitorPanel() {
             <Radio size={20} /><span className="text-sm font-medium">Cola DTN</span>
           </div>
           <p className="text-2xl font-semibold tracking-tight text-foreground">{data?.syncQueue.transactionCount ?? "—"}</p>
-          <p className="text-xs text-muted-foreground mt-1">Transacciones offline</p>
+          <p className="text-xs text-muted-foreground mt-1">Operaciones sin entregar</p>
         </Card>
       </div>
 
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <RefreshCw size={16} /> Cola DTN (CRDT)
+            <RefreshCw size={16} /> Cola DTN
           </h2>
           <Button onClick={handleSync} variant="secondary" disabled={forceSync.isPending}>
             {forceSync.isPending ? "Sincronizando..." : "Forzar Sincronización"}
           </Button>
         </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Cada cambio de este nodo queda registrado como una operación que los nodos pares se llevan cuando hay
+          enlace. Aquí están las que todavía no leyó ninguno.
+        </p>
         {data?.syncQueue.logs && data.syncQueue.logs.length > 0 ? (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {data.syncQueue.logs.map((log, i) => (
@@ -93,10 +108,46 @@ export default function MonitorPanel() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No hay transacciones pendientes.</p>
+          <p className="text-sm text-muted-foreground">No hay operaciones pendientes de entrega.</p>
         )}
         {data && (data.syncQueue.transactionCount ?? 0) > 0 && (
-          <div className="mt-3"><Badge variant="destructive">{data.syncQueue.transactionCount} pendientes</Badge></div>
+          <div className="mt-3"><Badge variant="destructive">{data.syncQueue.transactionCount} sin entregar</Badge></div>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+          <Network size={16} /> Nodos Pares
+        </h2>
+        {data?.syncQueue.peers && data.syncQueue.peers.length > 0 ? (
+          <div className="space-y-2">
+            {data.syncQueue.peers.map((peer) => (
+              <div key={peer.peer} className="flex flex-wrap items-center justify-between gap-2 bg-secondary/40 px-3 py-2 rounded">
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground truncate">{peer.nodeId || peer.peer}</p>
+                  <p className="text-xs font-mono text-muted-foreground truncate">{peer.peer}</p>
+                </div>
+                <div className="text-right">
+                  {peer.lastError ? (
+                    <Badge variant="destructive">Sin enlace</Badge>
+                  ) : (
+                    <Badge variant="secondary">Al día</Badge>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leído hasta #{peer.lastSeq}
+                    {peer.lastSyncAt && ` · ${new Date(peer.lastSyncAt).toLocaleTimeString()}`}
+                  </p>
+                </div>
+                {peer.lastError && (
+                  <p className="w-full text-xs text-destructive break-words">{peer.lastError}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Este nodo funciona solo: no hay nodos pares configurados en <span className="font-mono text-xs">SYNC_PEERS</span>.
+          </p>
         )}
       </Card>
 
@@ -108,7 +159,9 @@ export default function MonitorPanel() {
           El respaldo incluye cursos, lecciones, cuestionarios, notas, usuarios, inscripciones, foro y los
           archivos de la biblioteca, en un ZIP con las carpetas <span className="font-mono text-xs">data/</span> y{" "}
           <span className="font-mono text-xs">uploads/</span>. No incluye la cola DTN ni los logs del servidor,
-          que son propios de este nodo. Al importar, los registros se agregan a los que ya existen: nada se borra.
+          que son propios de este nodo. Al importar nada se borra: cada registro se compara con el local y solo
+          entra si es más reciente. Sirve para arrancar un nodo nuevo o para mover contenido sin red; los cambios
+          del día a día viajan por la cola.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">

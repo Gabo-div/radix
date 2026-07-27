@@ -74,7 +74,7 @@ func (q *Queries) GetCourseForumLinkedLessons(ctx context.Context, courseID stri
 }
 
 const getCourseForumLinkedLibraryItems = `-- name: GetCourseForumLinkedLibraryItems :many
-SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, users.name AS uploaded_by_name
+SELECT library_items.id, library_items.title, library_items.type, library_items.category, library_items.size_kb, library_items.mime_type, library_items.original_filename, library_items.uploaded_at, library_items.modified_at, library_items.duration, library_items.resolution, library_items.file_path, library_items.uploaded_by, library_items.hlc, library_items.origin_node, users.name AS uploaded_by_name
 FROM library_items
 LEFT JOIN users ON library_items.uploaded_by = users.id
 WHERE library_items.id IN (
@@ -100,6 +100,8 @@ type GetCourseForumLinkedLibraryItemsRow struct {
 	Resolution       sql.NullString
 	FilePath         string
 	UploadedBy       sql.NullString
+	Hlc              int64
+	OriginNode       string
 	UploadedByName   sql.NullString
 }
 
@@ -126,6 +128,8 @@ func (q *Queries) GetCourseForumLinkedLibraryItems(ctx context.Context, courseID
 			&i.Resolution,
 			&i.FilePath,
 			&i.UploadedBy,
+			&i.Hlc,
+			&i.OriginNode,
 			&i.UploadedByName,
 		); err != nil {
 			return nil, err

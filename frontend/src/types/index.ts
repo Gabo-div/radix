@@ -95,9 +95,32 @@ export interface Course {
   category: string;
 }
 
+/** Un nodo par del que este servidor tira operaciones. */
+export interface SyncPeer {
+  peer: string;
+  nodeId: string;
+  /** Hasta dónde se leyó el registro de ese nodo. */
+  lastSeq: number;
+  lastSyncAt: string;
+  lastError: string;
+}
+
 export interface SyncQueue {
+  /** Operaciones que ningún nodo par confirmó haber leído todavía. */
   transactionCount: number;
+  /** Etiquetas de esas operaciones, las más recientes primero. */
   logs: string[];
+  peers: SyncPeer[];
+}
+
+/** Resultado de tirar una vez de un nodo par. */
+export interface SyncResult {
+  peer: string;
+  nodeId: string;
+  pulled: number;
+  applied: number;
+  skipped: number;
+  error?: string;
 }
 
 export interface LoginResponse {
@@ -132,7 +155,7 @@ export interface MonitorData {
 }
 
 export interface ForceSyncResponse {
-  synced: number;
+  results: SyncResult[];
   message: string;
 }
 
@@ -170,7 +193,9 @@ export interface LogStatsResponse {
 
 export interface TableImport {
   name: string;
-  inserted: number;
+  /** Filas que entraron: nuevas, o que reemplazaron a una versión más antigua. */
+  applied: number;
+  /** Filas descartadas porque la copia local es más nueva. */
   skipped: number;
 }
 

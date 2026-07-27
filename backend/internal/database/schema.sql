@@ -8,7 +8,9 @@ CREATE TABLE users (
     name          TEXT NOT NULL,
     email         TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL
+    role          TEXT NOT NULL,
+    hlc           INTEGER NOT NULL DEFAULT 0,
+    origin_node   TEXT    NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX idx_users_email ON users(email);
 
@@ -16,7 +18,9 @@ CREATE TABLE courses (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
     description TEXT NOT NULL,
-    category    TEXT NOT NULL
+    category    TEXT NOT NULL,
+    hlc         INTEGER NOT NULL DEFAULT 0,
+    origin_node TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE library_items (
@@ -32,14 +36,18 @@ CREATE TABLE library_items (
     duration          TEXT,
     resolution        TEXT,
     file_path         TEXT NOT NULL,
-    uploaded_by       TEXT REFERENCES users(id)
+    uploaded_by       TEXT REFERENCES users(id),
+    hlc               INTEGER NOT NULL DEFAULT 0,
+    origin_node       TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE lessons (
     id           TEXT PRIMARY KEY,
     course_id    TEXT NOT NULL REFERENCES courses(id),
     title        TEXT NOT NULL,
-    content_text TEXT NOT NULL
+    content_text TEXT NOT NULL,
+    hlc          INTEGER NOT NULL DEFAULT 0,
+    origin_node  TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE quizzes (
@@ -48,7 +56,9 @@ CREATE TABLE quizzes (
     lesson_id   TEXT REFERENCES lessons(id),
     title       TEXT NOT NULL DEFAULT 'Cuestionario',
     description TEXT NOT NULL DEFAULT '',
-    value       INTEGER NOT NULL DEFAULT 100
+    value       INTEGER NOT NULL DEFAULT 100,
+    hlc         INTEGER NOT NULL DEFAULT 0,
+    origin_node TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_quizzes_course ON quizzes(course_id);
 CREATE UNIQUE INDEX idx_quizzes_lesson_unique ON quizzes(lesson_id) WHERE lesson_id IS NOT NULL;
@@ -59,14 +69,18 @@ CREATE TABLE quiz_questions (
     ordinal       INTEGER NOT NULL,
     text          TEXT NOT NULL,
     options_json  TEXT NOT NULL,
-    correct_index INTEGER NOT NULL
+    correct_index INTEGER NOT NULL,
+    hlc           INTEGER NOT NULL DEFAULT 0,
+    origin_node   TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE quiz_grades (
-    user_id   TEXT NOT NULL REFERENCES users(id),
-    quiz_id   TEXT NOT NULL REFERENCES quizzes(id),
-    grade     INTEGER NOT NULL,
-    graded_at TEXT NOT NULL,
+    user_id     TEXT NOT NULL REFERENCES users(id),
+    quiz_id     TEXT NOT NULL REFERENCES quizzes(id),
+    grade       INTEGER NOT NULL,
+    graded_at   TEXT NOT NULL,
+    hlc         INTEGER NOT NULL DEFAULT 0,
+    origin_node TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (user_id, quiz_id)
 );
 CREATE INDEX idx_quiz_grades_user ON quiz_grades(user_id);
@@ -85,13 +99,15 @@ CREATE TABLE course_enrollments (
 CREATE INDEX idx_course_enrollments_course ON course_enrollments(course_id);
 
 CREATE TABLE forum_posts (
-    id         TEXT PRIMARY KEY,
-    course_id  TEXT NOT NULL REFERENCES courses(id),
-    parent_id  TEXT REFERENCES forum_posts(id) ON DELETE CASCADE,
-    user_id    TEXT NOT NULL REFERENCES users(id),
-    title      TEXT NOT NULL DEFAULT '',
-    body       TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    id          TEXT PRIMARY KEY,
+    course_id   TEXT NOT NULL REFERENCES courses(id),
+    parent_id   TEXT REFERENCES forum_posts(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL REFERENCES users(id),
+    title       TEXT NOT NULL DEFAULT '',
+    body        TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    hlc         INTEGER NOT NULL DEFAULT 0,
+    origin_node TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_forum_posts_course ON forum_posts(course_id);
 CREATE INDEX idx_forum_posts_parent ON forum_posts(parent_id);
@@ -110,10 +126,33 @@ CREATE TABLE forum_links (
 );
 CREATE INDEX idx_forum_links_target ON forum_links(target_id);
 
-CREATE TABLE sync_log (
-    id         INTEGER PRIMARY KEY,
-    action     TEXT NOT NULL,
-    created_at TEXT NOT NULL
+-- The DTN queue: replayable operations, not audit strings (migration 00015).
+CREATE TABLE sync_ops (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+    origin_node TEXT    NOT NULL,
+    table_name  TEXT    NOT NULL,
+    pk_json     TEXT    NOT NULL,
+    op          TEXT    NOT NULL CHECK (op IN ('upsert', 'delete')),
+    hlc         INTEGER NOT NULL,
+    payload     TEXT    NOT NULL DEFAULT '{}',
+    label       TEXT    NOT NULL DEFAULT '',
+    created_at  TEXT    NOT NULL
+);
+CREATE UNIQUE INDEX idx_sync_ops_identity ON sync_ops(origin_node, table_name, pk_json, hlc);
+CREATE INDEX idx_sync_ops_row ON sync_ops(table_name, pk_json, hlc);
+
+CREATE TABLE sync_peers (
+    peer         TEXT    PRIMARY KEY,
+    node_id      TEXT    NOT NULL DEFAULT '',
+    last_seq     INTEGER NOT NULL DEFAULT 0,
+    last_sync_at TEXT    NOT NULL DEFAULT '',
+    last_error   TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE sync_readers (
+    node_id   TEXT    PRIMARY KEY,
+    acked_seq INTEGER NOT NULL DEFAULT 0,
+    last_seen TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE server_logs (

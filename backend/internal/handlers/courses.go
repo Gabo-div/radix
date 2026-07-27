@@ -37,7 +37,6 @@ func (h *Handler) CreateCourse(c *echo.Context) error {
 	if err := h.Store.AddCourse(ctx, course); err != nil {
 		return httpx.InternalError(c, "failed to create course")
 	}
-	h.Store.EnqueueSync(ctx, "ADD_COURSE: "+course.Title)
 	return httpx.OK(c, http.StatusCreated, course)
 }
 
@@ -91,7 +90,6 @@ func (h *Handler) CreateLesson(c *echo.Context) error {
 	if err := h.Store.AddLesson(ctx, lesson); err != nil {
 		return httpx.InternalError(c, "failed to create lesson")
 	}
-	h.Store.EnqueueSync(ctx, "ADD_LESSON: "+lesson.Title)
 	return httpx.OK(c, http.StatusCreated, lesson)
 }
 
@@ -204,7 +202,6 @@ func (h *Handler) UpdateLesson(c *echo.Context) error {
 	if err := h.Store.UpdateLesson(ctx, lesson); err != nil {
 		return httpx.InternalError(c, "failed to update lesson")
 	}
-	h.Store.EnqueueSync(ctx, "UPDATE_LESSON: "+id)
 	return httpx.OK(c, http.StatusOK, lesson)
 }
 
@@ -250,7 +247,6 @@ func (h *Handler) EnrollStudent(c *echo.Context) error {
 	if err := h.Store.EnrollStudent(ctx, req.UserID, courseID); err != nil {
 		return httpx.InternalError(c, "failed to enroll student")
 	}
-	h.Store.EnqueueSync(ctx, "ENROLL_STUDENT: "+req.UserID+" -> "+courseID)
 	return httpx.NoContent(c)
 }
 
@@ -279,6 +275,5 @@ func (h *Handler) UnenrollStudent(c *echo.Context) error {
 	if err := h.Store.UnenrollStudent(ctx, userID, courseID); err != nil {
 		return httpx.InternalError(c, "failed to unenroll student")
 	}
-	h.Store.EnqueueSync(ctx, "UNENROLL_STUDENT: "+userID+" -> "+courseID)
 	return httpx.NoContent(c)
 }

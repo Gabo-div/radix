@@ -10,7 +10,8 @@ import (
 )
 
 const addCourse = `-- name: AddCourse :exec
-INSERT INTO courses (id, title, description, category) VALUES (?, ?, ?, ?)
+INSERT INTO courses (id, title, description, category, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type AddCourseParams struct {
@@ -18,6 +19,8 @@ type AddCourseParams struct {
 	Title       string
 	Description string
 	Category    string
+	Hlc         int64
+	OriginNode  string
 }
 
 func (q *Queries) AddCourse(ctx context.Context, arg AddCourseParams) error {
@@ -26,12 +29,14 @@ func (q *Queries) AddCourse(ctx context.Context, arg AddCourseParams) error {
 		arg.Title,
 		arg.Description,
 		arg.Category,
+		arg.Hlc,
+		arg.OriginNode,
 	)
 	return err
 }
 
 const getCourse = `-- name: GetCourse :one
-SELECT id, title, description, category FROM courses WHERE id = ?
+SELECT id, title, description, category, hlc, origin_node FROM courses WHERE id = ?
 `
 
 func (q *Queries) GetCourse(ctx context.Context, id string) (Course, error) {
@@ -42,12 +47,14 @@ func (q *Queries) GetCourse(ctx context.Context, id string) (Course, error) {
 		&i.Title,
 		&i.Description,
 		&i.Category,
+		&i.Hlc,
+		&i.OriginNode,
 	)
 	return i, err
 }
 
 const getCourses = `-- name: GetCourses :many
-SELECT id, title, description, category FROM courses ORDER BY rowid
+SELECT id, title, description, category, hlc, origin_node FROM courses ORDER BY rowid
 `
 
 func (q *Queries) GetCourses(ctx context.Context) ([]Course, error) {
@@ -64,6 +71,8 @@ func (q *Queries) GetCourses(ctx context.Context) ([]Course, error) {
 			&i.Title,
 			&i.Description,
 			&i.Category,
+			&i.Hlc,
+			&i.OriginNode,
 		); err != nil {
 			return nil, err
 		}

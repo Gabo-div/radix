@@ -1,7 +1,9 @@
 -- name: UpsertQuizGrade :exec
-INSERT INTO quiz_grades (user_id, quiz_id, grade, graded_at)
-VALUES (?, ?, ?, ?)
-ON CONFLICT (user_id, quiz_id) DO UPDATE SET grade = excluded.grade, graded_at = excluded.graded_at;
+INSERT INTO quiz_grades (user_id, quiz_id, grade, graded_at, hlc, origin_node)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id, quiz_id) DO UPDATE SET
+    grade = excluded.grade, graded_at = excluded.graded_at,
+    hlc = excluded.hlc, origin_node = excluded.origin_node;
 
 -- name: GetUserCoursePoints :one
 SELECT COALESCE(SUM(quiz_grades.grade), 0)
