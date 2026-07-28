@@ -370,6 +370,45 @@ def credits_markdown(media_lock):
     return "\n".join(lines) + "\n"
 
 
+def build_games(uploads):
+    """Scan games/ for .html files and return library_items rows for each."""
+    games_dir = HERE / "games"
+    if not games_dir.is_dir():
+        return []
+    rows = []
+    for f in sorted(games_dir.glob("*.html")):
+        # El nombre del archivo puede llevar el autor (p.ej. "Culebrita - Gabriel
+        # Hernández.html"). El ID se deriva solo del nombre del juego (la parte
+        # anterior al primer " - ") para que las referencias [[id]] sean estables.
+        base = f.stem.split(" - ")[0]
+        slug = re.sub(r"[^a-z0-9-]+", "-", base.lower()).strip("-") or "game"
+        item_id = f"lib-game-{slug}"
+        body = f.read_text(encoding="utf-8")
+        mime = mimetypes.guess_type(f.name)[0] or "text/html"
+        uploaded_at = day_offset(20, 10, 0)
+        stored_name = f.name
+        uploads.append((stored_name, f))
+        # Extract <title> for human-readable title
+        m = re.search(r"<title[^>]*>(.*?)</title>", body, re.IGNORECASE | re.DOTALL)
+        title = m.group(1).strip() if m else slug.capitalize()
+        rows.append({
+            "id": item_id,
+            "title": title,
+            "type": "game",
+            "category": "Programación",
+            "size_kb": max(1, len(body.encode("utf-8")) // 1024),
+            "mime_type": mime,
+            "original_filename": f.name,
+            "uploaded_at": uploaded_at,
+            "modified_at": uploaded_at,
+            "duration": None,
+            "resolution": None,
+            "file_path": f"uploads/{stored_name}",
+            "uploaded_by": content.TEACHER["id"],
+        })
+    return rows
+
+
 def build_library(media_lock, uploads):
     """Returns library_items rows; appends (zip_name, local_path) to uploads."""
     rows = []
@@ -379,7 +418,10 @@ def build_library(media_lock, uploads):
             local.parent.mkdir(parents=True, exist_ok=True)
             local.write_text(item["body"].strip() + "\n", encoding="utf-8")
             filename = item["filename"]
-            mime = "text/markdown" if filename.endswith(".md") else "text/plain"
+            # .md -> text/markdown aunque el SO no lo conozca; .html ->
+            # text/html (los videojuegos del seed son kind=text con type=game).
+            mime = mimetypes.guess_type(filename)[0] or (
+                "text/markdown" if filename.endswith(".md") else "text/plain")
         else:
             pinned = media_lock[item["id"]]
             filename = safe_filename(pinned["commons_title"], pinned["url"])
@@ -397,7 +439,9 @@ def build_library(media_lock, uploads):
         rows.append({
             "id": item["id"],
             "title": item["title"],
-            "type": detect_type(filename),
+            # Una entrada puede fijar su tipo a mano (p.ej. type=game para un
+            # .html): sin eso detect_type lo clasificaría como documento.
+            "type": item.get("type") or detect_type(filename),
             "category": item["category"],
             "size_kb": max(1, local.stat().st_size // 1024),
             "mime_type": mime,
@@ -479,7 +523,7 @@ def build_rows(media_lock, video_lock, uploads):
             "password_hash": password_hash, "role": user["role"],
         })
 
-    rows["library_items"] = build_library(media_lock, uploads)
+    rows["library_items"] = build_library(media_lock, uploads) + build_games(uploads)
 
     for course_index, course in enumerate(content.COURSES):
         rows["courses"].append({

@@ -197,12 +197,25 @@ func (h *Handler) uploadFile(c *echo.Context) error {
 		title = header.Filename
 	}
 
+	// Un videojuego es un .html autocontenido que el que sube marca a mano; un
+	// HTML sin marcar sigue siendo "document" (tarjeta de descarga), que es lo
+	// que los diferencia en la biblioteca.
+	itemType := detectType(header.Filename)
+	if c.FormValue("game") == "true" {
+		switch strings.ToLower(filepath.Ext(header.Filename)) {
+		case ".html", ".htm":
+			itemType = "game"
+		default:
+			return httpx.BadRequest(c, "solo archivos HTML pueden ser videojuegos")
+		}
+	}
+
 	userID, _ := c.Get("user_id").(string)
 	now := time.Now().Format(time.RFC3339)
 
 	item := models.LibraryItem{
 		Title:            title,
-		Type:             detectType(header.Filename),
+		Type:             itemType,
 		Category:         category,
 		MimeType:         header.Header.Get("Content-Type"),
 		OriginalFilename: header.Filename,
@@ -277,6 +290,13 @@ func (h *Handler) serveFile(c *echo.Context, item *models.LibraryItem) error {
 	c.Response().Header().Set("Content-Disposition",
 		fmt.Sprintf(`inline; filename="%s"`, item.OriginalFilename))
 	c.Response().Header().Set("Content-Type", contentType)
+	if item.Type == "game" {
+		// El juego es HTML+JS del que sube el archivo: ni siquiera abriendo la
+		// URL directa en una pestaña debe poder tocar el localStorage de la app
+		// (donde vive el token de sesión). El sandbox CSP le da un origen opaco;
+		// el reproductor (GamePlayer) además lo carga por fetch+blob.
+		c.Response().Header().Set("Content-Security-Policy", "sandbox allow-scripts")
+	}
 
 	f, err := os.Open(item.FilePath)
 	if err != nil {

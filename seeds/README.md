@@ -17,9 +17,9 @@ datos que se parecen a los de uso real.
 | Lecciones | 36, en markdown, con material incrustado y enlaces entre lecciones |
 | Cuestionarios | 45 (36 por tema + 9 exámenes finales), 153 preguntas. Cada tema enlaza el suyo con `[[id]]`, que es lo que la vista de la lección muestra |
 | Foro | 48 publicaciones entre hilos y respuestas, con 151 "me gusta" |
-| Biblioteca | 35 archivos (imágenes, 2 videos, 7 lecturas escritas) |
+| Biblioteca | 36 archivos (imágenes, 2 videos, 7 lecturas escritas, 1 videojuego HTML) |
 | Usuarios | 1 docente + 12 estudiantes |
-| Filas totales | 1082 |
+| Filas totales | 1120 |
 
 Usuarios: cualquier correo `@radix.edu` del respaldo con la contraseña
 `radix2024` (la misma de `internal/seed`). El docente es

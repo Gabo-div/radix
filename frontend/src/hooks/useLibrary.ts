@@ -27,8 +27,8 @@ export function useLibraryItemUsage(id: string | undefined) {
 export function useAddLibraryItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ title, category, file }: { title: string; category: string; file: File }) =>
-      api.addLibraryItem(title, category, file),
+    mutationFn: ({ title, category, file, game }: { title: string; category: string; file: File; game?: boolean }) =>
+      api.addLibraryItem(title, category, file, game),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["library"] });
     },

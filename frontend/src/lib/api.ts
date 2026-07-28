@@ -73,11 +73,12 @@ export const api = {
   getLibraryFileUrl: (id: string) =>
     `/api/v1/library/${id}/file?token=${getToken()}`,
 
-  addLibraryItem: (title: string, category: string, file: File) => {
+  addLibraryItem: (title: string, category: string, file: File, game?: boolean) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("title", title);
     fd.append("category", category);
+    if (game) fd.append("game", "true");
     return request<LibraryItem>("/api/v1/library", { method: "POST", body: fd });
   },
 

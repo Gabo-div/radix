@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copa UNEG - Simulador</title>
+    <style>
+        body {
+            background-color: #121212; color: #fff; font-family: 'Segoe UI', sans-serif;
+            display: flex; flex-direction: column; align-items: center; margin: 0; padding-top: 20px;
+        }
+        #logo-uneg { position: absolute; top: 20px; left: 20px; height: 60px; z-index: 100; }
+        
+        #game-container {
+            background-color: #1e1e1e; border: 4px solid #444; border-radius: 10px; padding: 20px;
+            text-align: center; width: 900px; box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+        h1, h2, h3 { color: #ffeb3b; margin-top: 0; }
+        h3 { margin-bottom: 10px; font-size: 16px; color: #4fc3f7; }
+        
+        .btn {
+            background-color: #333; color: white; border: 2px solid transparent; padding: 8px 16px;
+            margin: 5px; font-size: 14px; cursor: pointer; font-weight: bold; border-radius: 5px;
+            text-transform: uppercase; transition: 0.2s;
+        }
+        .btn:hover { background-color: #555; }
+        .btn.active { background-color: #e53935; border-color: #ffeb3b; }
+        .btn-action { background-color: #4CAF50; padding: 12px 30px; font-size: 18px; margin-top: 20px; }
+        
+        .settings-group { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+        
+        #car-grid, #track-grid { 
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; 
+        }
+        .card { 
+            background-color: #2a2a2a; border: 2px solid #555; border-radius: 8px; padding: 10px; 
+            cursor: pointer; transition: 0.2s; 
+        }
+        .card:hover { border-color: #4fc3f7; transform: scale(1.05); }
+        .card.active { border-color: #ffeb3b; background-color: #444; }
+        .card img { width: 100%; height: 50px; object-fit: contain; margin-bottom: 5px; }
+        .card h4 { font-size: 13px; margin: 5px 0; color: #fff; }
+        
+        canvas { background-color: #4CAF50; display: none; border: 3px solid #555; border-radius: 5px; margin-top: 10px; }
+        
+        #hud { display: none; justify-content: space-between; background: #111; padding: 10px 20px; border-radius: 5px; margin-top: 10px; }
+        .hud-stat { font-size: 16px; font-weight: bold; color: #fff; }
+        .nitro-bar { width: 100px; height: 15px; background: #333; display: inline-block; vertical-align: middle; border-radius: 5px; overflow: hidden; margin-left: 5px;}
+        .nitro-fill { height: 100%; background: #00d2ff; width: 100%; }
+        
+        #menu-setup { display: block; }
+        #menu-garage { display: none; }
+        
+        /* Records Box */
+        #records-box { background: #111; border: 1px solid #333; border-radius: 5px; padding: 10px; margin-top: 15px; text-align: left; font-size: 13px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<img id="logo-uneg" src="img/uneg.png" alt="UNEG" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Logo_de_la_UNEG.png/220px-Logo_de_la_UNEG.png'">
+
+<div id="game-container">
+    
+    <!-- PANTALLA 1: Configuración -->
+    <div id="menu-setup">
+        <h1>🏁 COPA UNEG 🏁</h1>
+        
+        <div class="settings-group">
+            <h3>1. Modo de Juego</h3>
+            <button class="btn mode-btn" onclick="setMode('practice', this)">Práctica (Solo)</button>
+            <button class="btn mode-btn active" onclick="setMode('pve', this)">1 Jugador vs IA</button>
+            <button class="btn mode-btn" onclick="setMode('pvp', this)">2 Jugadores (Local)</button>
+        </div>
+
+        <div class="settings-group">
+            <h3>2. Vueltas</h3>
+            <button class="btn lap-btn active" onclick="setLaps(1, this)">1 Vuelta</button>
+            <button class="btn lap-btn" onclick="setLaps(3, this)">3 Vueltas</button>
+            <button class="btn lap-btn" onclick="setLaps(5, this)">5 Vueltas</button>
+        </div>
+
+        <div class="settings-group">
+            <h3>3. Pista</h3>
+            <div id="track-grid"></div>
+        </div>
+        
+        <div id="records-box">🏆 Mejores Tiempos (Sesión Actual): <br><span id="records-list">Ninguno todavía...</span></div>
+
+        <button class="btn btn-action" onclick="goToGarage()">Siguiente: Garaje ➔</button>
+    </div>
+
+    <!-- PANTALLA 2: Garaje -->
+    <div id="menu-garage">
+        <h1 id="garage-title">JUGADOR 1: Elige tu Auto</h1>
+        <div id="car-grid"></div>
+    </div>
+
+    <!-- HUD (Solo visible en carrera) -->
+    <div id="hud">
+        <div class="hud-stat">J1 VUELTA: <span id="p1-lap">1</span>/<span class="tot-laps">3</span> | <div class="nitro-bar"><div id="p1-nitro" class="nitro-fill"></div></div></div>
+        <div class="hud-stat" style="color:#ffeb3b; font-size: 20px;" id="time-ui">0.00s</div>
+        <div class="hud-stat" id="p2-hud">J2 VUELTA: <span id="p2-lap">1</span>/<span class="tot-laps">3</span> | <div class="nitro-bar"><div id="p2-nitro" class="nitro-fill"></div></div></div>
+    </div>
+
+    <!-- PISTAS -->
+    <canvas id="bgCanvas" width="860" height="480" style="display:none;"></canvas>
+    <canvas id="gameCanvas" width="860" height="480"></canvas>
+    
+    <div id="game-over" style="display:none; margin-top: 20px;">
+        <h1 id="result-msg"></h1>
+        <button class="btn btn-action" onclick="location.reload()">Volver al Menú Principal</button>
+    </div>
+    
+    <div id="controls-hint" style="display:none; color:#aaa; margin-top:10px; font-size:13px;">
+        <b>J1:</b> W, A, S, D (Mover) + SHIFT (Nitro) <span id="p2-controls-hint"> | <b>J2:</b> Flechas (Mover) + CTRL DER (Nitro)</span>
+    </div>
+</div>
+
+<script>
+    // --- DATOS BALANCEADOS ---
+    // Reduje vel. máxima (top) y aceleración (acc) para un control perfecto.
+    const carList = [
+        { name: "Skyline GT-R", acc: 0.08, top: 4.5, turn: 0.045, color: "#1e88e5", file: "img/skyline.png" },
+        { name: "Supra MK4", acc: 0.07, top: 4.8, turn: 0.04, color: "#e53935", file: "img/supra.png" },
+        { name: "Civic Type R", acc: 0.10, top: 4.0, turn: 0.055, color: "#ffffff", file: "img/civic.png" },
+        { name: "Mustang GT", acc: 0.06, top: 5.2, turn: 0.035, color: "#fdd835", file: "img/mustang.png" }
+    ];
+
+    carList.forEach(car => {
+        car.imgObj = new Image(); car.imgObj.src = car.file;
+        car.imgObj.onerror = function() { this.onerror=null; this.src = `https://via.placeholder.com/40x20/333333/ffffff?text=Auto`; };
+    });
+
+    // Pistas perfectas con Waypoints para la IA
+    const tracks = [
+        { 
+            name: "El Óvalo", startX: 430, startY: 80, startAngle: 0,
+            draw: (ctx) => { ctx.ellipse(430, 240, 320, 140, 0, 0, Math.PI*2); },
+            // Muros gigantes para asegurar que se detecte el paso
+            finishLine: { x: 425, y: 0, w: 10, h: 180 }, 
+            checkpoint: { x: 425, y: 300, w: 10, h: 180 },
+            waypoints: [ {x:600, y:100}, {x:750, y:240}, {x:600, y:380}, {x:430, y:380}, {x:250, y:380}, {x:110, y:240}, {x:250, y:100}, {x:430, y:100} ]
+        },
+        { 
+            name: "Circuito Cuadrado", startX: 200, startY: 90, startAngle: 0,
+            draw: (ctx) => { 
+                ctx.moveTo(150, 90); ctx.lineTo(710, 90); ctx.arcTo(770, 90, 770, 150, 60);
+                ctx.lineTo(770, 330); ctx.arcTo(770, 390, 710, 390, 60); ctx.lineTo(150, 390);
+                ctx.arcTo(90, 390, 90, 330, 60); ctx.lineTo(90, 150); ctx.arcTo(90, 90, 150, 90, 60);
+            },
+            finishLine: { x: 430, y: 0, w: 10, h: 180 },
+            checkpoint: { x: 430, y: 300, w: 10, h: 180 },
+            waypoints: [ {x:430,y:90}, {x:710,y:90}, {x:770,y:150}, {x:770,y:330}, {x:710,y:390}, {x:150,y:390}, {x:90,y:330}, {x:90,y:150}, {x:150,y:90} ]
+        },
+        { 
+            name: "La L (UNEG)", startX: 180, startY: 380, startAngle: -Math.PI/2,
+            draw: (ctx) => {
+                ctx.moveTo(180, 380); ctx.lineTo(180, 150); ctx.arcTo(180, 90, 240, 90, 60);
+                ctx.lineTo(680, 90); ctx.arcTo(740, 90, 740, 150, 60); ctx.lineTo(740, 320);
+                ctx.arcTo(740, 380, 680, 380, 60); ctx.lineTo(400, 380); ctx.arcTo(340, 380, 340, 320, 60);
+                ctx.lineTo(340, 250); ctx.arcTo(340, 190, 280, 190, 60); ctx.lineTo(240, 190);
+                ctx.arcTo(180, 190, 180, 250, 60); ctx.lineTo(180, 380);
+            },
+            finishLine: { x: 100, y: 250, w: 180, h: 10 },
+            checkpoint: { x: 600, y: 0, w: 10, h: 180 },
+            waypoints: [ {x:180,y:150}, {x:240,y:90}, {x:680,y:90}, {x:740,y:150}, {x:740,y:320}, {x:680,y:380}, {x:400,y:380}, {x:340,y:320}, {x:340,y:250}, {x:280,y:190}, {x:240,y:190}, {x:180,y:250}, {x:180,y:380} ]
+        }
+    ];
+
+    // --- VARIABLES GLOBALES ---
+    let gameMode = 'pve'; // practice, pve, pvp
+    let totalLaps = 1;
+    let selTrackIdx = 0;
+    
+    let p1 = { car: null, x:0, y:0, angle:0, speed:0, nitro:100, lap:1, hitCp:false, wp:0 };
+    let p2 = { car: null, x:0, y:0, angle:0, speed:0, nitro:100, lap:1, hitCp:false, wp:0, active:false };
+    
+    let isPlaying = false;
+    let timeElapsed = 0;
+    let lastTime = 0;
+    const keys = { w:false, a:false, s:false, d:false, shift:false, up:false, down:false, left:false, right:false, ctrl:false };
+
+    // --- SISTEMA DE RÉCORDS (SESSION STORAGE) ---
+    function loadRecords() {
+        let recs = JSON.parse(sessionStorage.getItem('unegRecords')) || [];
+        const box = document.getElementById('records-list');
+        if(recs.length === 0) box.innerHTML = "Sin tiempos registrados aún.";
+        else {
+            box.innerHTML = recs.map(r => `<b>${r.track} (${r.laps}v):</b> ${r.time}s - ${r.mode}`).join('<br>');
+        }
+    }
+    function saveRecord(time) {
+        let recs = JSON.parse(sessionStorage.getItem('unegRecords')) || [];
+        recs.push({ track: tracks[selTrackIdx].name, laps: totalLaps, time: time, mode: gameMode.toUpperCase() });
+        recs.sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
+        if(recs.length > 5) recs.pop();
+        sessionStorage.setItem('unegRecords', JSON.stringify(recs));
+    }
+    window.onload = () => { loadRecords(); initTrackMenu(); };
+
+    // --- MENÚS ---
+    function setMode(m, btn) {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        gameMode = m;
+    }
+    function setLaps(l, btn) {
+        document.querySelectorAll('.lap-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        totalLaps = l;
+        document.querySelectorAll('.tot-laps').forEach(el => el.innerText = l);
+    }
+    function initTrackMenu() {
+        const grid = document.getElementById('track-grid'); grid.innerHTML = '';
+        tracks.forEach((t, i) => {
+            const div = document.createElement('div'); div.className = 'card' + (i===0?' active':'');
+            div.innerHTML = `<h4>${t.name}</h4>`;
+            div.onclick = () => {
+                document.querySelectorAll('#track-grid .card').forEach(c => c.classList.remove('active'));
+                div.classList.add('active');
+                selTrackIdx = i;
+            };
+            grid.appendChild(div);
+        });
+    }
+
+    let choosingP2 = false;
+    function goToGarage() {
+        document.getElementById('menu-setup').style.display = 'none';
+        document.getElementById('menu-garage').style.display = 'block';
+        renderGarage();
+    }
+    
+    function renderGarage() {
+        const grid = document.getElementById('car-grid'); grid.innerHTML = '';
+        carList.forEach((car) => {
+            const div = document.createElement('div'); div.className = 'card';
+            div.innerHTML = `<img src="${car.imgObj.src}"><h4>${car.name}</h4>`;
+            div.onclick = () => {
+                if(!choosingP2) {
+                    p1.car = car;
+                    if(gameMode === 'pvp') {
+                        choosingP2 = true;
+                        document.getElementById('garage-title').innerText = "JUGADOR 2: Elige tu Auto";
+                        document.getElementById('garage-title').style.color = "#ff5252";
+                        renderGarage(); // Refrescar
+                    } else if (gameMode === 'pve') {
+                        p2.car = carList[Math.floor(Math.random() * carList.length)];
+                        startRace();
+                    } else { startRace(); } // Práctica
+                } else {
+                    p2.car = car; startRace();
+                }
+            };
+            grid.appendChild(div);
+        });
+    }
+
+    // --- CARRERA ---
+    const bgCanvas = document.getElementById('bgCanvas'); const bgCtx = bgCanvas.getContext('2d', {willReadFrequently:true});
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+
+    function startRace() {
+        document.getElementById('menu-garage').style.display = 'none';
+        canvas.style.display = 'block'; document.getElementById('hud').style.display = 'flex';
+        document.getElementById('controls-hint').style.display = 'block';
+        
+        let t = tracks[selTrackIdx];
+        
+        // Setup P1
+        p1.x = t.startX; p1.y = t.startY - (gameMode==='practice'?0:15); p1.angle = t.startAngle; 
+        p1.speed = 0; p1.nitro = 100; p1.lap = 1; p1.hitCp = false; p1.wp = 0;
+
+        // Setup P2
+        if(gameMode !== 'practice') {
+            p2.active = true;
+            p2.x = t.startX; p2.y = t.startY + 15; p2.angle = t.startAngle;
+            p2.speed = 0; p2.nitro = 100; p2.lap = 1; p2.hitCp = false; p2.wp = 0;
+            document.getElementById('p2-hud').style.display = 'block';
+            document.getElementById('p2-controls-hint').style.display = gameMode==='pvp' ? 'inline' : 'none';
+        } else {
+            p2.active = false; document.getElementById('p2-hud').style.display = 'none';
+            document.getElementById('p2-controls-hint').style.display = 'none';
+        }
+
+        timeElapsed = 0; isPlaying = true;
+        preRenderTrack();
+        lastTime = performance.now(); requestAnimationFrame(gameLoop);
+    }
+
+    function preRenderTrack() {
+        bgCtx.fillStyle = '#4CAF50'; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+        bgCtx.lineWidth = 90; bgCtx.lineJoin = 'round'; bgCtx.lineCap = 'round'; bgCtx.strokeStyle = '#555555';
+        bgCtx.beginPath(); tracks[selTrackIdx].draw(bgCtx); bgCtx.stroke();
+    }
+
+    // Controles teclado
+    window.addEventListener('keydown', (e) => {
+        let k = e.key.toLowerCase();
+        if(k==='w') keys.w=true; if(k==='s') keys.s=true; if(k==='a') keys.a=true; if(k==='d') keys.d=true; if(k==='shift') keys.shift=true;
+        if(k==='arrowup') keys.up=true; if(k==='arrowdown') keys.down=true; if(k==='arrowleft') keys.left=true; if(k==='arrowright') keys.right=true; if(k==='control') keys.ctrl=true;
+    });
+    window.addEventListener('keyup', (e) => {
+        let k = e.key.toLowerCase();
+        if(k==='w') keys.w=false; if(k==='s') keys.s=false; if(k==='a') keys.a=false; if(k==='d') keys.d=false; if(k==='shift') keys.shift=false;
+        if(k==='arrowup') keys.up=false; if(k==='arrowdown') keys.down=false; if(k==='arrowleft') keys.left=false; if(k==='arrowright') keys.right=false; if(k==='control') keys.ctrl=false;
+    });
+
+    function processPlayer(p, isP2) {
+        if(!p.active && isP2) return;
+
+        let dt = 0.016; // Fixed timestep for stability
+        let up = isP2 ? keys.up : keys.w;
+        let down = isP2 ? keys.down : keys.s;
+        let left = isP2 ? keys.left : keys.a;
+        let right = isP2 ? keys.right : keys.d;
+        let nitro = isP2 ? keys.ctrl : keys.shift;
+
+        // IA toma el control si es PvE y es el P2
+        if(isP2 && gameMode === 'pve') {
+            runAI(p);
+            up = true; down = false; left = false; right = false; nitro = false; // IA maneja aceleracion interna
+        } else {
+            // Controles Humanos
+            let maxSpeed = (nitro && p.nitro > 0) ? p.car.top * 1.5 : p.car.top;
+            let acc = (nitro && p.nitro > 0) ? p.car.acc * 2 : p.car.acc;
+
+            if (up) p.speed += acc;
+            if (down) p.speed -= acc;
+            if (p.speed > maxSpeed) p.speed = maxSpeed;
+            if (p.speed < -p.car.top/2) p.speed = -p.car.top/2;
+
+            if (nitro && up && p.nitro > 0) p.nitro -= 0.5;
+            else if (p.speed > 0 && p.nitro < 100) p.nitro += 0.1;
+
+            if (Math.abs(p.speed) > 0.5) {
+                let t = p.car.turn * (p.speed > 0 ? 1 : -1);
+                if (left) p.angle -= t;
+                if (right) p.angle += t;
+            }
+        }
+
+        // Fricción terreno
+        let isOnGrass = false;
+        try {
+            let px = bgCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
+            isOnGrass = (px[0] === 76 && px[1] === 175);
+        } catch(e) {}
+        
+        p.speed *= isOnGrass ? 0.90 : (!up && !down ? 0.96 : 0.98);
+        p.x += Math.cos(p.angle) * p.speed;
+        p.y += Math.sin(p.angle) * p.speed;
+
+        // Límites
+        if(p.x < 10) p.x=10; if(p.x > canvas.width-10) p.x=canvas.width-10;
+        if(p.y < 10) p.y=10; if(p.y > canvas.height-10) p.y=canvas.height-10;
+
+        // Laps
+        let t = tracks[selTrackIdx];
+        if (p.x>t.checkpoint.x && p.x<t.checkpoint.x+t.checkpoint.w && p.y>t.checkpoint.y && p.y<t.checkpoint.y+t.checkpoint.h) p.hitCp = true;
+        if (p.x>t.finishLine.x && p.x<t.finishLine.x+t.finishLine.w && p.y>t.finishLine.y && p.y<t.finishLine.y+t.finishLine.h) {
+            if (p.hitCp) { p.lap++; p.hitCp = false; }
+        }
+    }
+
+    // Lógica perfecta para la IA usando los waypoints
+    function runAI(p) {
+        let t = tracks[selTrackIdx];
+        let target = t.waypoints[p.wp];
+        let dx = target.x - p.x;
+        let dy = target.y - p.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        
+        if (dist < 60) { p.wp = (p.wp + 1) % t.waypoints.length; target = t.waypoints[p.wp]; dx = target.x - p.x; dy = target.y - p.y; }
+
+        let targetAngle = Math.atan2(dy, dx);
+        let diff = targetAngle - p.angle;
+        while(diff > Math.PI) diff -= Math.PI*2; while(diff < -Math.PI) diff += Math.PI*2;
+
+        if (diff > 0.1) p.angle += p.car.turn;
+        else if (diff < -0.1) p.angle -= p.car.turn;
+
+        // Si la curva es muy cerrada, frena. Si no, acelera a fondo.
+        if (Math.abs(diff) > 0.6) p.speed -= p.car.acc; 
+        else p.speed += p.car.acc;
+
+        if (p.speed > p.car.top * 0.95) p.speed = p.car.top * 0.95; // IA va casi al máximo
+        if (p.speed < 1.0) p.speed = 1.0;
+    }
+
+    function gameLoop(timestamp) {
+        if (!isPlaying) return;
+        let dt = (timestamp - lastTime)/1000; lastTime = timestamp;
+        if(dt > 0.1) dt = 0.016; timeElapsed += dt;
+
+        processPlayer(p1, false);
+        processPlayer(p2, true);
+
+        // Dibujar
+        ctx.drawImage(bgCanvas, 0, 0);
+        
+        let fl = tracks[selTrackIdx].finishLine;
+        ctx.fillStyle = '#fff'; ctx.fillRect(fl.x, fl.y, fl.w, fl.h); // Meta blanca simple
+        
+        drawCarTopDown(p1, false);
+        if(p2.active) drawCarTopDown(p2, true);
+        
+        // HUD
+        document.getElementById('time-ui').innerText = timeElapsed.toFixed(2) + "s";
+        document.getElementById('p1-lap').innerText = Math.min(p1.lap, totalLaps);
+        document.getElementById('p1-nitro').style.width = p1.nitro + "%";
+        if(p2.active) {
+            document.getElementById('p2-lap').innerText = Math.min(p2.lap, totalLaps);
+            document.getElementById('p2-nitro').style.width = p2.nitro + "%";
+        }
+
+        // Fin de juego
+        if (p1.lap > totalLaps) endRace("¡GANA JUGADOR 1!");
+        else if (p2.active && p2.lap > totalLaps) endRace(gameMode === 'pve' ? "¡GANA LA IA!" : "¡GANA JUGADOR 2!");
+        else requestAnimationFrame(gameLoop);
+    }
+
+    // Diseñando los carritos (Sin usar imágenes en la pista)
+    function drawCarTopDown(p, isP2) {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+        
+        // Nitro flame
+        let nitroKey = isP2 ? keys.ctrl : keys.shift;
+        if (nitroKey && p.nitro > 0 && p.speed > 1) {
+            ctx.fillStyle = '#00d2ff'; ctx.beginPath();
+            ctx.moveTo(-15, -4); ctx.lineTo(-30, 0); ctx.lineTo(-15, 4); ctx.fill();
+        }
+
+        ctx.fillStyle = p.car.color; ctx.fillRect(-15, -8, 30, 16); // Chasis
+        ctx.strokeStyle = '#000'; ctx.strokeRect(-15, -8, 30, 16); // Borde
+        ctx.fillStyle = '#111'; ctx.fillRect(-8, -6, 6, 12); // Vidrio atrás
+        ctx.fillRect(2, -6, 6, 12); // Parabrisas
+
+        // Indicador de jugador encima del carro
+        ctx.fillStyle = isP2 ? '#ff5252' : '#4fc3f7'; ctx.font = '10px Arial';
+        ctx.fillText(isP2 ? "P2" : "P1", -5, 2);
+
+        ctx.restore();
+    }
+
+    function endRace(msg) {
+        isPlaying = false;
+        if(gameMode === 'practice' || msg === "¡GANA JUGADOR 1!") saveRecord(timeElapsed.toFixed(2));
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        document.getElementById('game-over').style.display = 'block';
+        document.getElementById('result-msg').innerText = gameMode === 'practice' ? `¡TIEMPO: ${timeElapsed.toFixed(2)}s!` : `${msg} (${timeElapsed.toFixed(2)}s)`;
+    }
+</script>
+</body>
+</html>

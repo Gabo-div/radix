@@ -41,7 +41,9 @@ STUDENTS = [
 # --- biblioteca -------------------------------------------------------------
 # kind=image|video|pdf -> se resuelve en Wikimedia Commons con `search`
 # (`filemime` afina el tipo de archivo). kind=text -> el `body` se escribe tal
-# cual como archivo y se sube como material de lectura.
+# cual como archivo y se sube como material de lectura. `type` es opcional y
+# pisa el tipo que detect_type deduciría de la extensión: así un .html se
+# registra como videojuego (game) en vez de documento.
 
 MEDIA = [
     # Sistemas Distribuidos
@@ -389,6 +391,9 @@ un Dios bueno y poderoso frente al sufrimiento observable.
 razón, sin apelar a la revelación. Su alcance es discutido dentro de las
 propias tradiciones.
 """},
+
+    # Los videojuegos HTML se descubren automáticamente de seeds/games/
+    # al construir el zip — la lección les-go-04 referencia [[lib-game-la-culebrita]].
 ]
 
 # --- asignaturas ------------------------------------------------------------
@@ -3355,6 +3360,14 @@ No todo merece prueba. Sí la merece lo que tiene ramas, lo que calcula algo y
 lo que ya falló una vez. Un ejemplo real de este proyecto: el respaldo de la
 base de datos tiene una única prueba que exporta, vuelve a importar y compara
 fila por fila, porque si eso se rompe se pierden datos.
+
+## Para despejarse
+
+Programar también es jugar: [[lib-game-la-culebrita]] es el clásico juego de la
+culebrita, escrito en un solo archivo HTML con un `<canvas>` y un bucle de
+`setInterval`. Ábrelo con el botón Jugar y piensa cómo sería la misma lógica
+en Go: el estado sería un slice de posiciones y cada paso del juego, una
+función que devuelve error cuando la culebrita choca.
 
 {video}
 

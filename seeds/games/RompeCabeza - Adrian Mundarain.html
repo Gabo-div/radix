@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copa UNEG - Rompecabezas Temático</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding-top: 30px;
+        }
+
+        #game-container {
+            background-color: #262626;
+            border: 4px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            width: 750px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+
+        h1, h2, h3 { color: #4fc3f7; margin-top: 0; }
+        h3 { color: #ffeb3b; font-size: 18px; margin-bottom: 10px; }
+
+        .btn {
+            background-color: #444; color: white; border: 2px solid transparent; padding: 10px 20px;
+            margin: 5px; font-size: 14px; cursor: pointer; font-weight: bold; border-radius: 5px;
+            transition: 0.2s;
+        }
+        .btn:hover { background-color: #666; }
+        .btn.active { background-color: #4fc3f7; color: #000; border-color: #fff; }
+        .btn-action { background-color: #4CAF50; padding: 12px 30px; font-size: 16px; margin-top: 20px; color: white; }
+        
+        .settings-group { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+
+        #puzzle-wrapper {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            background: #111;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        #game-area {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        #reference-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #111;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #555;
+        }
+        #reference-img {
+            width: 150px;
+            height: 150px;
+            background-size: cover;
+            border: 2px solid #aaa;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        #reference-container span { font-size: 12px; color: #aaa; font-weight: bold; }
+
+        #puzzle-board {
+            display: grid;
+            width: 500px;
+            height: 500px;
+            gap: 2px;
+            background-color: #111;
+            border: 4px solid #555;
+        }
+
+        .tile {
+            background-size: 500px 500px;
+            cursor: pointer;
+            transition: transform 0.1s, border 0.1s;
+            box-sizing: border-box;
+        }
+        .tile:hover { opacity: 0.8; }
+        .tile.selected {
+            border: 4px solid #ffeb3b;
+            transform: scale(0.92);
+            z-index: 10;
+            opacity: 1;
+        }
+
+        #records-box {
+            background: #111; border: 1px solid #333; border-radius: 5px; padding: 15px;
+            margin-top: 15px; text-align: left; font-size: 14px; color: #ccc;
+        }
+        .record-entry { display: flex; justify-content: space-between; border-bottom: 1px solid #222; padding: 4px 0; }
+        .record-entry:last-child { border: none; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    
+    <!-- MENÚ PRINCIPAL -->
+    <div id="menu">
+        <h1>🧩 ROMPECABEZAS UNEG 🧩</h1>
+        <p style="color: #aaa; font-size: 13px;">Temática: Sistemas Distribuidos en la Selva e Ingeniería para Comunidades Indígenas.</p>
+
+        <div class="settings-group">
+            <h3>Dificultad (Cuadrícula)</h3>
+            <button class="btn diff-btn active" onclick="setDifficulty(3, this)">Fácil (3x3)</button>
+            <button class="btn diff-btn" onclick="setDifficulty(4, this)">Normal (4x4)</button>
+            <button class="btn diff-btn" onclick="setDifficulty(5, this)">Difícil (5x5)</button>
+            <button class="btn diff-btn" onclick="setDifficulty(6, this)">Experto (6x6)</button>
+        </div>
+
+        <div id="records-box">
+            <h4 style="margin: 0 0 10px 0; color: #ffeb3b;">🏆 Récords de la Sesión (Se borran al salir)</h4>
+            <div id="records-list">No hay tiempos registrados aún.</div>
+        </div>
+
+        <button id="btn-start" class="btn btn-action" onclick="initRandomGame()">¡INICIAR ROMPECABEZAS ALEATORIO! ➔</button>
+    </div>
+
+    <!-- ÁREA DE JUEGO -->
+    <div id="puzzle-wrapper">
+        <div id="hud">
+            <div>CATEGORÍA: <span id="category-ui" style="color: #4fc3f7;">Sistema</span></div>
+            <div>TEMA: <span id="theme-ui" style="color: #ffeb3b;">Red</span></div>
+            <div>MOV: <span id="moves-ui" style="color: #00e676;">0</span></div>
+            <div>TIEMPO: <span id="time-ui" style="color: #ff9800;">00:00</span></div>
+        </div>
+        
+        <div id="game-area">
+            <div id="reference-container">
+                <div id="reference-img"></div>
+                <span>MODELO</span>
+            </div>
+
+            <div id="puzzle-board"></div>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <button class="btn" style="background-color: #d32f2f;" onclick="location.reload()">Abandonar / Volver</button>
+        </div>
+    </div>
+    
+    <!-- MENSAJE DE VICTORIA -->
+    <div id="victory-screen" style="display:none; margin-top: 20px;">
+        <h1 style="color: #4CAF50;">¡ROMPECABEZAS COMPLETADO!</h1>
+        <p id="victory-stats"></p>
+        <button class="btn btn-action" onclick="location.reload()">Jugar de Nuevo</button>
+    </div>
+
+</div>
+
+<script>
+    // --- GALERÍA AMPLIADA DE IMÁGENES SELECCIONADAS ---
+    const imageLibrary = [
+        // 1. Sistemas Distribuidos (Nodos, Redes de Datos, Infraestructura Descentralizada)
+        { category: "Sistemas Distribuidos", name: "Arquitectura de Nodos y Red", url: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=500&h=500&fit=crop" },
+        { category: "Sistemas Distribuidos", name: "Servidores Descentralizados", url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=500&h=500&fit=crop" },
+        { category: "Sistemas Distribuidos", name: "Conectividad Global / IoT", url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=500&h=500&fit=crop" },
+        { category: "Sistemas Distribuidos", name: "Flujo de Datos en Red", url: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=500&h=500&fit=crop" },
+        { category: "Sistemas Distribuidos", name: "Topología de Servidores", url: "https://images.unsplash.com/photo-1510519138161-5364d8cd7bb5?q=80&w=500&h=500&fit=crop" },
+
+        // 2. Naturaleza y Selva (Paisajes, Tepuyes, Ríos de la Región)
+        { category: "Naturaleza y Selva", name: "Selva y Vegetación", url: "https://images.unsplash.com/photo-1511497584788-876761142212?q=80&w=500&h=500&fit=crop" },
+        { category: "Naturaleza y Selva", name: "Río y Bosque Tropical", url: "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=500&h=500&fit=crop" },
+        { category: "Naturaleza y Selva", name: "Atardecer en la Sabana", url: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=500&h=500&fit=crop" },
+        { category: "Naturaleza y Selva", name: "Montañas y Neblina", url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=500&h=500&fit=crop" },
+        { category: "Naturaleza y Selva", name: "Cascada en la Selva", url: "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?q=80&w=500&h=500&fit=crop" },
+
+        // 3. Culturas Indígenas (Arte, Comunidad, Tradición)
+        { category: "Cultura Indígena", name: "Arte Textil Tradicional", url: "https://images.unsplash.com/photo-1582214777419-741c888d1830?q=80&w=500&h=500&fit=crop" },
+        { category: "Cultura Indígena", name: "Patrimonio Ancestral", url: "https://images.unsplash.com/photo-1509315357904-7a13d3957cd9?q=80&w=500&h=500&fit=crop" },
+        { category: "Cultura Indígena", name: "Cerámica y Artesanía", url: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?q=80&w=500&h=500&fit=crop" },
+        { category: "Cultura Indígena", name: "Tejido y Simbología", url: "https://images.unsplash.com/photo-1604928503827-0466b0d91206?q=80&w=500&h=500&fit=crop" },
+        { category: "Cultura Indígena", name: "Comunidad y Armonía", url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=500&h=500&fit=crop" }
+    ];
+
+    let gridSize = 3; 
+    let activeImage = null;
+    
+    let board = document.getElementById('puzzle-board');
+    let tiles = [];
+    let selectedTile = null; 
+    
+    let moves = 0;
+    let timeElapsed = 0;
+    let timerInterval = null;
+
+    function setDifficulty(size, btn) {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        gridSize = size;
+    }
+
+    function loadRecords() {
+        let records = JSON.parse(sessionStorage.getItem('puzzleRecordsUNEG')) || [];
+        const listDiv = document.getElementById('records-list');
+        
+        if (records.length === 0) {
+            listDiv.innerHTML = 'No hay tiempos registrados aún.';
+            return;
+        }
+
+        listDiv.innerHTML = '';
+        records.forEach((rec, i) => {
+            listDiv.innerHTML += `
+                <div class="record-entry">
+                    <span>${i+1}. [${rec.cat}] ${rec.name} (${rec.grid}x${rec.grid})</span>
+                    <span style="color:#4fc3f7">${rec.time}s (${rec.moves} movs)</span>
+                </div>`;
+        });
+    }
+
+    function saveRecord(time, moves) {
+        let records = JSON.parse(sessionStorage.getItem('puzzleRecordsUNEG')) || [];
+        records.push({ category: activeImage.category, name: activeImage.name, grid: gridSize, time: time, moves: moves });
+
+        records.sort((a, b) => {
+            if (b.grid !== a.grid) return b.grid - a.grid; 
+            return a.time - b.time; 
+        });
+
+        if (records.length > 5) records.pop();
+        sessionStorage.setItem('puzzleRecordsUNEG', JSON.stringify(records));
+    }
+
+    window.onload = loadRecords;
+
+    function initRandomGame() {
+        let btn = document.getElementById('btn-start');
+        btn.innerText = "Sincronizando nodos e imagen... ⏳";
+        btn.style.pointerEvents = 'none';
+
+        let randomChoice = imageLibrary[Math.floor(Math.random() * imageLibrary.length)];
+        
+        let imgLoader = new Image();
+        imgLoader.src = randomChoice.url;
+
+        imgLoader.onload = () => {
+            activeImage = randomChoice;
+            startGame();
+        };
+
+        imgLoader.onerror = () => {
+            initRandomGame();
+        };
+    }
+
+    function startGame() {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('puzzle-wrapper').style.display = 'flex';
+        
+        document.getElementById('reference-img').style.backgroundImage = `url(${activeImage.url})`;
+        document.getElementById('category-ui').innerText = activeImage.category;
+        document.getElementById('theme-ui').innerText = activeImage.name;
+        
+        buildBoard();
+        shuffleBoard();
+        
+        moves = 0;
+        timeElapsed = 0;
+        document.getElementById('moves-ui').innerText = moves;
+        document.getElementById('time-ui').innerText = "00:00";
+        
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeElapsed++;
+            let m = Math.floor(timeElapsed / 60).toString().padStart(2, '0');
+            let s = (timeElapsed % 60).toString().padStart(2, '0');
+            document.getElementById('time-ui').innerText = `${m}:${s}`;
+        }, 1000);
+    }
+
+    function buildBoard() {
+        board.innerHTML = '';
+        board.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+        board.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+        
+        tiles = [];
+        let pieceSize = 500 / gridSize;
+
+        for (let row = 0; row < gridSize; row++) {
+            for (let col = 0; col < gridSize; col++) {
+                let index = row * gridSize + col;
+                
+                let tileDiv = document.createElement('div');
+                tileDiv.className = 'tile';
+                tileDiv.style.backgroundImage = `url(${activeImage.url})`;
+                
+                let bgPosX = -(col * pieceSize);
+                let bgPosY = -(row * pieceSize);
+                tileDiv.style.backgroundPosition = `${bgPosX}px ${bgPosY}px`;
+                
+                tileDiv.dataset.correctIndex = index;
+                tileDiv.dataset.currentIndex = index; 
+                
+                tileDiv.onclick = () => handleTileClick(tileDiv);
+                
+                board.appendChild(tileDiv);
+                tiles.push(tileDiv);
+            }
+        }
+    }
+
+    function shuffleBoard() {
+        let shuffleMoves = gridSize * gridSize * 2; 
+        for (let i = 0; i < shuffleMoves; i++) {
+            let idxA = Math.floor(Math.random() * tiles.length);
+            let idxB = Math.floor(Math.random() * tiles.length);
+            swapTiles(tiles[idxA], tiles[idxB]);
+        }
+    }
+
+    function handleTileClick(clickedTile) {
+        if (!selectedTile) {
+            selectedTile = clickedTile;
+            selectedTile.classList.add('selected');
+        } else {
+            if (selectedTile === clickedTile) {
+                selectedTile.classList.remove('selected');
+                selectedTile = null;
+                return;
+            }
+            
+            swapTiles(selectedTile, clickedTile);
+            
+            selectedTile.classList.remove('selected');
+            selectedTile = null;
+            
+            moves++;
+            document.getElementById('moves-ui').innerText = moves;
+            
+            checkVictory();
+        }
+    }
+
+    function swapTiles(tileA, tileB) {
+        let tempBgPos = tileA.style.backgroundPosition;
+        tileA.style.backgroundPosition = tileB.style.backgroundPosition;
+        tileB.style.backgroundPosition = tempBgPos;
+
+        let tempIdx = tileA.dataset.currentIndex;
+        tileA.dataset.currentIndex = tileB.dataset.currentIndex;
+        tileB.dataset.currentIndex = tempIdx;
+    }
+
+    function checkVictory() {
+        let isComplete = true;
+        for (let i = 0; i < tiles.length; i++) {
+            if (tiles[i].dataset.currentIndex !== tiles[i].dataset.correctIndex) {
+                isComplete = false;
+                break;
+            }
+        }
+
+        if (isComplete) {
+            clearInterval(timerInterval);
+            setTimeout(() => {
+                saveRecord(timeElapsed, moves);
+                document.getElementById('puzzle-wrapper').style.display = 'none';
+                document.getElementById('victory-screen').style.display = 'block';
+                document.getElementById('victory-stats').innerHTML = `
+                    Categoría: <b>${activeImage.category}</b> <br>
+                    Tema: <b>${activeImage.name}</b> <br>
+                    Tiempo: <b>${timeElapsed}s</b> <br>
+                    Movimientos: <b>${moves}</b> <br>
+                    Dificultad: <b>${gridSize}x${gridSize}</b>
+                `;
+            }, 400);
+        }
+    }
+</script>
+</body>
+</html>

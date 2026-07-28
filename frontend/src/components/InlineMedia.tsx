@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import type { LibraryItem } from "../types";
-import { FileText, Download } from "lucide-react";
+import { FileText, Download, Gamepad2, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import GamePlayer from "./GamePlayer";
 
 interface Props {
   item: LibraryItem;
@@ -10,6 +12,7 @@ interface Props {
 export default function InlineMedia({ item }: Props) {
   const url = api.getLibraryFileUrl(item.id);
   const [textContent, setTextContent] = useState("");
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     if (item.type === "text") {
@@ -52,6 +55,23 @@ export default function InlineMedia({ item }: Props) {
           <pre className="text-sm text-foreground/80 font-mono whitespace-pre-wrap overflow-x-auto max-h-[400px] p-4">
             {textContent || "Cargando contenido..."}
           </pre>
+        </div>
+      );
+    case "game":
+      // El juego no se renderiza inline: solo una tarjeta con acceso al
+      // reproductor (GamePlayer), que lo ejecuta aislado en un modal.
+      return (
+        <div className="flex items-center gap-3 p-4 my-3 bg-card border border-border rounded-xl">
+          <Gamepad2 size={24} className="text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground truncate">{item.title}</p>
+            <p className="text-xs text-muted-foreground">Videojuego HTML · {(item.sizeKB / 1024).toFixed(1)} MB</p>
+          </div>
+          <Button size="sm" onClick={() => setPlaying(true)}>
+            <Play size={14} />
+            Jugar
+          </Button>
+          {playing && <GamePlayer item={item} onClose={() => setPlaying(false)} />}
         </div>
       );
     default:

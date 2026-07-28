@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La culebrita</title>
+<style>
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column;
+         align-items:center; justify-content:center; gap:.6rem;
+         background:#0f172a; color:#e2e8f0; font-family:system-ui,sans-serif; }
+  h1 { font-size:1.1rem; margin:0; }
+  #info { display:flex; gap:1.2rem; font-size:.9rem; }
+  canvas { background:#1e293b; border-radius:.5rem; max-width:92vw; max-height:65vh; }
+  #msg { min-height:1.4rem; font-size:.9rem; color:#94a3b8; }
+  button { padding:.45rem 1.2rem; border:0; border-radius:.5rem;
+           background:#4f46e5; color:#fff; font:inherit; cursor:pointer; }
+  button:hover { background:#4338ca; }
+</style>
+</head>
+<body>
+<h1>La culebrita</h1>
+<div id="info"><span>Puntos: <b id="pts">0</b></span><span>Récord: <b id="rec">0</b></span></div>
+<canvas id="cv" width="400" height="400" tabindex="0"></canvas>
+<div id="msg">Flechas o WASD para moverte. Espacio para empezar.</div>
+<button id="btn" type="button">Empezar</button>
+<script>
+"use strict";
+var N = 20, CELL = 20;
+var cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+var pts = document.getElementById("pts"), rec = document.getElementById("rec");
+var msg = document.getElementById("msg"), btn = document.getElementById("btn");
+var snake, dir, nextDir, food, score, best = 0, timer = null;
+
+function colocarComida() {
+  while (true) {
+    var f = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) };
+    var libre = true;
+    for (var i = 0; i < snake.length; i++)
+      if (snake[i].x === f.x && snake[i].y === f.y) { libre = false; break; }
+    if (libre) return f;
+  }
+}
+function reiniciar() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  dir = { x: 1, y: 0 }; nextDir = dir;
+  score = 0; pts.textContent = "0";
+  food = colocarComida();
+  pintar();
+}
+function pintar() {
+  ctx.fillStyle = "#1e293b"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = "#f87171";
+  ctx.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
+  for (var i = 0; i < snake.length; i++) {
+    ctx.fillStyle = i === 0 ? "#4ade80" : "#22c55e";
+    ctx.fillRect(snake[i].x * CELL + 1, snake[i].y * CELL + 1, CELL - 2, CELL - 2);
+  }
+}
+function paso() {
+  dir = nextDir;
+  var cabeza = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  if (cabeza.x < 0 || cabeza.x >= N || cabeza.y < 0 || cabeza.y >= N) return fin();
+  for (var i = 0; i < snake.length; i++)
+    if (snake[i].x === cabeza.x && snake[i].y === cabeza.y) return fin();
+  snake.unshift(cabeza);
+  if (cabeza.x === food.x && cabeza.y === food.y) {
+    score++; pts.textContent = String(score);
+    food = colocarComida();
+  } else {
+    snake.pop();
+  }
+  pintar();
+}
+function fin() {
+  clearInterval(timer); timer = null;
+  if (score > best) { best = score; rec.textContent = String(best); }
+  msg.textContent = "Fin del juego: " + score + " puntos. Espacio para otra.";
+  btn.textContent = "Otra vez";
+}
+function empezar() {
+  if (timer) return;
+  reiniciar();
+  msg.textContent = "";
+  timer = setInterval(paso, 120);
+  cv.focus();
+}
+document.addEventListener("keydown", function (e) {
+  var k = e.key;
+  if (k === " ") { e.preventDefault(); empezar(); return; }
+  var d = null;
+  if (k === "ArrowUp" || k === "w" || k === "W") d = { x: 0, y: -1 };
+  if (k === "ArrowDown" || k === "s" || k === "S") d = { x: 0, y: 1 };
+  if (k === "ArrowLeft" || k === "a" || k === "A") d = { x: -1, y: 0 };
+  if (k === "ArrowRight" || k === "d" || k === "D") d = { x: 1, y: 0 };
+  if (d && (d.x !== -dir.x || d.y !== -dir.y)) { nextDir = d; e.preventDefault(); }
+});
+btn.addEventListener("click", empezar);
+reiniciar();
+</script>
+<!--
+  Videojuego incluido en el contenido semilla de RADIX.
+  Autor: Gabriel Hernández
+-->
+</body>
+</html>

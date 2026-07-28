@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html class="dark" lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>BRICK_BREAK_OS | ARCADE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Anybody:wght@400;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Hanken+Grotesk:wght@400;600&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#131318",
+                        "primary": "#ffffff",
+                        "secondary": "#ffabf3",
+                        "primary-fixed": "#00fbfb",
+                        "error-container": "#93000a",
+                        "on-surface-variant": "#b9cac9",
+                        "surface-container-highest": "#35343a"
+                    },
+                    fontFamily: {
+                        "headline-lg": ["Anybody"],
+                        "label-md": ["JetBrains Mono"],
+                        "score-display": ["Anybody"],
+                        "body-lg": ["Hanken Grotesk"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #131318;
+            color: #e4e1e9;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Hanken Grotesk', sans-serif;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .crt-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .bloom-text {
+            text-shadow: 0 0 10px rgba(0, 251, 251, 0.8), 0 0 20px rgba(0, 251, 251, 0.4);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 251, 251, 0.2);
+        }
+
+        .neon-button {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(45deg, #00fbfb, #fe00fe);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .neon-button:hover {
+            filter: brightness(1.2);
+            box-shadow: 0 0 25px rgba(0, 251, 251, 0.6);
+            transform: scale(1.05);
+        }
+
+        .neon-button:active {
+            transform: scale(0.95);
+        }
+
+        #gameCanvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+
+<body class="bg-background">
+
+    <main class="w-full flex flex-col items-center gap-6 p-4">
+        <!-- Game HUD -->
+        <div class="w-full max-w-[800px] flex justify-between items-end">
+            <div class="glass-panel px-6 py-3 rounded-t-xl border-b-0">
+                <p class="font-label-md text-[10px] text-secondary uppercase tracking-widest opacity-60">NIVEL</p>
+                <p class="font-score-display text-2xl text-primary" id="levelDisplay">01</p>
+            </div>
+            <div class="glass-panel px-10 py-4 rounded-t-xl border-b-0 flex flex-col items-center">
+                <p class="font-label-md text-[12px] text-primary-fixed uppercase tracking-[0.2em]">PUNTUACIÓN</p>
+                <p class="font-headline-lg text-4xl text-primary bloom-text" id="scoreDisplay">000000</p>
+            </div>
+            <div class="glass-panel px-6 py-3 rounded-t-xl border-b-0 text-right">
+                <p class="font-label-md text-[10px] text-secondary uppercase tracking-widest opacity-60">VIDAS</p>
+                <div class="flex justify-end gap-2 mt-1" id="livesContainer"></div>
+            </div>
+        </div>
+
+        <!-- Game Cabinet -->
+        <div
+            class="relative w-full max-w-[800px] aspect-[4/3] bg-black rounded-lg overflow-hidden border-4 border-surface-container-highest shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <div class="crt-overlay absolute inset-0 pointer-events-none"></div>
+
+            <canvas class="w-full h-full block" height="600" id="gameCanvas" width="800"></canvas>
+
+            <!-- Screens -->
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-20"
+                id="startScreen">
+                <h1 class="font-headline-lg text-5xl text-primary bloom-text mb-2">BRICK BREAK OS</h1>
+                <p class="font-body-lg text-on-surface-variant mb-8 text-center max-w-md">Controles: Ratón o
+                    Flechas.<br>Tecla P o ESC para pausar.</p>
+                <button class="neon-button px-10 py-4 font-headline-lg text-xl text-black rounded-lg"
+                    id="startBtn">INICIAR SISTEMA</button>
+            </div>
+
+            <div class="absolute inset-0 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center z-20 hidden"
+                id="pauseScreen">
+                <h1 class="font-headline-lg text-4xl text-primary-fixed bloom-text mb-2 tracking-widest">SISTEMA PAUSADO
+                </h1>
+                <p class="font-body-lg text-on-surface-variant mb-8">Presiona P para continuar</p>
+                <button class="neon-button px-8 py-3 font-headline-lg text-lg text-black rounded-lg"
+                    id="resumeBtn">REANUDAR</button>
+            </div>
+
+            <div class="absolute inset-0 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center z-20 hidden"
+                id="gameOverScreen">
+                <h1
+                    class="font-headline-lg text-5xl text-red-500 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)] mb-2 uppercase">
+                    ERROR CRÍTICO</h1>
+                <p class="font-body-lg text-on-surface-variant mb-4">CONEXIÓN PERDIDA</p>
+                <p class="font-headline-lg text-4xl text-primary mb-12">SCORE: <span id="finalScore">0</span></p>
+                <button class="neon-button px-10 py-4 font-headline-lg text-xl text-black rounded-lg"
+                    id="retryBtn">REINICIAR</button>
+            </div>
+
+            <div class="absolute inset-0 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center z-20 hidden"
+                id="winScreen">
+                <h1 class="font-headline-lg text-5xl text-primary-fixed bloom-text mb-2 uppercase">¡SECTOR LIMPIO!</h1>
+                <div class="flex gap-4 mb-10 mt-4 text-primary">
+                    <span class="material-symbols-outlined text-5xl">workspace_premium</span>
+                </div>
+                <button class="neon-button px-10 py-4 font-headline-lg text-xl text-black rounded-lg"
+                    id="nextLevelBtn">SIGUIENTE NIVEL</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const screens = {
+            start: document.getElementById('startScreen'),
+            gameover: document.getElementById('gameOverScreen'),
+            win: document.getElementById('winScreen'),
+            pause: document.getElementById('pauseScreen')
+        };
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const levelDisplay = document.getElementById('levelDisplay');
+        const livesContainer = document.getElementById('livesContainer');
+
+        // Audio Context for Retro Sounds
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function playTone(freq, type, duration, vol = 0.1) {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + duration);
+        }
+
+        // Game Variables
+        let score = 0, lives = 3, level = 1;
+        let isPaused = true;
+        let isGameOver = false;
+        let particles = [];
+
+        // Paddle
+        const paddleHeight = 12, paddleWidth = 100;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false, leftPressed = false;
+
+        // Ball
+        let ballRadius = 8;
+        let x = canvas.width / 2, y = canvas.height - 30;
+        let dx = 4, dy = -4;
+        let ballSpeedMultiplier = 1;
+
+        // Bricks
+        const brickRowCount = 5, brickColumnCount = 9;
+        const brickWidth = 75, brickHeight = 24, brickPadding = 10;
+        const brickOffsetTop = 50, brickOffsetLeft = 35;
+        let bricks = [];
+        const colors = ['#00fbfb', '#fe00fe', '#eaea00', '#00dddd', '#ffffff'];
+
+        function initBricks() {
+            bricks = [];
+            for (let c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1, color: colors[r % colors.length] };
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.size = Math.random() * 4 + 2;
+                this.speedX = Math.random() * 6 - 3;
+                this.speedY = Math.random() * 6 - 3;
+                this.life = 1.0;
+            }
+            update() { this.x += this.speedX; this.y += this.speedY; this.life -= 0.02; }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 10; i++) particles.push(new Particle(x, y, color));
+        }
+
+        // Controls
+        document.addEventListener("keydown", e => {
+            if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+            else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+
+            // Pause Logic
+            if ((e.key === "p" || e.key === "P" || e.key === "Escape") && !screens.start.classList.contains('hidden') === false && !isGameOver) {
+                togglePause();
+            }
+        });
+        document.addEventListener("keyup", e => {
+            if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+            else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+        });
+        document.addEventListener("mousemove", e => {
+            if (isPaused) return;
+            const relativeX = e.clientX - canvas.getBoundingClientRect().left;
+            if (relativeX > 0 && relativeX < canvas.width) {
+                paddleX = relativeX - paddleWidth / 2;
+            }
+        });
+
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                screens.pause.classList.remove('hidden');
+            } else {
+                screens.pause.classList.add('hidden');
+                requestAnimationFrame(draw);
+            }
+        }
+
+        function collisionDetection() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if (b.status === 1) {
+                        if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                            dy = -dy;
+                            b.status = 0;
+                            score += 100;
+                            updateHUD();
+                            playTone(440 + (r * 50), 'square', 0.1); // Retro hit sound
+                            createExplosion(b.x + brickWidth / 2, b.y + brickHeight / 2, b.color);
+
+                            if (isLevelComplete()) showWinScreen();
+                        }
+                    }
+                }
+            }
+        }
+
+        function isLevelComplete() {
+            return bricks.every(col => col.every(brick => brick.status === 0));
+        }
+
+        // Drawing Functions
+        function drawBall() {
+            ctx.beginPath(); ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffffff"; ctx.shadowBlur = 15; ctx.shadowColor = "#00fbfb";
+            ctx.fill(); ctx.closePath(); ctx.shadowBlur = 0;
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight - 10, paddleWidth, paddleHeight);
+            const gradient = ctx.createLinearGradient(paddleX, 0, paddleX + paddleWidth, 0);
+            gradient.addColorStop(0, "#00fbfb"); gradient.addColorStop(1, "#fe00fe");
+            ctx.fillStyle = gradient; ctx.shadowBlur = 10; ctx.shadowColor = "#fe00fe";
+            ctx.fill(); ctx.closePath(); ctx.shadowBlur = 0;
+        }
+
+        function drawBricks() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    if (bricks[c][r].status === 1) {
+                        let bX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+                        let bY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+                        bricks[c][r].x = bX; bricks[c][r].y = bY;
+
+                        ctx.beginPath(); ctx.rect(bX, bY, brickWidth, brickHeight);
+                        ctx.fillStyle = bricks[c][r].color; ctx.fill();
+                        ctx.fillStyle = "rgba(255,255,255,0.15)";
+                        ctx.fillRect(bX, bY, brickWidth, brickHeight / 2);
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach((p, index) => {
+                p.update(); p.draw();
+                if (p.life <= 0) particles.splice(index, 1);
+            });
+        }
+
+        function updateHUD() {
+            scoreDisplay.textContent = score.toString().padStart(6, '0');
+            levelDisplay.textContent = level.toString().padStart(2, '0');
+            livesContainer.innerHTML = Array(lives).fill('<span class="material-symbols-outlined text-secondary" style="font-variation-settings: \'FILL\' 1;">favorite</span>').join('');
+        }
+
+        function draw() {
+            if (isPaused) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Grid background
+            ctx.strokeStyle = 'rgba(0, 251, 251, 0.05)'; ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+            for (let i = 0; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+            drawBricks(); drawBall(); drawPaddle(); drawParticles(); collisionDetection();
+
+            // Wall Collisions
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+                playTone(200, 'sawtooth', 0.05); // Wall bounce sound
+            }
+            if (y + dy < ballRadius) {
+                dy = -dy;
+                playTone(200, 'sawtooth', 0.05);
+            } else if (y + dy > canvas.height - ballRadius - 10) {
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    // Dynamic paddle bounce logic
+                    let hitPoint = x - (paddleX + paddleWidth / 2);
+                    dx = hitPoint * 0.15;
+                    dy = -dy;
+                    playTone(600, 'sine', 0.1); // Paddle bounce sound
+                } else {
+                    lives--; updateHUD();
+                    playTone(150, 'square', 0.5); // Death sound
+                    if (!lives) showGameOver(); else resetBall();
+                }
+            }
+
+            if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 7;
+            else if (leftPressed && paddleX > 0) paddleX -= 7;
+
+            x += dx * ballSpeedMultiplier; y += dy * ballSpeedMultiplier;
+            requestAnimationFrame(draw);
+        }
+
+        function resetBall() {
+            x = canvas.width / 2; y = canvas.height - 40;
+            dx = 4 * (Math.random() > 0.5 ? 1 : -1); dy = -4;
+            paddleX = (canvas.width - paddleWidth) / 2;
+        }
+
+        function showScreen(screen) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            if (screen) screen.classList.remove('hidden');
+        }
+
+        function showGameOver() {
+            isPaused = true; isGameOver = true;
+            finalScoreDisplay.textContent = score;
+            showScreen(screens.gameover);
+        }
+
+        function showWinScreen() {
+            isPaused = true;
+            showScreen(screens.win);
+        }
+
+        function startLevel() {
+            isGameOver = false;
+            initBricks(); resetBall();
+            ballSpeedMultiplier = 1 + (level - 1) * 0.2;
+            isPaused = false;
+            updateHUD();
+            showScreen(null);
+            draw();
+        }
+
+        // Button Listeners
+        document.getElementById('startBtn').onclick = () => { audioCtx = new AudioContext(); startLevel(); };
+        document.getElementById('resumeBtn').onclick = togglePause;
+        document.getElementById('retryBtn').onclick = () => { score = 0; level = 1; lives = 3; startLevel(); };
+        document.getElementById('nextLevelBtn').onclick = () => { level++; startLevel(); };
+
+        initBricks(); updateHUD();
+    </script>
+</body>
+
+</html>

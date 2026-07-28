@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLibrary, useAddLibraryItem } from "@/hooks/useLibrary";
+import { isHtmlFilename } from "@/lib/utils";
 import { Upload, Search } from "lucide-react";
 import LibraryPreview from "../LibraryPreview";
 
@@ -26,6 +27,7 @@ export default function FilePickerModal({ onSelect, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [game, setGame] = useState(false);
 
   const filtered = items.filter(
     (i) => !search || i.title.toLowerCase().includes(search.toLowerCase()) || i.id.includes(search)
@@ -35,7 +37,7 @@ export default function FilePickerModal({ onSelect, onClose }: Props) {
     e.preventDefault();
     if (!title || !file) return;
     addItem.mutate(
-      { title, category, file },
+      { title, category, file, game: game && isHtmlFilename(file.name) },
       {
         onSuccess: (item) => {
           onSelect(item.id);
@@ -106,9 +108,24 @@ export default function FilePickerModal({ onSelect, onClose }: Props) {
               </Select>
               <Input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setFile(f);
+                  if (f && !isHtmlFilename(f.name)) setGame(false);
+                }}
                 required
               />
+              {file && isHtmlFilename(file.name) && (
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={game}
+                    onChange={(e) => setGame(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Es un videojuego (HTML autocontenido)
+                </label>
+              )}
               <div className="flex gap-2">
                 <Button type="submit" disabled={addItem.isPending}>
                   <Upload size={14} />

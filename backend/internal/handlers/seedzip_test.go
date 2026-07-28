@@ -171,6 +171,20 @@ func TestSeedBackupImports(t *testing.T) {
 		}
 	}
 
+	// Debe existir un videojuego HTML en la biblioteca.
+	var foundGame bool
+	for _, item := range items {
+		if item.Type == "game" {
+			foundGame = true
+			if item.FilePath == "" {
+				t.Errorf("game %s: sin file_path", item.ID)
+			}
+		}
+	}
+	if !foundGame {
+		t.Error("ningún elemento de la biblioteca tiene type=game")
+	}
+
 	// Volver a importar el mismo zip no debe duplicar nada.
 	again, err := s.ImportTables(ctx, dumps)
 	if err != nil {

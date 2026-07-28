@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { LibraryItem } from "../types";
-import { FileVideo, FileAudio, FileImage, FileText, File } from "lucide-react";
+import { FileVideo, FileAudio, FileImage, FileText, File, Gamepad2 } from "lucide-react";
 
 interface Props {
   item: LibraryItem;
@@ -15,6 +15,7 @@ const typeIcon: Record<string, typeof FileVideo> = {
   pdf: FileText,
   text: FileText,
   document: File,
+  game: Gamepad2,
 };
 
 const typeColor: Record<string, string> = {
@@ -24,6 +25,7 @@ const typeColor: Record<string, string> = {
   pdf: "text-destructive",
   text: "text-primary",
   document: "text-muted-foreground",
+  game: "text-warning",
 };
 
 // Cuántos caracteres del archivo de texto se piden para la vista previa. Es un

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLibrary, useAddLibraryItem } from "@/hooks/useLibrary";
+import { isHtmlFilename } from "@/lib/utils";
 import LibraryPreview from "../components/LibraryPreview";
 import { Upload, Filter } from "lucide-react";
 
@@ -17,7 +18,12 @@ const categories = [
   "Literatura", "Desarrollo", "Imágenes", "Video", "Audio", "General",
 ];
 
-const typeOptions = ["video", "audio", "image", "pdf", "text", "document"];
+const typeOptions = ["video", "audio", "image", "pdf", "text", "document", "game"];
+
+const typeLabels: Record<string, string> = {
+  video: "Video", audio: "Audio", image: "Image", pdf: "Pdf",
+  text: "Text", document: "Document", game: "Videojuego",
+};
 
 export default function Library() {
   const { currentUser } = useAuth();
@@ -27,6 +33,7 @@ export default function Library() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [game, setGame] = useState(false);
 
   const { data: items = [] } = useLibrary(
     typeFilter === "all" ? undefined : typeFilter,
@@ -38,10 +45,10 @@ export default function Library() {
     e.preventDefault();
     if (!title || !category || !file) return;
     addItem.mutate(
-      { title, category, file },
+      { title, category, file, game: game && isHtmlFilename(file.name) },
       {
         onSuccess: () => {
-          setTitle(""); setCategory(""); setFile(null);
+          setTitle(""); setCategory(""); setFile(null); setGame(false);
           setShowForm(false);
         },
         onError: (err) => toast.error((err as Error).message),
@@ -91,10 +98,25 @@ export default function Library() {
               </Select>
               <Input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setFile(f);
+                  if (f && !isHtmlFilename(f.name)) setGame(false);
+                }}
                 required
               />
             </div>
+            {file && isHtmlFilename(file.name) && (
+              <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={game}
+                  onChange={(e) => setGame(e.target.checked)}
+                  className="accent-primary"
+                />
+                Es un videojuego (HTML autocontenido)
+              </label>
+            )}
             {file && <p className="text-xs text-muted-foreground">Archivo: {file.name} ({(file.size / 1024).toFixed(1)} KB)</p>}
             <Button type="submit" variant="success" disabled={addItem.isPending}>
               {addItem.isPending ? "Subiendo..." : "Subir"}
@@ -112,7 +134,7 @@ export default function Library() {
           <SelectContent>
             <SelectItem value="all">Todos los tipos</SelectItem>
             {typeOptions.map((t) => (
-              <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+              <SelectItem key={t} value={t}>{typeLabels[t] ?? t}</SelectItem>
             ))}
           </SelectContent>
         </Select>

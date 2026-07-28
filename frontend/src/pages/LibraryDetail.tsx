@@ -9,13 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryItem, useLibraryItemUsage, useUpdateLibraryItem } from "@/hooks/useLibrary";
 import BackLink from "../components/common/BackLink";
+import GamePlayer from "../components/GamePlayer";
 import {
   Download, FileVideo, FileAudio, FileImage, FileText, Edit, CheckCircle, BookOpen,
+  Gamepad2, Play,
 } from "lucide-react";
 
 const typeIcon: Record<string, typeof FileVideo> = {
   video: FileVideo, audio: FileAudio, image: FileImage,
-  pdf: FileText, text: FileText, document: FileText,
+  pdf: FileText, text: FileText, document: FileText, game: Gamepad2,
 };
 
 export default function LibraryDetail() {
@@ -28,6 +30,7 @@ export default function LibraryDetail() {
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const [playing, setPlaying] = useState(false);
 
   const fileUrl = item ? api.getLibraryFileUrl(item.id) : "";
 
@@ -140,6 +143,23 @@ export default function LibraryDetail() {
           </pre>
         </Card>
       )}
+
+      {item.type === "game" && (
+        <Card className="flex items-center gap-4">
+          <Gamepad2 size={32} className="text-primary shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">Videojuego HTML</p>
+            <p className="text-xs text-muted-foreground">
+              Se ejecuta aislado en el reproductor, sin acceso a los datos de la aplicación.
+            </p>
+          </div>
+          <Button onClick={() => setPlaying(true)}>
+            <Play size={14} />
+            Jugar
+          </Button>
+        </Card>
+      )}
+      {playing && item.type === "game" && <GamePlayer item={item} onClose={() => setPlaying(false)} />}
 
       <Card>
         <h2 className="text-sm font-medium text-muted-foreground mb-4">Detalles del Archivo</h2>
