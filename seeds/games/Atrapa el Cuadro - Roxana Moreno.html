@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Minijuego: Atrapa el Cuadro</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+    }
+
+    /* El área donde se moverá el cuadro */
+    #tablero {
+      width: 400px;
+      height: 400px;
+      background-color: #ffffff;
+      border: 3px solid #333;
+      margin: 20px auto;
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    /* El objetivo que hay que cliquear */
+    #objetivo {
+      width: 50px;
+      height: 50px;
+      background-color: #ff4757;
+      position: absolute;
+      cursor: pointer;
+      border-radius: 5px;
+      top: 175px;
+      left: 175px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #2ed573;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>¡Atrapa el Cuadro!</h1>
+  <p>Puntos: <span id="puntos">0</span> | Tiempo: <span id="tiempo">10</span>s</p>
+  <button id="boton-inicio" onclick="iniciarJuego()">Iniciar Juego</button>
+
+  <div id="tablero">
+    <div id="objetivo" onclick="sumarPunto()"></div>
+  </div>
+
+  <script>
+    let puntos = 0;
+    let tiempoRestante = 10;
+    let intervaloTiempo;
+    let juegoActivo = false;
+
+    const elObjetivo = document.getElementById("objetivo");
+    const elPuntos = document.getElementById("puntos");
+    const elTiempo = document.getElementById("tiempo");
+    const elBoton = document.getElementById("boton-inicio");
+
+    function iniciarJuego() {
+      // Reiniciar variables
+      puntos = 0;
+      tiempoRestante = 10;
+      juegoActivo = true;
+
+      elPuntos.textContent = puntos;
+      elTiempo.textContent = tiempoRestante;
+      elBoton.disabled = true; // Desactivar botón durante la partida
+
+      moverObjetivo();
+
+      // Cuenta regresiva cada segundo (1000 ms)
+      intervaloTiempo = setInterval(() => {
+        tiempoRestante--;
+        elTiempo.textContent = tiempoRestante;
+
+        if (tiempoRestante <= 0) {
+          clearInterval(intervaloTiempo);
+          juegoActivo = false;
+          elBoton.disabled = false;
+          alert("¡Tiempo agotado! Conseguiste " + puntos + " puntos.");
+        }
+      }, 1000);
+    }
+
+    function sumarPunto() {
+      if (!juegoActivo) return;
+
+      puntos++;
+      elPuntos.textContent = puntos;
+      moverObjetivo();
+    }
+
+    function moverObjetivo() {
+      // Calcular posición aleatoria dentro del tablero de 400x400
+      // Le restamos 50px para que el cuadro no se salga de los bordes
+      const x = Math.floor(Math.random() * 350);
+      const y = Math.floor(Math.random() * 350);
+
+      elObjetivo.style.left = x + "px";
+      elObjetivo.style.top = y + "px";
+    }
+  </script>
+
+</body>
+</html>
