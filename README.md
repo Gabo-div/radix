@@ -8,17 +8,20 @@ Los archivos se suben localmente al servidor de borde, los estudiantes consumen 
 
 ## ✨ Funcionalidades
 
-- **3 roles con RBAC:** Profesor (Admin), Estudiante (User), Invitado (Guest)
-- **LMS Offline:** Cursos con lecciones en markdown, quizzes, XP y medallas
-- **Biblioteca Multimedia:** Upload real de archivos (video, audio, imagen, PDF, texto) con preview inline
-- **Wiki Syntax `[[id]]`:** Enlaza archivos dentro del contenido de las lecciones, se renderizan como media embebido
+- **3 roles con RBAC:** Profesor (Admin), Estudiante (Student), Invitado (Guest)
+- **LMS Offline:** Cursos con inscripción de estudiantes (el contenido solo es visible para inscritos), lecciones en markdown, quizzes por curso y XP
+- **Foro por curso:** Hilos y respuestas anidadas, likes, visible desde el curso
+- **Biblioteca Multimedia:** Upload real de archivos (video, audio, imagen, PDF, texto, documento) con preview inline
+- **Videojuegos HTML:** Un HTML subido puede marcarse como juego (`game=true`); se sirve en un `<iframe sandbox>` con su propio reproductor (`GamePlayer`)
+- **Wiki Syntax `[[id]]`:** Enlaza archivos, lecciones o quizzes dentro del contenido de una lección; se renderizan como media/tarjeta embebida
 - **Editor de Lecciones:** CodeMirror 6 con syntax highlight para `[[id]]`, hover tooltip con preview, y sidebar de archivos enlazados
 - **Monitor del Servidor:** Métricas en tiempo real (disco, usuarios activos, cola DTN)
 - **Observabilidad:** Página de Logs dedicada — tail en vivo, historial filtrable (nivel/fecha/texto libre vía full-text search) y estadísticas, con retención configurable
 - **Auto-detección de metadatos:** ffprobe extrae duración y resolución automáticamente al subir archivos
-- **Sincronización entre nodos:** Cola DTN real — cada escritura se anota como una operación reproducible, los nodos pares tiran solo lo que les falta, los conflictos se resuelven por versión de fila y los archivos se descargan aparte
+- **Sincronización entre nodos:** Cola DTN real — cada escritura se anota como una operación reproducible, los nodos pares tiran solo lo que les falta, los conflictos se resuelven por versión de fila (HLC) y los archivos se descargan aparte
 - **Red de pruebas en Docker:** Varios servidores de borde completos hablando entre sí en una máquina (`./testnet.sh`)
 - **Autenticación real:** Login por email/contraseña (bcrypt) + acceso invitado sin credenciales
+- **XP:** puntos por lección completada y por quiz aprobado. *(Las "medallas" del dashboard de estudiante son umbrales fijos calculados en el cliente, no un sistema de logros del backend — ver Roadmap.)*
 
 ---
 
@@ -210,20 +213,38 @@ Todas las rutas bajo `/api/v1/`. Autenticación vía `Authorization: Bearer <tok
 | `PATCH` | `/library/:id` | admin | Editar título/categoría |
 | `GET` | `/library/:id/file` | auth | Servir archivo (soporta `?token=` para media) |
 | `GET` | `/library/:id/usage` | auth | Lecciones que enlazan este archivo vía `[[id]]` (calculado en vivo) |
-| `POST` | `/library` | admin | Subir archivo (`multipart/form-data`) |
+| `POST` | `/library` | admin | Subir archivo (`multipart/form-data`, `game=true` marca un HTML como videojuego) |
 | `GET` | `/courses` | auth | Lista cursos |
 | `POST` | `/courses` | admin | Crear curso |
-| `GET` | `/courses/:id` | auth | Curso + lecciones |
+| `GET` | `/courses/:id` | auth | Curso + lecciones (estudiante: solo si está inscrito) |
+| `GET` | `/courses/:id/students` | admin | Estudiantes inscritos + puntos |
+| `GET` | `/courses/:id/students/available` | admin | Estudiantes no inscritos, para el picker |
+| `POST` | `/courses/:id/students` | admin | Inscribir estudiante |
+| `DELETE` | `/courses/:id/students/:userId` | admin | Desinscribir estudiante |
+| `GET` | `/courses/:id/resources` | auth | Archivos de biblioteca enlazados desde el curso |
+| `GET` | `/courses/:id/forum` | auth | Hilos y respuestas del foro del curso |
+| `GET` | `/courses/:id/forum/links` | auth | Recursos enlazados desde los posts del foro |
+| `POST` | `/courses/:id/forum` | auth | Crear hilo o respuesta |
+| `POST` | `/forum/:id/like` | auth | Dar like a un post |
+| `DELETE` | `/forum/:id/like` | auth | Quitar like |
 | `POST` | `/courses/:id/lessons` | admin | Crear lección |
-| `GET` | `/courses/:cId/lessons/:lId` | auth | Lección + quiz (oculto a guest) |
+| `GET` | `/courses/:cId/lessons/:lId` | auth | Lección + quiz adjunto (oculto a guest) |
 | `PUT` | `/lessons/:id` | admin | Editar lección (título + contenido) |
-| `POST` | `/quizzes` | admin | Crear quiz con preguntas |
+| `GET` | `/lessons` | auth | Todas las lecciones (para el picker de `[[id]]`) |
+| `GET` | `/lessons/:id/links` | auth | Archivos/lecciones/quizzes que esta lección enlaza |
+| `GET` | `/lessons/:id/usage` | auth | Lecciones que enlazan esta lección vía `[[id]]` |
+| `GET` | `/courses/:id/quizzes` | auth | Quizzes del curso |
+| `POST` | `/quizzes` | admin | Crear quiz con preguntas, asociado a un curso |
 | `GET` | `/quizzes/:id` | auth† | Ver quiz (†no guest) |
+| `PUT` | `/quizzes/:id` | admin | Editar quiz |
+| `GET` | `/quizzes/:id/links` | auth | Archivos/lecciones que este quiz enlaza |
 | `POST` | `/quizzes/:id/submit` | student | Responder → corrige y registra la nota |
 | `GET` | `/monitor` | admin | Métricas (disco, usuarios, cola DTN, nodos pares) |
 | `POST` | `/monitor/sync` | admin | Ejecutar una ronda de sincronización ahora |
 | `GET` | `/sync/ops` | nodo par | Registro de operaciones desde un cursor (`?since=&limit=&node=`), autenticado con `SYNC_TOKEN` |
 | `GET` | `/sync/file/:id` | nodo par | Archivo de un item de biblioteca, para que el nodo par complete lo que la operación no lleva |
+| `GET` | `/backup/export` | admin | Exportar toda la base como zip |
+| `POST` | `/backup/import` | admin | Importar un zip (merge por versión de fila) |
 | `GET` | `/logs` | auth | Últimas N líneas del log del servidor (tail en vivo) |
 | `GET` | `/logs/history` | admin | Historial filtrable (`?level=&from=&to=&q=&limit=&offset=`) |
 | `GET` | `/logs/stats` | admin | Conteos por nivel + retención configurada (`?from=&to=`) |
@@ -317,16 +338,19 @@ Este camino usa la base del segundo nodo dentro de Docker pero corre backend y f
 
 | Funcionalidad | Admin | Student | Guest |
 |---|---|---|---|
-| Dashboard personal con XP/medallas | — | ✅ | — |
-| Explorar cursos y lecciones | ✅ | ✅ | ✅ |
-| Crear / editar cursos | ✅ | — | — |
+| Dashboard personal con XP | — | ✅ | — |
+| Explorar cursos y lecciones | ✅ | ✅ (solo inscritos) | ✅ |
+| Crear / editar cursos, inscribir estudiantes | ✅ | — | — |
 | Crear / editar lecciones | ✅ | — | — |
-| Subir / editar archivos | ✅ | — | — |
+| Crear / editar quizzes | ✅ | — | — |
+| Subir / editar archivos (incl. videojuegos HTML) | ✅ | — | — |
 | Ver quizzes | ✅ | ✅ | ❌ |
 | Responder quizzes | — | ✅ | — |
-| Ganar XP y medallas | — | ✅ | — |
+| Participar en el foro del curso | ✅ | ✅ | ✅ |
+| Ganar XP | — | ✅ | — |
 | Monitor del servidor | ✅ | — | — |
 | Logs (tail en vivo + historial + stats) | ✅ | ❌ | ❌ |
+| Exportar / importar respaldo | ✅ | — | — |
 
 ---
 
@@ -337,12 +361,18 @@ type User struct {
     ID, Name, Email string
     PasswordHash string // no serializado
     Role     Role  // "admin" | "student" | "guest"
-    Points   int
     CompletedLessons []string
+    EnrolledCourses []string // solo relevante para student
+}
+
+// Fila de la pestaña "Estudiantes" de un curso.
+type CourseStudent struct {
+    ID, Name, Email string
+    Points int // suma en vivo de quiz_grades para ese curso
 }
 
 type LibraryItem struct {
-    ID, Title, Type, Category string // Type: video|audio|image|pdf|text|document
+    ID, Title, Type, Category string // Type: video|audio|image|pdf|text|document|game
     SizeKB int
     MimeType, OriginalFilename string
     UploadedBy, UploadedAt, ModifiedAt string
@@ -352,18 +382,33 @@ type LibraryItem struct {
 
 type Lesson struct {
     ID, CourseID, Title, ContentText string
-    QuizID *string
+    QuizID *string // quiz adjunto vía quizzes.lesson_id, no vía [[id]]
+}
+
+// Quiz.LessonID es opcional: vive en el curso ("Cuestionarios") y
+// opcionalmente se adjunta a una lección.
+type Quiz struct {
+    ID, CourseID, Title, Description string
+    LessonID *string
+    Value int // puntos máximos; la nota = value * (aciertos / total)
+    Questions []QuizQuestion // { Text, Options[], CorrectIndex }
+}
+
+// Un hilo o una respuesta del foro de un curso (árbol vía ParentID).
+type ForumPost struct {
+    ID, CourseID string
+    ParentID *string
+    UserID, AuthorName string
+    AuthorRole Role
+    Title, Body, CreatedAt string
+    LikeCount int
+    Liked bool // si el usuario que pide lo likeó
 }
 
 type ServerLog struct {
     ID int64
     Timestamp, Level, Message string
     Fields string // JSON genérico — método/path/rol/status/duración para requests, lo que sea para otros logs
-}
-
-type Quiz struct {
-    ID, LessonID string
-    Questions []QuizQuestion // { Text, Options[], CorrectIndex }
 }
 
 type Course struct {
@@ -395,17 +440,21 @@ type SyncQueue struct {
 | Ruta | Componente | Rol | Descripción |
 |---|---|---|---|
 | `/login` | Login | público | Login email/password + acceso invitado |
-| `/dashboard` | StudentDashboard | student | Progreso, XP, medallas |
+| `/dashboard` | StudentDashboard | student | Progreso, XP, medallas (umbrales fijos en cliente) |
 | `/library` | Library | todos | Grid de archivos con filtros |
 | `/library/:id` | LibraryDetail | todos | Preview + metadatos + editar (admin) |
 | `/courses` | Courses | todos | Lista de cursos |
-| `/courses/:id` | CourseDetail | todos | Lecciones del curso |
+| `/courses/:id` | CourseDetail | todos | Lecciones, quizzes, estudiantes (admin) y foro del curso |
 | `/courses/:id/lessons/new` | LessonEditor | admin | Editor completo con CodeMirror |
 | `/courses/:id/lessons/:lid/edit` | LessonEditor | admin | Editar lección existente |
-| `/courses/:id/lessons/:lid` | LessonViewer | todos | Visor con media embebido + quiz |
-| `/admin` | AdminPanel | admin | Crear cursos |
-| `/admin/monitor` | Monitor | admin | Disco, sesiones activas, cola DTN |
-| `/admin/logs` | Logs | admin | Tail en vivo + historial filtrable + stats |
+| `/courses/:id/lessons/:lid` | LessonViewer | todos | Visor con media embebido + quiz adjunto |
+| `/courses/:id/quizzes/new` | QuizEditor | admin | Crear quiz del curso |
+| `/courses/:id/quizzes/:qid/edit` | QuizEditor | admin | Editar quiz |
+| `/courses/:id/quizzes/:qid` | QuizViewer | todos† | Ver/responder quiz (†no guest) |
+| `/courses/:id/forum/:postId` | ForumThread | todos | Hilo del foro con respuestas |
+| `/admin` | AdminPanel | admin | Pestañas: General (crear curso), Monitor y Logs |
+| `/admin/monitor` | *(redirect)* | admin | → `/admin?tab=monitor` |
+| `/admin/logs` | *(redirect)* | admin | → `/admin?tab=logs` |
 
 ---
 
@@ -437,6 +486,21 @@ En el editor, los `[[id]]` se resaltan con syntax highlighting (CodeMirror) y al
 La página de detalle de un archivo en la Biblioteca muestra en qué lecciones se usa — calculado en vivo buscando `[[id]]` en el contenido de las lecciones (sin tabla de relación separada), así que si editás o eliminás una lección se refleja automáticamente.
 
 ---
+
+## 🗺️ Roadmap — qué falta
+
+Este prototipo cubre el nodo educativo (LMS offline-first + cola DTN entre nodos). Lo que el macroproyecto propone y todavía **no** está construido:
+
+**Software**
+- **Medallas/logros reales.** Hoy `StudentDashboard` calcula 3 medallas con umbrales fijos en el cliente (`completedCount >= 1/3/6`, con `totalLessons = 6` hardcodeado) — no hay backend detrás ni escala con las lecciones reales.
+- **TTL de sesiones.** Las sesiones no expiran (`Store` no tiene eviction, solo el snapshot a `sessions.json`).
+- **Filtrado de logs por `fields`.** El JSON estructurado de `server_logs.fields` se guarda pero no se puede filtrar por él (solo nivel/fecha/texto libre).
+- **Suite de pruebas más completa.** Hay tests de store/sync/backup/HLC (`internal/store`, `internal/handlers/sync_test.go`), pero ningún test de handlers HTTP end-to-end ni de frontend.
+
+**Infraestructura (fuera del alcance de este prototipo software)**
+- **CRDTs reales.** La resolución de conflictos actual es *last-writer-wins* por fila vía reloj lógico (HLC) — no fusión a nivel de campo.
+- **IPFS** para almacenamiento de contenido direccionado por hash.
+- **Clúster de 3 microservidores por escuela**, red mesh Wi-Fi física, y **gateway LoRaWAN** de telemetría.
 
 ## 📸 Capturas de Pantalla
 
