@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade 3 en 1: Sudoku, Buscaminas y Tetris</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --primary: #3498db;
+            --secondary: #e74c3c;
+            --board-bg: #ecf0f1;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 { margin-top: 20px; }
+
+        /* Navegación (Pestañas) */
+        nav {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        nav button {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        nav button:hover, nav button.active {
+            background-color: var(--primary);
+        }
+
+        /* Contenedores de los Juegos */
+        .game-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        .game-section.active {
+            display: flex;
+        }
+
+        /* Instrucciones */
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .instructions h3 { margin-top: 0; color: #f1c40f; }
+
+        /* Botones de acción general */
+        .btn-action {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: var(--secondary);
+            color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;
+        }
+        .btn-action:hover { background-color: #c0392b; }
+
+        /* --- ESTILOS BUSCAMINAS --- */
+        #ms-board {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-template-rows: repeat(10, 30px);
+            gap: 2px;
+            background-color: #7f8c8d;
+            padding: 2px;
+            border: 3px solid #95a5a6;
+        }
+        .ms-cell {
+            width: 30px; height: 30px;
+            background-color: #bdc3c7;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 16px; cursor: pointer;
+            user-select: none;
+        }
+        .ms-cell.revealed { background-color: #ecf0f1; cursor: default; }
+        .ms-cell.mine { background-color: #e74c3c; }
+        .ms-cell.flag { background-color: #f1c40f; color: #2c3e50; }
+
+        /* --- ESTILOS SUDOKU --- */
+        #sudoku-board {
+            display: grid;
+            grid-template-columns: repeat(9, 40px);
+            grid-template-rows: repeat(9, 40px);
+            gap: 1px;
+            background-color: #34495e;
+            border: 3px solid #2c3e50;
+        }
+        .sudoku-cell {
+            width: 40px; height: 40px; text-align: center; font-size: 20px;
+            border: none; outline: none; background: var(--board-bg); font-weight: bold;
+        }
+        .sudoku-cell:nth-child(3n) { border-right: 2px solid #2c3e50; }
+        .sudoku-cell:nth-child(9n) { border-right: none; }
+        .sudoku-cell.fixed { background: #bdc3c7; color: #2c3e50; }
+        .sudoku-cell.error { color: #e74c3c; background: #fadbd8; }
+        /* Bordes gruesos para cuadrículas 3x3 horizontales se manejan en JS por simplicidad o CSS */
+        .row-2, .row-5 { border-bottom: 2px solid #2c3e50; }
+
+        /* --- ESTILOS TETRIS --- */
+        #tetris-canvas {
+            background-color: #111;
+            border: 4px solid #555;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .tetris-ui { display: flex; gap: 20px; align-items: flex-start; }
+        .tetris-info { font-size: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Arcade 3 en 1 🎮</h1>
+    
+    <nav>
+        <button class="active" onclick="switchTab('buscaminas', this)">Buscaminas 💣</button>
+        <button onclick="switchTab('sudoku', this)">Sudoku 🔢</button>
+        <button onclick="switchTab('tetris', this)">Tetris 🧱</button>
+    </nav>
+
+    <!-- ==========================================
+                    BUSCAMINAS
+    =========================================== -->
+    <div id="buscaminas" class="game-section active">
+        <div class="instructions">
+            <h3>📖 Cómo jugar Buscaminas</h3>
+            <ul>
+                <li><b>Objetivo:</b> Descubrir todas las casillas vacías sin tocar ninguna mina.</li>
+                <li><b>Click Izquierdo:</b> Descubre una casilla. El número indica cuántas minas hay alrededor.</li>
+                <li><b>Click Derecho:</b> Coloca una bandera (🚩) donde creas que hay una mina para no pisarla por error.</li>
+            </ul>
+        </div>
+        <div>Estado: <span id="ms-status">Jugando...</span> | Banderas: <span id="ms-flags">10</span></div>
+        <div id="ms-board" oncontextmenu="return false;"></div>
+        <button class="btn-action" onclick="initMinesweeper()">Reiniciar Buscaminas</button>
+    </div>
+
+    <!-- ==========================================
+                        SUDOKU
+    =========================================== -->
+    <div id="sudoku" class="game-section">
+        <div class="instructions">
+            <h3>📖 Cómo jugar Sudoku</h3>
+            <ul>
+                <li><b>Objetivo:</b> Llenar la cuadrícula con números del 1 al 9.</li>
+                <li><b>Regla de Oro:</b> No se puede repetir ningún número en la misma fila, en la misma columna, ni en el mismo bloque de 3x3.</li>
+                <li><b>Controles:</b> Haz clic en una celda en blanco y usa el teclado para escribir un número.</li>
+            </ul>
+        </div>
+        <div id="sudoku-board"></div>
+        <button class="btn-action" onclick="checkSudoku()">Comprobar Solución</button>
+        <button class="btn-action" onclick="initSudoku()">Nuevo Sudoku</button>
+        <div id="sudoku-status" style="margin-top: 10px; font-weight: bold;"></div>
+    </div>
+
+    <!-- ==========================================
+                        TETRIS
+    =========================================== -->
+    <div id="tetris" class="game-section">
+        <div class="instructions">
+            <h3>📖 Cómo jugar Tetris</h3>
+            <ul>
+                <li><b>Objetivo:</b> Completar líneas horizontales para que desaparezcan y sumar puntos.</li>
+                <li><b>Flechas Izquierda/Derecha:</b> Mover la pieza.</li>
+                <li><b>Flecha Arriba:</b> Rotar la pieza.</li>
+                <li><b>Flecha Abajo:</b> Bajar la pieza más rápido.</li>
+            </ul>
+        </div>
+        <div class="tetris-ui">
+            <canvas id="tetris-canvas" width="240" height="400"></canvas>
+            <div class="tetris-info">
+                Puntuación: <span id="tetris-score">0</span><br><br>
+                <button class="btn-action" onclick="tetrisGame.reset()">Reiniciar Tetris</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT PRINCIPAL -->
+    <script>
+        // --- CONTROL DE PESTAÑAS (TABS) ---
+        function switchTab(tabId, btnElement) {
+            // Ocultar todos los juegos
+            document.querySelectorAll('.game-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+            
+            // Mostrar el seleccionado
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+
+            // Pausar/Reanudar Tetris según la pestaña
+            if (tabId === 'tetris') {
+                if(!tetrisGame.running) tetrisGame.start();
+            } else {
+                tetrisGame.pause();
+            }
+        }
+
+        // ==========================================
+        // LÓGICA BUSCAMINAS (MINESWEEPER)
+        // ==========================================
+        const msRows = 10;
+        const msCols = 10;
+        const msMinesCount = 10;
+        let msBoard = [];
+        let msGameOver = false;
+        let flagsLeft = msMinesCount;
+
+        function initMinesweeper() {
+            const boardEl = document.getElementById('ms-board');
+            boardEl.innerHTML = '';
+            document.getElementById('ms-status').innerText = 'Jugando...';
+            document.getElementById('ms-status').style.color = 'white';
+            flagsLeft = msMinesCount;
+            document.getElementById('ms-flags').innerText = flagsLeft;
+            msGameOver = false;
+            msBoard = [];
+
+            // Generar tablero vacío
+            for (let r = 0; r < msRows; r++) {
+                let row = [];
+                for (let c = 0; c < msCols; c++) {
+                    row.push({ isMine: false, isRevealed: false, isFlagged: false, neighborMines: 0 });
+                    let cell = document.createElement('div');
+                    cell.className = 'ms-cell';
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+                    cell.addEventListener('click', () => msReveal(r, c));
+                    cell.addEventListener('contextmenu', (e) => { e.preventDefault(); msToggleFlag(r, c); });
+                    boardEl.appendChild(cell);
+                }
+                msBoard.push(row);
+            }
+
+            // Colocar minas aleatorias
+            let minasColocadas = 0;
+            while (minasColocadas < msMinesCount) {
+                let r = Math.floor(Math.random() * msRows);
+                let c = Math.floor(Math.random() * msCols);
+                if (!msBoard[r][c].isMine) {
+                    msBoard[r][c].isMine = true;
+                    minasColocadas++;
+                }
+            }
+
+            // Calcular números
+            for (let r = 0; r < msRows; r++) {
+                for (let c = 0; c < msCols; c++) {
+                    if (!msBoard[r][c].isMine) {
+                        let count = 0;
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                let nr = r + dr, nc = c + dc;
+                                if (nr >= 0 && nr < msRows && nc >= 0 && nc < msCols && msBoard[nr][nc].isMine) {
+                                    count++;
+                                }
+                            }
+                        }
+                        msBoard[r][c].neighborMines = count;
+                    }
+                }
+            }
+        }
+
+        function msReveal(r, c) {
+            if (msGameOver || msBoard[r][c].isRevealed || msBoard[r][c].isFlagged) return;
+            
+            let cellData = msBoard[r][c];
+            cellData.isRevealed = true;
+            
+            // Calcular el índice plano para encontrar el div en el DOM
+            let index = r * msCols + c;
+            let cellEl = document.getElementById('ms-board').children[index];
+            cellEl.classList.add('revealed');
+
+            if (cellData.isMine) {
+                cellEl.classList.add('mine');
+                cellEl.innerText = '💣';
+                msGameOver = true;
+                document.getElementById('ms-status').innerText = '¡PERDISTE!';
+                document.getElementById('ms-status').style.color = '#e74c3c';
+                msRevealAllMines();
+                return;
+            }
+
+            if (cellData.neighborMines > 0) {
+                cellEl.innerText = cellData.neighborMines;
+                // Colores para los números
+                const colors = ['','blue','green','red','purple','maroon','turquoise','black','gray'];
+                cellEl.style.color = colors[cellData.neighborMines];
+            } else {
+                // Expansión (Flood Fill) si es 0
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        let nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < msRows && nc >= 0 && nc < msCols) {
+                            msReveal(nr, nc);
+                        }
+                    }
+                }
+            }
+            msCheckWin();
+        }
+
+        function msToggleFlag(r, c) {
+            if (msGameOver || msBoard[r][c].isRevealed) return;
+            let cellData = msBoard[r][c];
+            let index = r * msCols + c;
+            let cellEl = document.getElementById('ms-board').children[index];
+
+            if (!cellData.isFlagged && flagsLeft > 0) {
+                cellData.isFlagged = true;
+                cellEl.classList.add('flag');
+                cellEl.innerText = '🚩';
+                flagsLeft--;
+            } else if (cellData.isFlagged) {
+                cellData.isFlagged = false;
+                cellEl.classList.remove('flag');
+                cellEl.innerText = '';
+                flagsLeft++;
+            }
+            document.getElementById('ms-flags').innerText = flagsLeft;
+        }
+
+        function msRevealAllMines() {
+            for (let r = 0; r < msRows; r++) {
+                for (let c = 0; c < msCols; c++) {
+                    if (msBoard[r][c].isMine) {
+                        let index = r * msCols + c;
+                        let cellEl = document.getElementById('ms-board').children[index];
+                        cellEl.classList.add('mine');
+                        cellEl.innerText = '💣';
+                    }
+                }
+            }
+        }
+
+        function msCheckWin() {
+            let won = true;
+            for (let r = 0; r < msRows; r++) {
+                for (let c = 0; c < msCols; c++) {
+                    if (!msBoard[r][c].isMine && !msBoard[r][c].isRevealed) {
+                        won = false;
+                    }
+                }
+            }
+            if (won) {
+                msGameOver = true;
+                document.getElementById('ms-status').innerText = '¡GANASTE!';
+                document.getElementById('ms-status').style.color = '#2ecc71';
+            }
+        }
+
+
+        // ==========================================
+        // LÓGICA SUDOKU
+        // ==========================================
+        // Un tablero base válido (solución completa)
+        const baseSudoku = [
+            [5,3,4,6,7,8,9,1,2],
+            [6,7,2,1,9,5,3,4,8],
+            [1,9,8,3,4,2,5,6,7],
+            [8,5,9,7,6,1,4,2,3],
+            [4,2,6,8,5,3,7,9,1],
+            [7,1,3,9,2,4,8,5,6],
+            [9,6,1,5,3,7,2,8,4],
+            [2,8,7,4,1,9,6,3,5],
+            [3,4,5,2,8,6,1,7,9]
+        ];
+
+        function initSudoku() {
+            const boardEl = document.getElementById('sudoku-board');
+            boardEl.innerHTML = '';
+            document.getElementById('sudoku-status').innerText = '';
+
+            // Hacer una copia profunda del tablero base para jugarla
+            // En un juego real aquí se haría un shuffle de filas/columnas para variar.
+            let puzzle = JSON.parse(JSON.stringify(baseSudoku));
+            
+            // Eliminar algunos números para crear el puzzle (Dificultad fácil/media)
+            const cellsToRemove = 40; 
+            for(let i=0; i<cellsToRemove; i++) {
+                let r = Math.floor(Math.random()*9);
+                let c = Math.floor(Math.random()*9);
+                puzzle[r][c] = 0;
+            }
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = 1; input.max = 9;
+                    input.className = 'sudoku-cell';
+                    if (r === 2 || r === 5) input.classList.add('row-2'); // Bordes 3x3 horizontales
+                    
+                    input.dataset.r = r;
+                    input.dataset.c = c;
+                    
+                    if (puzzle[r][c] !== 0) {
+                        input.value = puzzle[r][c];
+                        input.readOnly = true;
+                        input.classList.add('fixed');
+                    } else {
+                        input.value = '';
+                        input.addEventListener('input', function() {
+                            this.classList.remove('error'); // Quitar error al corregir
+                            if(this.value.length > 1) this.value = this.value.slice(0,1); // Evitar 2 dígitos
+                        });
+                    }
+                    boardEl.appendChild(input);
+                }
+            }
+        }
+
+        function checkSudoku() {
+            const inputs = document.querySelectorAll('.sudoku-cell');
+            let board = [];
+            let r=0, c=0, row=[];
+            let isComplete = true;
+
+            // Limpiar errores previos
+            inputs.forEach(inp => inp.classList.remove('error'));
+
+            // Construir matriz actual y chequear vacíos
+            inputs.forEach(inp => {
+                let val = parseInt(inp.value) || 0;
+                if(val === 0) isComplete = false;
+                row.push(val);
+                c++;
+                if (c === 9) {
+                    board.push(row);
+                    row = []; c = 0;
+                }
+            });
+
+            if (!isComplete) {
+                document.getElementById('sudoku-status').innerText = "Faltan casillas por llenar.";
+                document.getElementById('sudoku-status').style.color = '#f1c40f';
+                return;
+            }
+
+            let errorsFound = false;
+
+            // Validar Reglas de Sudoku
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    if (board[i][j] !== 0) {
+                        if (!isValidSudokuCell(board, i, j, board[i][j])) {
+                            errorsFound = true;
+                            // Resaltar casilla errónea
+                            let index = i * 9 + j;
+                            inputs[index].classList.add('error');
+                        }
+                    }
+                }
+            }
+
+            if (errorsFound) {
+                document.getElementById('sudoku-status').innerText = "Hay errores, revisa las casillas rojas.";
+                document.getElementById('sudoku-status').style.color = '#e74c3c';
+            } else {
+                document.getElementById('sudoku-status').innerText = "¡Felicidades! Resolviste el Sudoku.";
+                document.getElementById('sudoku-status').style.color = '#2ecc71';
+            }
+        }
+
+        function isValidSudokuCell(board, r, c, val) {
+            // Revisa Fila y Columna
+            for (let i = 0; i < 9; i++) {
+                if (i !== c && board[r][i] === val) return false;
+                if (i !== r && board[i][c] === val) return false;
+            }
+            // Revisa Bloque 3x3
+            let startRow = Math.floor(r / 3) * 3;
+            let startCol = Math.floor(c / 3) * 3;
+            for (let i = startRow; i < startRow + 3; i++) {
+                for (let j = startCol; j < startCol + 3; j++) {
+                    if ((i !== r || j !== c) && board[i][j] === val) return false;
+                }
+            }
+            return true;
+        }
+
+
+        // ==========================================
+        // LÓGICA TETRIS
+        // ==========================================
+        const tetrisGame = (function() {
+            const canvas = document.getElementById('tetris-canvas');
+            const context = canvas.getContext('2d');
+            const grid = 24; // Tamaño de cada bloque
+            const cols = 10;
+            const rows = 20;
+            
+            // Fix escala del canvas
+            canvas.width = cols * grid;
+            canvas.height = rows * grid;
+
+            // Formas (Tetrominoes)
+            const tetrominoes = {
+                'I': [ [0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0] ],
+                'J': [ [1,0,0], [1,1,1], [0,0,0] ],
+                'L': [ [0,0,1], [1,1,1], [0,0,0] ],
+                'O': [ [1,1], [1,1] ],
+                'S': [ [0,1,1], [1,1,0], [0,0,0] ],
+                'Z': [ [1,1,0], [0,1,1], [0,0,0] ],
+                'T': [ [0,1,0], [1,1,1], [0,0,0] ]
+            };
+
+            const colors = {
+                'I': 'cyan', 'O': 'yellow', 'T': 'purple', 'S': 'green',
+                'Z': 'red', 'J': 'blue', 'L': 'orange'
+            };
+
+            let playfield = [];
+            let tetrominoSequence = [];
+            let playfieldRow = 0; // for loop
+            let count = 0;
+            let tetromino = null;
+            let rAF = null;  // Request Animation Frame reference
+            let gameOver = false;
+            let score = 0;
+            let isRunning = false;
+
+            // Rellenar tablero vacío
+            function resetPlayfield() {
+                playfield = [];
+                for (let r = -2; r < rows; r++) { // -2 para esconder piezas que recién nacen
+                    playfield[r] = [];
+                    for (let c = 0; c < cols; c++) {
+                        playfield[r][c] = 0;
+                    }
+                }
+            }
+
+            function generateSequence() {
+                const sequence = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+                while (sequence.length) {
+                    const rand = Math.floor(Math.random() * sequence.length);
+                    const name = sequence.splice(rand, 1)[0];
+                    tetrominoSequence.push(name);
+                }
+            }
+
+            function getNextTetromino() {
+                if (tetrominoSequence.length === 0) generateSequence();
+                const name = tetrominoSequence.pop();
+                const matrix = tetrominoes[name];
+                
+                // Centrar
+                const col = playfield[0].length / 2 - Math.ceil(matrix[0].length / 2);
+                const row = name === 'I' ? -1 : -2;
+
+                return { name: name, matrix: matrix, row: row, col: col };
+            }
+
+            function rotate(matrix) {
+                const N = matrix.length - 1;
+                const result = matrix.map((row, i) =>
+                    row.map((val, j) => matrix[N - j][i])
+                );
+                return result;
+            }
+
+            function isValidMove(matrix, cellRow, cellCol) {
+                for (let r = 0; r < matrix.length; r++) {
+                    for (let c = 0; c < matrix[r].length; c++) {
+                        if (matrix[r][c] && (
+                            cellCol + c < 0 ||
+                            cellCol + c >= cols ||
+                            cellRow + r >= rows ||
+                            // Colisión con pieza anclada
+                            (playfield[cellRow + r] && playfield[cellRow + r][cellCol + c])
+                        )) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            function placeTetromino() {
+                for (let r = 0; r < tetromino.matrix.length; r++) {
+                    for (let c = 0; c < tetromino.matrix[r].length; c++) {
+                        if (tetromino.matrix[r][c]) {
+                            // Si choca arriba, Game Over
+                            if (tetromino.row + r < 0) return showGameOver();
+                            playfield[tetromino.row + r][tetromino.col + c] = tetromino.name;
+                        }
+                    }
+                }
+
+                // Check lines
+                let linesCleared = 0;
+                for (let r = rows - 1; r >= 0; ) {
+                    if (playfield[r].every(cell => !!cell)) {
+                        playfield.splice(r, 1);
+                        playfield.unshift(new Array(cols).fill(0));
+                        linesCleared++;
+                    } else {
+                        r--;
+                    }
+                }
+                if(linesCleared > 0) {
+                    score += linesCleared * 100;
+                    document.getElementById('tetris-score').innerText = score;
+                }
+                tetromino = getNextTetromino();
+            }
+
+            function showGameOver() {
+                cancelAnimationFrame(rAF);
+                gameOver = true;
+                isRunning = false;
+                context.fillStyle = 'rgba(0,0,0,0.75)';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = 'white';
+                context.font = '24px monospace';
+                context.textAlign = 'center';
+                context.fillText('GAME OVER', canvas.width/2, canvas.height/2);
+            }
+
+            function loop() {
+                rAF = requestAnimationFrame(loop);
+                if (!isRunning) return; // Pausado si no está en la pestaña
+                context.clearRect(0,0,canvas.width,canvas.height);
+
+                // Dibujar playfield
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        if (playfield[r][c]) {
+                            const name = playfield[r][c];
+                            context.fillStyle = colors[name];
+                            context.fillRect(c * grid, r * grid, grid-1, grid-1);
+                        }
+                    }
+                }
+
+                // Dibujar pieza activa y gravedad
+                if (tetromino) {
+                    // Gravedad (cae cada ~35 frames)
+                    if (++count > 35) {
+                        tetromino.row++;
+                        count = 0;
+                        if (!isValidMove(tetromino.matrix, tetromino.row, tetromino.col)) {
+                            tetromino.row--;
+                            placeTetromino();
+                        }
+                    }
+
+                    context.fillStyle = colors[tetromino.name];
+                    for (let r = 0; r < tetromino.matrix.length; r++) {
+                        for (let c = 0; c < tetromino.matrix[r].length; c++) {
+                            if (tetromino.matrix[r][c]) {
+                                context.fillRect((tetromino.col + c) * grid, (tetromino.row + r) * grid, grid-1, grid-1);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Controles de Teclado
+            document.addEventListener('keydown', function(e) {
+                if (gameOver || !isRunning) return;
+
+                // Prevenir scroll en la página con flechas si estamos en Tetris
+                if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                    e.preventDefault();
+                }
+
+                if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+                    const col = e.code === 'ArrowLeft' ? tetromino.col - 1 : tetromino.col + 1;
+                    if (isValidMove(tetromino.matrix, tetromino.row, col)) tetromino.col = col;
+                }
+                if (e.code === 'ArrowUp') { // Rotar
+                    const matrix = rotate(tetromino.matrix);
+                    if (isValidMove(matrix, tetromino.row, tetromino.col)) tetromino.matrix = matrix;
+                }
+                if (e.code === 'ArrowDown') { // Bajar rápido
+                    const row = tetromino.row + 1;
+                    if (!isValidMove(tetromino.matrix, row, tetromino.col)) {
+                        tetromino.row = row - 1;
+                        placeTetromino();
+                        return;
+                    }
+                    tetromino.row = row;
+                }
+            });
+
+            return {
+                start: function() {
+                    isRunning = true;
+                    if(!rAF && !gameOver) {
+                        if(!tetromino) tetromino = getNextTetromino();
+                        rAF = requestAnimationFrame(loop);
+                    }
+                },
+                pause: function() {
+                    isRunning = false;
+                },
+                reset: function() {
+                    cancelAnimationFrame(rAF);
+                    rAF = null;
+                    gameOver = false;
+                    score = 0;
+                    count = 0;
+                    document.getElementById('tetris-score').innerText = score;
+                    resetPlayfield();
+                    tetromino = getNextTetromino();
+                    this.start();
+                },
+                get running() { return isRunning; }
+            };
+        })();
+
+
+        // ==========================================
+        // INICIALIZACIÓN AL CARGAR
+        // ==========================================
+        window.onload = () => {
+            initMinesweeper();
+            initSudoku();
+            tetrisGame.reset();
+            tetrisGame.pause(); // Pausado al inicio porque la pestaña activa es Buscaminas
+        };
+
+    </script>
+</body>
+</html>

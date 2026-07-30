@@ -1,0 +1,2604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazhonor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #2e1d16;
+            width: 100vw;
+            height: 100vh;
+            color: white;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+
+    <script src="https://unpkg.com/kaplay/dist/kaplay.js"></script>
+
+    <script>
+        kaplay({
+            background: [93, 161, 48],
+            global: true,
+            font: "roboto"
+        });
+
+        loadFont("roboto", "https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf");
+
+        // ESTADO GLOBAL
+        let money = 20; 
+        let energy = 100;
+        const MAX_ENERGY = 100;
+        
+        function getToolDamage(id) {
+            if (!id) return 1;
+            if(id.endsWith("_copper")) return 1;
+            if(id.endsWith("_iron")) return 2;
+            if(id.endsWith("_gold")) return 3;
+            if(id.endsWith("_diamond")) return 4;
+            return 1;
+        }
+
+        let hotbar = [
+            { cat: "tool", id: "hoe", name: "Azada", q: 1 },
+            { cat: "tool", id: "water", name: "Agua", q: 1 },
+            { cat: "tool", id: "axe_copper", name: "Hacha\nCobre", q: 1 },
+            { cat: "tool", id: "pickaxe_copper", name: "Pico\nCobre", q: 1 },
+            { cat: "seed", id: "seed_tomato", name: "Tomate", q: 3 },
+            null, null, null, null
+        ];
+        let backpack = Array(27).fill(null);
+        let backpackLevel = 0;
+
+        function getEmptySlot(arr, max) {
+            for(let i=0; i<max; i++) if (!arr[i]) return i;
+            return -1;
+        }
+        function addItem(cat, id, name, q) {
+            for(let i=0; i<9; i++) {
+                if(hotbar[i] && hotbar[i].id === id) { hotbar[i].q += q; return true; }
+            }
+            let bps = backpackLevel * 9;
+            for(let i=0; i<bps; i++) {
+                if(backpack[i] && backpack[i].id === id) { backpack[i].q += q; return true; }
+            }
+            let hSlot = getEmptySlot(hotbar, 9);
+            if(hSlot !== -1) { hotbar[hSlot] = { cat, id, name, q }; return true; }
+            let bSlot = getEmptySlot(backpack, bps);
+            if(bSlot !== -1) { backpack[bSlot] = { cat, id, name, q }; return true; }
+            return false; 
+        }
+        function countItem(id) {
+            let c = 0;
+            for(let i=0; i<9; i++) if(hotbar[i] && hotbar[i].id === id) c += hotbar[i].q;
+            let bps = backpackLevel * 9;
+            for(let i=0; i<bps; i++) if(backpack[i] && backpack[i].id === id) c += backpack[i].q;
+            return c;
+        }
+        function removeItem(id, qty) {
+            let left = qty;
+            for(let i=0; i<9; i++) {
+                if(hotbar[i] && hotbar[i].id === id) {
+                    if(hotbar[i].q >= left) { hotbar[i].q -= left; if(hotbar[i].q <= 0) hotbar[i] = null; return true; }
+                    else { left -= hotbar[i].q; hotbar[i] = null; }
+                }
+            }
+            let bps = backpackLevel * 9;
+            for(let i=0; i<bps; i++) {
+                if(backpack[i] && backpack[i].id === id) {
+                    if(backpack[i].q >= left) { backpack[i].q -= left; if(backpack[i].q <= 0) backpack[i] = null; return true; }
+                    else { left -= backpack[i].q; backpack[i] = null; }
+                }
+            }
+            return false;
+        }
+
+        let skills = {
+            agricultor: { level: 1, xp: 0, next: 10, name: "Agricultor" },
+            jardinero: { level: 1, xp: 0, next: 10, name: "Jardinero" },
+            minero: { level: 1, xp: 0, next: 10, name: "Minero" },
+            pescador: { level: 1, xp: 0, next: 10, name: "Pescador" },
+            herrero: { level: 1, xp: 0, next: 10, name: "Herrero" },
+            carpintero: { level: 1, xp: 0, next: 10, name: "Carpintero" },
+            botanico: { level: 1, xp: 0, next: 10, name: "Botánico" }
+        };
+        let currentQuest = 0;
+
+        function addXP(skill, amount) {
+            skills[skill].xp += amount;
+            if (skills[skill].xp >= skills[skill].next) {
+                skills[skill].xp -= skills[skill].next;
+                skills[skill].level++;
+                skills[skill].next = Math.floor(skills[skill].next * 1.5);
+                add([ text(`¡SISTEMA: Nivel de ${skills[skill].name} subió a ${skills[skill].level}!`, { size: 28 }), pos(width()/2, 120), anchor("center"), color(255,215,0), opacity(1), lifespan(4, { fade: 1 }), fixed(), z(500) ]);
+            }
+        }
+
+        let boatRepaired = false;
+
+        let activeTool = 0; // 0 a 8
+        let activeSoilType = "normal"; // "normal", "sand"
+        
+        let dayTime = 0; 
+        let isNight = false;
+        let exhaustTimer = 0;
+
+        let placedFurniture = [];
+        let globalStorage = Array(27).fill(null); // Cofre con slots
+
+        const FURNITURE_CATALOG = [
+            { id: "sofa", name: "Sofá", price: 2000, w: 80, h: 40, c: [100, 100, 200] },
+            { id: "tv", name: "Televisor", price: 5000, w: 60, h: 20, c: [50, 50, 50] },
+            { id: "shelf", name: "Estante", price: 1500, w: 80, h: 30, c: [139, 69, 19] },
+            { id: "bookcase", name: "Biblioteca", price: 3000, w: 80, h: 40, c: [101, 67, 33] },
+            { id: "kitchen", name: "Cocina", price: 8000, w: 100, h: 60, c: [220, 220, 220] },
+            { id: "nightstand", name: "Mesa de Noche", price: 1000, w: 30, h: 30, c: [160, 82, 45] },
+            { id: "rug", name: "Alfombra", price: 2500, w: 120, h: 80, c: [200, 50, 50] },
+            { id: "fireplace", name: "Chimenea", price: 6000, w: 80, h: 40, c: [178, 34, 34] },
+            { id: "chest", name: "Cofre", price: 4000, w: 40, h: 40, c: [218, 165, 32] },
+            { id: "mortar", name: "Mortero Botánico", price: 2000, w: 40, h: 40, c: [100, 100, 100] }
+        ];
+
+
+        let skillsUI = null;
+        let anvilUI = null;
+        let carpentryUI = null;
+        let bpUI = null;
+        let activeSwap = null;
+        let uiMoney = null;
+        let uiTime = null;
+        let hotbarSlots = [];
+        let uiQuest = null;
+        let mortarUI = null;
+        
+        function getQuestText() {
+            if (currentQuest === 0) return "Misión: Habla con el Asistente (cerca de tu casa)";
+            if (currentQuest === 1) return "Misión: Alcanza Botánica Nvl 20";
+            if (currentQuest === 2) return "Misión: Fabrica la Cura en un Mortero Botánico";
+            if (currentQuest === 3) return "Misión: Entrega la Cura al Asistente";
+            if (currentQuest === 4) return "Misión: Alcanza Minería Nvl 20 y el resto Nvl 10";
+            if (currentQuest === 5) return "Misión: Habla con el Asistente. Estás listo.";
+            return "Misión: Sobrevive";
+        }
+        
+        function showDialog(pages, onComplete) {
+            if (!Array.isArray(pages)) pages = [pages];
+            let d = add([ rect(width()-100, 240, {radius: 10}), pos(width()/2, height()-140), anchor("center"), color(20,20,20), fixed(), z(1000), area() ]);
+            let txt = d.add([ text("", {size: 18, width: width()-140}), pos(0, -80), anchor("top") ]);
+            let hint = d.add([ text("Clic para avanzar", {size: 14}), pos(0, 100), anchor("center"), color(255,255,0) ]);
+            
+            let pageIdx = 0;
+            let charIdx = 0;
+            let timer = 0;
+            let isTyping = true;
+            
+            d.onUpdate(() => {
+                if (isTyping) {
+                    timer += dt();
+                    if (timer > 0.02) {
+                        timer = 0;
+                        charIdx++;
+                        txt.text = pages[pageIdx].substring(0, charIdx);
+                        if (charIdx >= pages[pageIdx].length) {
+                            isTyping = false;
+                        }
+                    }
+                }
+            });
+            
+            d.onClick(() => {
+                if (isTyping) {
+                    isTyping = false;
+                    txt.text = pages[pageIdx];
+                } else {
+                    pageIdx++;
+                    if (pageIdx < pages.length) {
+                        txt.text = "";
+                        charIdx = 0;
+                        isTyping = true;
+                    } else {
+                        destroy(d);
+                        if (onComplete) onComplete();
+                    }
+                }
+            });
+        }
+        
+        function triggerEndGame() {
+            const flood = add([ rect(width(), height()), color(0, 100, 255), opacity(0), fixed(), z(2000) ]);
+            tween(0, 1, 4, (v) => flood.opacity = v);
+            setTimeout(() => {
+                add([ text("LA GRAN MAREA", {size: 40}), pos(width()/2, height()/2 - 40), anchor("center"), color(255,255,255), fixed(), z(2001) ]);
+                add([ text("Continuará en la Parte 2...", {size: 24}), pos(width()/2, height()/2 + 40), anchor("center"), color(200,200,200), fixed(), z(2001) ]);
+            }, 4000);
+        }
+        
+        function toggleMortarUI() {
+            if (mortarUI) { destroy(mortarUI); mortarUI = null; return; }
+            mortarUI = add([ rect(400, 300), pos(width()/2, height()/2), anchor("center"), color(40,40,40), fixed(), area(), z(500) ]);
+            mortarUI.add([ text("MORTERO BOTÁNICO", {size: 24}), pos(0, -120), anchor("center"), color(100,255,100) ]);
+            
+            let btn1 = mortarUI.add([ rect(360, 60, { radius: 8 }), color(70, 70, 70), pos(0, -30), anchor("center"), area() ]);
+            btn1.add([ text("Cura Milagrosa\n(Req: Bot. 20, 10 Bayas, 5 Aloe, 2 Ginseng)", {size: 14, align: "center"}), anchor("center") ]);
+            btn1.onClick(() => {
+                if (skills.botanico.level < 20) {
+                    add([ text("Falta nivel de Botánica", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    return;
+                }
+                if (countItem("baya") >= 10 && countItem("aloe") >= 5 && countItem("ginseng") >= 2) {
+                    if (addItem("craft", "cura", "Cura", 1)) {
+                        removeItem("baya", 10);
+                        removeItem("aloe", 5);
+                        removeItem("ginseng", 2);
+                        addXP("botanico", 5);
+                        if(currentQuest === 2) currentQuest = 3;
+                        globalUpdateUI();
+                        add([ text("¡Cura fabricada!", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(0,255,0), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    }
+                } else add([ text("Faltan ingredientes", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+            });
+            btn1.onUpdate(() => { btn1.color = btn1.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+            
+            let closeBtn = mortarUI.add([ rect(30,30), color(255,0,0), pos(170,-130), anchor("center"), area() ]);
+            closeBtn.add([ text("X", {size: 18}), anchor("center") ]);
+            closeBtn.onClick(() => toggleMortarUI());
+        }
+        
+        onClick("mortar", (m) => {
+            let p = get("player")[0];
+            if (!p) return;
+            if (p.pos.dist(m.pos) < 60) toggleMortarUI();
+            else add([ text("Acércate más", {size: 16}), pos(m.pos), color(255,50,50), opacity(1), lifespan(1) ]);
+        });
+
+        let globalUpdateUI = null;
+        let globalStartPlacing = null;
+        let isFishing = false;
+        
+        let isHighTide = false;
+        let highTideTimer = 0;
+        let isMapVisible = false;
+
+        // TIENDA GLOBAL
+        let inShop = false;
+        let shopParent = null;
+
+        function closeShop() {
+            if (shopParent) { destroy(shopParent); shopParent = null; }
+            inShop = false;
+        }
+
+        function openShop(inHouse = false) {
+            if (inShop) return;
+            inShop = true;
+
+            shopParent = add([
+                rect(800, 500), color(30, 30, 30),
+                pos(width()/2, height()/2), anchor("center"),
+                fixed(), z(300), area()
+            ]);
+
+            const descPanel = shopParent.add([
+                rect(300, 450), color(20, 20, 20),
+                pos(220, 0), anchor("center")
+            ]);
+            const descText = descPanel.add([
+                text("Pasa el ratón por\nencima de un objeto\npara ver sus detalles.", { size: 18 }),
+                pos(0, -100), anchor("center")
+            ]);
+
+            let currentMenuObjs = [];
+            let currentShopCat = "main";
+            function clearMenu() {
+                currentMenuObjs.forEach(o => destroy(o));
+                currentMenuObjs = [];
+                descText.text = "Selecciona una\nopción...";
+            }
+
+            function addBtn(txt, yPos, desc, action) {
+                let btn = shopParent.add([
+                    rect(350, 45, { radius: 8 }), color(70, 70, 70),
+                    pos(-150, yPos), anchor("center"), area()
+                ]);
+                btn.add([ text(txt, { size: 18 }), anchor("center") ]);
+                btn.onClick(() => { 
+                    action(); 
+                    if (globalUpdateUI) globalUpdateUI(); 
+                    drawMenu(currentShopCat);
+                });
+                
+                let wasHovering = false;
+                btn.onUpdate(() => {
+                    let isHovering = btn.isHovering();
+                    if (isHovering && !wasHovering) {
+                        btn.color = rgb(100, 100, 100);
+                        descText.text = desc;
+                    } else if (!isHovering && wasHovering) {
+                        btn.color = rgb(70, 70, 70);
+                        if (descText.text === desc) descText.text = "Selecciona una\nopción...";
+                    }
+                    wasHovering = isHovering;
+                });
+                
+                currentMenuObjs.push(btn);
+            }
+
+            function addTitle(txt) {
+                let t = shopParent.add([ text(txt, { size: 28 }), pos(-150, -220), anchor("center"), color(255,255,100) ]);
+                currentMenuObjs.push(t);
+            }
+
+            function buyFurniture(id) {
+                const item = FURNITURE_CATALOG.find(f => f.id === id);
+                if (money >= item.price) {
+                    if (globalStartPlacing) {
+                        globalStartPlacing(item);
+                    }
+                } else {
+                    add([ text("Dinero Insuficiente", { size: 24 }), pos(width()/2, height()/2), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(400) ]);
+                }
+            }
+
+            function drawMenu(cat) {
+                currentShopCat = cat;
+                clearMenu();
+                if (cat === "main") {
+                    addTitle("--- TIENDA ---");
+                    addBtn("Semillas", -120, "Catálogo de semillas.", () => drawMenu("seeds"));
+                    addBtn("Comida", -60, "Comida silvestre.", () => drawMenu("food"));
+                    addBtn("Abonos", 0, "Fertilizantes para\ntus cultivos.", () => drawMenu("fertilizers"));
+                    addBtn("Herramientas", 60, "Equipo de trabajo.", () => drawMenu("tools"));
+                    addBtn("Equipo", 120, "Mejora tu inventario\ncomprando mochilas.", () => drawMenu("equip"));
+                    addBtn("Vender", 180, "Vende tus cultivos,\npeces y muebles.", () => drawMenu("sell"));
+                    
+                    if (inHouse) {
+                        addBtn("Muebles (CASA)", 240, "¡Exclusivo de interiores!\n\nDecora tu casa con\nmuebles de lujo.", () => drawMenu("furniture1"));
+                    }
+                }
+                else if (cat === "equip") {
+                    addTitle("--- EQUIPO ---");
+                    let b1 = backpackLevel >= 1 ? "Adquirido" : "Mochila Pequeña (-$2000)";
+                    addBtn(b1, -140, "Desbloquea 9 espacios extras.", () => {
+                        if(backpackLevel === 0 && money >= 2000) { money-=2000; backpackLevel=1; }
+                    });
+                    let b2 = backpackLevel >= 2 ? "Adquirido" : (backpackLevel<1?"Bloqueado":"Mochila Mediana (-$5000)");
+                    addBtn(b2, -80, "18 espacios extras en total.", () => {
+                        if(backpackLevel === 1 && money >= 5000) { money-=5000; backpackLevel=2; }
+                    });
+                    let b3 = backpackLevel >= 3 ? "Adquirido" : (backpackLevel<2?"Bloqueado":"Mochila Grande (-$12000)");
+                    addBtn(b3, -20, "27 espacios extras en total.", () => {
+                        if(backpackLevel === 2 && money >= 12000) { money-=12000; backpackLevel=3; }
+                    });
+                    addBtn("<< Volver", 100, "Regresar al menú principal.", () => drawMenu("main"));
+                }
+                else if (cat === "seeds") {
+                    addTitle("--- SEMILLAS ---");
+                    addBtn("Tomate (-$3)", -140, "Requiere Tierra.\nVende a $6.", () => {
+                        if (money >= 3 && addItem("seed", "seed_tomato", "Tomate", 1)) money -= 3;
+                    });
+                    addBtn("Cactus (-$5)", -80, "Requiere Arena.\nVende a $12.", () => {
+                        if (money >= 5 && addItem("seed", "seed_cactus", "Cactus", 1)) money -= 5;
+                    });
+                    addBtn("S. Baya (-$2)", -20, "Requiere Tierra.\nVende a $4.", () => {
+                        if (money >= 2 && addItem("seed", "seed_baya", "S. Baya", 1)) money -= 2;
+                    });
+                    addBtn("Mágica (-$24)", 40, "Requiere Abono Especial.\nVende a $60.", () => {
+                        if (money >= 24 && addItem("seed", "seed_magic", "Mágica", 1)) money -= 24;
+                    });
+                    addBtn("<< Volver", 100, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "food") {
+                    addTitle("--- COMIDA ---");
+                    addBtn("Baya (-$5)", -140, "Restaura 20 Energía.\nAlimento silvestre.", () => {
+                        if (money >= 5 && addItem("food", "baya", "Baya", 1)) money -= 5;
+                    });
+                    addBtn("<< Volver", 100, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "fertilizers") {
+                    addTitle("--- ABONOS ---");
+                    addBtn("Normal (-$6)", -140, "Madura al instante.", () => {
+                        if (money >= 6 && addItem("fertilizer", "fert_normal", "Abono N", 1)) money -= 6;
+                    });
+                    addBtn("Especial (-$18)", -80, "Para Semillas Mágicas.", () => {
+                        if (money >= 18 && addItem("fertilizer", "fert_special", "Abono Esp", 1)) money -= 18;
+                    });
+                    addBtn("<< Volver", 100, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "tools") {
+                    addTitle("--- HERRAMIENTAS ---");
+                    addBtn("Tijeras (-$18)", -140, "Para talar árboles.", () => {
+                        if (money >= 18 && addItem("tool", "scissors", "Tijeras", 30)) money -= 18;
+                    });
+                    let rodTxt = skills.pescador.level >= 20 ? "Caña de Pescar (-$10000)" : "Caña (Nvl Pescador 20)";
+                    addBtn(rodTxt, -80, "Nivel 20 requerido.", () => {
+                        if (skills.pescador.level >= 20 && money >= 10000 && countItem("rod")===0) {
+                            if(addItem("tool", "rod", "Caña", 1)) money -= 10000;
+                        }
+                    });
+                    addBtn("<< Volver", 100, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "sell") {
+                    addTitle("--- VENDER (1/2) ---");
+                    addBtn(`Vender Tomate (+$6)`, -140, `Tienes: ${countItem("crop_tomato")}`, () => {
+                        if (countItem("crop_tomato") >= 1) { removeItem("crop_tomato", 1); money += 6; }
+                    });
+                    addBtn(`Vender Cactus (+$12)`, -80, `Tienes: ${countItem("crop_cactus")}`, () => {
+                        if (countItem("crop_cactus") >= 1) { removeItem("crop_cactus", 1); money += 12; addXP("botanico", 2); }
+                    });
+                    addBtn(`Vender F. Mágico (+$60)`, -20, `Tienes: ${countItem("crop_magic")}`, () => {
+                        if (countItem("crop_magic") >= 1) { removeItem("crop_magic", 1); money += 60; }
+                    });
+                    addBtn(`Vender Baya (+$4)`, 40, `Tienes: ${countItem("baya")}`, () => {
+                        if (countItem("baya") >= 1) { removeItem("baya", 1); money += 4; }
+                    });
+                    addBtn("Siguiente >>", 100, "Ver más opciones de venta.", () => drawMenu("sell2"));
+                    addBtn("<< Volver", 160, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "sell2") {
+                    addTitle("--- VENDER (2/2) ---");
+                    addBtn(`Silla Madera (+$50)`, -140, `Tienes: ${countItem("chair_wood")}`, () => {
+                        if (removeItem("chair_wood", 1)) money += 50;
+                    });
+                    addBtn(`Mesa Madera (+$100)`, -80, `Tienes: ${countItem("table_wood")}`, () => {
+                        if (removeItem("table_wood", 1)) money += 100;
+                    });
+                    addBtn(`Vender Pez (+$30)`, -20, `Tienes: ${countItem("fish")}`, () => {
+                        if (removeItem("fish", 1)) money += 30;
+                    });
+                    addBtn("<< Volver", 160, "Página anterior.", () => drawMenu("sell"));
+                }
+
+                else if (cat === "furniture1") {
+                    addTitle("--- MUEBLES (1/2) ---");
+                    addBtn("Sofá (-$2000)", -140, "Un sofá cómodo.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("sofa"));
+                    addBtn("Televisor (-$5000)", -80, "Para ver noticias.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("tv"));
+                    addBtn("Estante (-$1500)", -20, "Madera fina.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("shelf"));
+                    addBtn("Biblioteca (-$3000)", 40, "Llena de libros.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("bookcase"));
+                    addBtn("Pág Siguiente >>", 100, "Ver más muebles.", () => drawMenu("furniture2"));
+                    addBtn("<< Volver", 160, "Regresar al menú.", () => drawMenu("main"));
+                }
+                else if (cat === "furniture2") {
+                    addTitle("--- MUEBLES (2/2) ---");
+                    addBtn("Cocina (-$8000)", -140, "Prepara comida.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("kitchen"));
+                    addBtn("Mesa Noche (-$1000)", -80, "Junto a la cama.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("nightstand"));
+                    addBtn("Alfombra (-$2500)", -20, "No bloquea el paso.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("rug"));
+                    addBtn("Chimenea (-$6000)", 40, "Calienta la casa.\nPresiona ESPACIO\npara colocarlo o\nESC para cancelar.", () => buyFurniture("fireplace"));
+                    addBtn("Cofre (-$4000)", 100, "Guarda tus objetos\nvaliosos aquí.\n(Evita robos al\ndesmayarte)", () => buyFurniture("chest"));
+                    addBtn("<< Volver", 160, "Página anterior.", () => drawMenu("furniture1"));
+                }
+            }
+
+            drawMenu("main");
+
+            let closeBtn = shopParent.add([
+                rect(350, 45, { radius: 8 }), color(150, 50, 50),
+                pos(-150, 220), anchor("center"), area()
+            ]);
+            closeBtn.add([ text("Cerrar Tienda (T)", { size: 18 }), anchor("center") ]);
+            closeBtn.onClick(() => closeShop());
+            closeBtn.onUpdate(() => {
+                closeBtn.color = closeBtn.isHovering() ? rgb(200, 50, 50) : rgb(150, 50, 50);
+            });
+        }
+
+
+        function makeAssistant(x, y) {
+            const p = add([
+                rect(24, 24), color(205, 133, 63),
+                pos(x, y), area({ shape: new Rect(vec2(0, 30), 40, 70) }), body({isStatic:true}), anchor("center"), z(50), "assistant"
+            ]);
+            p.add([ rect(30, 40), color(34, 139, 34), pos(0, 32), anchor("center") ]);
+            p.add([ rect(10, 30), color(205, 133, 63), pos(-20, 20), anchor("center") ]);
+            p.add([ rect(10, 30), color(205, 133, 63), pos(20, 20), anchor("center") ]);
+            p.add([ rect(12, 30), color(139, 69, 19), pos(-10, 60), anchor("center") ]);
+            p.add([ rect(12, 30), color(139, 69, 19), pos(10, 60), anchor("center") ]);
+            return p;
+        }
+
+        function saveGame() {
+            const data = { money, energy, dayTime, isNight, dayCount, boatRepaired, currentQuest, skills, backpack, hotbar, globalStorage };
+            localStorage.setItem("farmGameSave", JSON.stringify(data));
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem("farmGameSave");
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    money = data.money !== undefined ? data.money : money;
+                    energy = data.energy !== undefined ? data.energy : energy;
+                    dayTime = data.dayTime !== undefined ? data.dayTime : dayTime;
+                    isNight = data.isNight !== undefined ? data.isNight : isNight;
+                    dayCount = data.dayCount || dayCount;
+                    boatRepaired = data.boatRepaired !== undefined ? data.boatRepaired : boatRepaired;
+                    currentQuest = data.currentQuest !== undefined ? data.currentQuest : currentQuest;
+                    if (data.skills) skills = data.skills;
+                    if (data.backpack) backpack = data.backpack;
+                    if (data.hotbar) hotbar = data.hotbar;
+                    if (data.globalStorage) globalStorage = data.globalStorage;
+                } catch(e) {}
+            }
+        }
+        
+        loadGame();
+        setInterval(saveGame, 5000);
+
+        function makePlayer(px, py, isHouse = false) {
+            let plyr = add([
+                pos(px, py),
+                area({ shape: new Rect(vec2(0, isHouse ? 0 : -5), 16, 16) }),
+                body(),
+                scale(1.2),
+                anchor("center"),
+                z(50),
+                "player"
+            ]);
+            
+            const SKIN = rgb(120, 70, 30); // Moreno
+            const HAIR = rgb(30, 20, 10);
+            const CLOTH = rgb(230, 220, 200); // Loincloth
+
+            // PIERNAS COMPARTIDAS (Sin zapatos)
+            plyr.legL = plyr.add([ rect(6, 8), color(SKIN), anchor("top"), pos(-4, 10) ]); 
+            plyr.legR = plyr.add([ rect(6, 8), color(SKIN), anchor("top"), pos(4, 10) ]); 
+
+            // VISTA FRENTE (Abajo)
+            plyr.viewDown = plyr.add([ pos(0,0) ]);
+            plyr.viewDown.add([ rect(16, 6), color(HAIR), anchor("center"), pos(0, -17) ]); 
+            plyr.viewDown.add([ rect(14, 12), color(SKIN), anchor("center"), pos(0, -10) ]); 
+            plyr.viewDown.add([ rect(2, 2), color(255, 255, 255), anchor("center"), pos(-3, -11) ]); 
+            plyr.viewDown.add([ rect(2, 2), color(255, 255, 255), anchor("center"), pos(3, -11) ]); 
+            plyr.viewDown.add([ rect(16, 14), color(SKIN), anchor("center"), pos(0, 3) ]); 
+            plyr.viewDown.add([ rect(16, 6), color(CLOTH), anchor("center"), pos(0, 9) ]); 
+            plyr.viewDown.add([ rect(6, 8), color(CLOTH), anchor("center"), pos(0, 13) ]); 
+            plyr.viewDown.add([ rect(4, 12), color(SKIN), anchor("center"), pos(-10, 3) ]); 
+            plyr.viewDown.add([ rect(4, 12), color(SKIN), anchor("center"), pos(10, 3) ]); 
+
+            // VISTA ESPALDA (Arriba)
+            plyr.viewUp = plyr.add([ pos(0,0) ]);
+            plyr.viewUp.add([ rect(16, 16), color(HAIR), anchor("center"), pos(0, -12) ]); 
+            plyr.viewUp.add([ rect(16, 14), color(SKIN), anchor("center"), pos(0, 3) ]); 
+            plyr.viewUp.add([ rect(16, 6), color(CLOTH), anchor("center"), pos(0, 9) ]); 
+            plyr.viewUp.add([ rect(4, 12), color(SKIN), anchor("center"), pos(-10, 3) ]); 
+            plyr.viewUp.add([ rect(4, 12), color(SKIN), anchor("center"), pos(10, 3) ]); 
+
+            // VISTA PERFIL (Lados)
+            plyr.viewSide = plyr.add([ pos(0,0) ]);
+            plyr.viewSide.add([ rect(14, 12), color(SKIN), anchor("center"), pos(0, -10) ]); 
+            plyr.viewSide.add([ rect(10, 8), color(HAIR), anchor("center"), pos(-2, -15) ]); 
+            plyr.viewSide.add([ rect(8, 10), color(HAIR), anchor("center"), pos(-3, -10) ]); 
+            plyr.viewSide.add([ rect(2, 2), color(255, 255, 255), anchor("center"), pos(4, -11) ]); 
+            plyr.viewSide.add([ rect(12, 14), color(SKIN), anchor("center"), pos(0, 3) ]); 
+            plyr.viewSide.add([ rect(14, 6), color(CLOTH), anchor("center"), pos(0, 9) ]); 
+            plyr.viewSide.add([ rect(4, 12), color(SKIN), anchor("center"), pos(0, 3) ]); 
+
+            plyr.viewDown.hidden = false;
+            plyr.viewUp.hidden = true;
+            plyr.viewSide.hidden = true;
+
+            plyr.walkTimer = 0;
+            return plyr;
+        }
+
+        function handlePlayerAnim(plyr, canMove) {
+            if (!canMove) {
+                plyr.legL.pos.y = 10;
+                plyr.legR.pos.y = 10;
+                return;
+            }
+            let moved = false;
+            if (isKeyDown("a") || isKeyDown("left")) { 
+                plyr.scale.x = -1.2; 
+                moved = true; 
+                plyr.viewDown.hidden = true; plyr.viewUp.hidden = true; plyr.viewSide.hidden = false;
+            } else if (isKeyDown("d") || isKeyDown("right")) { 
+                plyr.scale.x = 1.2; 
+                moved = true; 
+                plyr.viewDown.hidden = true; plyr.viewUp.hidden = true; plyr.viewSide.hidden = false;
+            } else if (isKeyDown("w") || isKeyDown("up")) { 
+                moved = true; 
+                plyr.viewDown.hidden = true; plyr.viewUp.hidden = false; plyr.viewSide.hidden = true;
+            } else if (isKeyDown("s") || isKeyDown("down")) { 
+                moved = true; 
+                plyr.viewDown.hidden = false; plyr.viewUp.hidden = true; plyr.viewSide.hidden = true;
+            }
+
+            if (moved) {
+                plyr.walkTimer += dt() * 15;
+                plyr.legL.pos.y = 10 + Math.sin(plyr.walkTimer) * 3;
+                plyr.legR.pos.y = 10 + Math.sin(plyr.walkTimer + Math.PI) * 3;
+            } else {
+                plyr.legL.pos.y = 10;
+                plyr.legR.pos.y = 10;
+                plyr.walkTimer = 0;
+            }
+        }
+
+        // SISTEMA DE DESMAYO
+        function checkPassOut() {
+            if (energy <= 0) {
+                money = Math.floor(money / 2);
+                for(let i=0; i<9; i++) if(hotbar[i] && hotbar[i].cat !== "tool") hotbar[i].q = Math.floor(hotbar[i].q / 2);
+                for(let i=0; i<27; i++) if(backpack[i] && backpack[i].cat !== "tool") backpack[i].q = Math.floor(backpack[i].q / 2);
+                dayTime = 0; 
+                isNight = false;
+                energy = MAX_ENERGY; 
+                go("house", { passedOut: true });
+            }
+        }
+
+        function addMapUI(currentScene) {
+            const mapBtn = add([
+                rect(80, 30, { radius: 5 }), color(60, 60, 60),
+                pos(width() - 50, height() - 25), anchor("center"), area(), fixed(), z(500)
+            ]);
+            mapBtn.add([ text("Mapa", { size: 14 }), anchor("center"), color(255,255,255) ]);
+
+            const mapPanel = add([
+                rect(160, 180, { radius: 8 }), color(30, 30, 30), opacity(0.95),
+                pos(width() - 10, height() - 50), anchor("botright"), fixed(), z(499)
+            ]);
+            mapPanel.hidden = !isMapVisible;
+            
+            // Granja (Arriba)
+            mapPanel.add([ rect(50, 50, {radius:4}), color(100, 200, 100), pos(-35, -135), anchor("center") ]);
+            mapPanel.add([ text("Granja", {size: 10}), pos(-35, -100), anchor("center"), color(255,255,255) ]);
+
+            // Camino Granja -> Selva (Vertical)
+            mapPanel.add([ rect(15, 25), color(150, 100, 50), pos(-35, -97.5), anchor("center") ]);
+
+            // Selva (Abajo)
+            mapPanel.add([ rect(50, 50, {radius:4}), color(34, 139, 34), pos(-35, -60), anchor("center") ]);
+            mapPanel.add([ text("Selva", {size: 10}), pos(-35, -25), anchor("center"), color(255,255,255) ]);
+
+            // Camino Selva -> Mina (Horizontal)
+            mapPanel.add([ rect(25, 15), color(100, 100, 100), pos(-72.5, -60), anchor("center") ]);
+
+            // Mina (Izquierda de Selva)
+            let minaColor = skills.minero.level >= 15 ? color(120, 120, 120) : color(50, 50, 50);
+            let minaBox = mapPanel.add([ rect(50, 50, {radius:4}), minaColor, pos(-110, -60), anchor("center") ]);
+            mapPanel.add([ text("Mina", {size: 10}), pos(-110, -25), anchor("center"), color(255,255,255) ]);
+
+            if (skills.minero.level < 15) {
+                minaBox.add([ rect(12, 10), color(200, 200, 0), anchor("center"), pos(0, 4) ]);
+                minaBox.add([ rect(8, 8), outline(2, rgb(200,200,0)), color(50,50,50), anchor("center"), pos(0, -4) ]);
+                minaBox.add([ rect(2, 4), color(0,0,0), anchor("center"), pos(0, 4) ]); 
+            }
+
+            const dot = mapPanel.add([ circle(3), color(255, 0, 0), anchor("center") ]);
+            dot.hidden = true;
+            
+            onUpdate(() => {
+                if (mapPanel.hidden) return;
+                let p = get("player")[0];
+                if (!p) return;
+                
+                let dx = (p.pos.x - width()/2) * (50 / width());
+                let dy = (p.pos.y - height()/2) * (50 / height());
+                
+                dot.hidden = false;
+                if (currentScene === "game") {
+                    dot.pos = vec2(-35 + dx, -135 + dy);
+                } else if (currentScene === "jungle") {
+                    dot.pos = vec2(-35 + dx, -60 + dy);
+                } else if (currentScene && currentScene.startsWith("mine")) {
+                    dot.pos = vec2(-110 + dx, -60 + dy);
+                } else {
+                    dot.hidden = true;
+                }
+            });
+
+            mapBtn.onClick(() => {
+                isMapVisible = !isMapVisible;
+                mapPanel.hidden = !isMapVisible;
+            });
+        }
+
+        function addGlobalUI(sceneName) {
+            addSleepyEffect();
+            addMapUI(sceneName);
+            addInventoryUI();
+        }
+
+        function addSleepyEffect() {
+            let sleepyOverlay = add([
+                rect(width(), height()),
+                color(0, 0, 0),
+                opacity(0),
+                fixed(),
+                z(999)
+            ]);
+            
+            let sleepyText = add([
+                text("Creo que debo comer un poco", {size: 24}),
+                pos(width()/2, height()/2),
+                anchor("center"),
+                color(255,255,255),
+                opacity(0),
+                fixed(),
+                z(1000)
+            ]);
+
+            let timer = 0;
+            onUpdate(() => {
+                if (energy <= 10 && energy > 0) {
+                    timer += dt();
+                    let alpha = (Math.sin(timer * 4) + 1) / 2 * 0.6; 
+                    sleepyOverlay.opacity = alpha;
+                    sleepyText.opacity = alpha;
+                } else {
+                    sleepyOverlay.opacity = 0;
+                    sleepyText.opacity = 0;
+                }
+            });
+        }
+
+        
+        function addInventoryUI() {
+            const uiTopBg = add([
+                rect(300, 70), color(0, 0, 0), opacity(0.6),
+                pos(10, 10), fixed(), z(95)
+            ]);
+
+            uiMoney = add([
+                text("Energía: " + energy + " | Dinero: $" + money, { size: 18 }),
+                pos(20, 20), fixed(), z(100)
+            ]);
+            
+            uiTime = add([
+                text("Hora: DÍA", { size: 18 }),
+                pos(20, 45), fixed(), z(100)
+            ]);
+            uiQuest = add([
+                text(getQuestText(), { size: 14, width: 250 }),
+                pos(20, 75), fixed(), z(100), color(255, 255, 100)
+            ]);
+
+            const btnSkills = add([
+                rect(120, 40, { radius: 8 }), color(200, 150, 50),
+                pos(width() - 20, 20), anchor("topright"), fixed(), area(), z(100)
+            ]);
+            btnSkills.add([ text("SKILLS", { size: 20 }), pos(-60, 20), anchor("center") ]);
+            
+            const btnShop = add([
+                rect(120, 40, { radius: 8 }), color(50, 150, 200),
+                pos(width() - 150, 20), anchor("topright"), fixed(), area(), z(100)
+            ]);
+            btnShop.add([ text("TIENDA", { size: 20 }), pos(-60, 20), anchor("center") ]);
+            
+            btnShop.onClick(() => {
+                if (inShop) closeShop();
+                else if (!isFishing && !skillsUI && !anvilUI && !carpentryUI) openShop(false);
+            });
+            btnShop.onUpdate(() => { btnShop.color = btnShop.isHovering() ? rgb(80, 180, 230) : rgb(50, 150, 200); });
+
+            
+            skillsUI = null;
+            function toggleSkillsUI() {
+                if (skillsUI) { destroy(skillsUI); skillsUI = null; return; }
+                skillsUI = add([ rect(400, 450), pos(width() - 220, height()/2), anchor("center"), color(40,40,40), fixed(), area(), z(500) ]);
+                skillsUI.add([ text("TUS SKILLS", {size: 24}), pos(0, -180), anchor("center"), color(255,215,0) ]);
+                
+                let y = -120;
+                for (let k in skills) {
+                    let s = skills[k];
+                    skillsUI.add([ text(`${s.name}: Nvl ${s.level}`, {size: 18}), pos(-160, y), color(255,255,255) ]);
+                    skillsUI.add([ rect(320, 15), color(20,20,20), pos(-160, y + 25) ]);
+                    let fillWidth = (s.xp / s.next) * 320;
+                    skillsUI.add([ rect(fillWidth, 15), color(0,255,0), pos(-160, y + 25) ]);
+                    skillsUI.add([ text(`${s.xp} / ${s.next}`, {size: 12}), pos(0, y + 32), anchor("center"), color(255,255,255) ]);
+                    y += 55;
+                }
+                
+                let closeSkillsBtn = skillsUI.add([ rect(30,30), color(255,0,0), pos(170,-200), anchor("center"), area() ]);
+                closeSkillsBtn.add([ text("X", {size: 18}), anchor("center") ]);
+                closeSkillsBtn.onClick(() => toggleSkillsUI());
+                skillsUI.onUpdate(() => { if (isKeyDown("esc")) toggleSkillsUI(); });
+            }
+            btnSkills.onClick(() => toggleSkillsUI());
+            btnSkills.onUpdate(() => { btnSkills.color = btnSkills.isHovering() ? rgb(230, 180, 80) : rgb(200, 150, 50); });
+
+            const btnSave = add([
+                rect(100, 40, { radius: 5 }), color(50, 200, 50),
+                pos(320, 10), fixed(), area(), z(100)
+            ]);
+            btnSave.add([ text("GUARDAR", { size: 16 }), anchor("center"), pos(50, 20) ]);
+            btnSave.onClick(() => {
+                saveGame();
+                add([ text("¡Partida Guardada!", {size:30}), pos(width()/2, height()/2), anchor("center"), color(0,255,0), opacity(1), lifespan(2, {fade:0.5}), fixed(), z(1000) ]);
+            });
+            btnSave.onUpdate(() => { btnSave.color = btnSave.isHovering() ? rgb(80, 230, 80) : rgb(50, 200, 50); });
+
+            function upgradeTool(baseId, nameBase) {
+                let slot = -1; let item = null;
+                for(let i=0; i<9; i++) if(hotbar[i] && hotbar[i].id.startsWith(baseId)) { slot = i; item = hotbar[i]; break; }
+                if(!item) for(let i=0; i<backpack.length; i++) if(backpack[i] && backpack[i].id.startsWith(baseId)) { slot = i; item = backpack[i]; break; }
+                
+                if(!item) {
+                    add([ text("No tienes un " + nameBase, {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    return;
+                }
+                
+                let reqId = ""; let reqQ = 0; let nextTier = ""; let nextName = ""; let xpReq = 0;
+                if(item.id.endsWith("_copper")) { reqId = "iron"; reqQ = 5; nextTier = "_iron"; nextName = "Hierro"; xpReq = 3; }
+                else if(item.id.endsWith("_iron")) { reqId = "gold"; reqQ = 5; nextTier = "_gold"; nextName = "Oro"; xpReq = 5; }
+                else if(item.id.endsWith("_gold")) { reqId = "diamond"; reqQ = 3; nextTier = "_diamond"; nextName = "Diam."; xpReq = 10; }
+                else {
+                    add([ text("Al máximo nivel", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(100,255,100), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    return;
+                }
+                
+                if(countItem(reqId) >= reqQ) {
+                    removeItem(reqId, reqQ);
+                    item.id = baseId + nextTier;
+                    item.name = nameBase + "\n" + nextName;
+                    addXP("herrero", xpReq);
+                    globalUpdateUI();
+                    add([ text("¡Mejorado a " + nextName + "!", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(0,255,0), opacity(1), lifespan(1), fixed(), z(600) ]);
+                } else {
+                    add([ text(`Falta ${reqQ} ${reqId}`, {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                }
+            }
+
+            anvilUI = null;
+            function toggleAnvilUI() {
+                if (anvilUI) { destroy(anvilUI); anvilUI = null; return; }
+                anvilUI = add([ rect(450, 400), pos(width()/2, height()/2), anchor("center"), color(40,40,40), fixed(), area(), z(500) ]);
+                anvilUI.add([ text("MESA DE HERRERO", {size: 24}), pos(0, -170), anchor("center"), color(255,215,0) ]);
+                
+                let btn1 = anvilUI.add([ rect(300, 50, { radius: 8 }), color(70, 70, 70), pos(0, -90), anchor("center"), area() ]);
+                btn1.add([ text("Fabricar Clavos (1 Hierro)", {size: 16}), anchor("center") ]);
+                btn1.onClick(() => {
+                    if (countItem("iron") >= 1) {
+                        if (addItem("material", "nails", "Clavos", 5)) { removeItem("iron", 1); addXP("herrero", 1); globalUpdateUI(); }
+                        else add([ text("Inventario Lleno", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    } else add([ text("Falta Hierro", {size:18}), pos(width()/2, height()/2-150), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                });
+                btn1.onUpdate(() => { btn1.color = btn1.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+                
+                let btn2 = anvilUI.add([ rect(300, 50, { radius: 8 }), color(70, 70, 70), pos(0, -20), anchor("center"), area() ]);
+                btn2.add([ text("Mejorar Hacha\n(5 Hierro / 5 Oro / 3 Diam.)", {size: 14, align:"center"}), anchor("center") ]);
+                btn2.onClick(() => upgradeTool("axe", "Hacha"));
+                btn2.onUpdate(() => { btn2.color = btn2.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+                
+                let btn3 = anvilUI.add([ rect(300, 50, { radius: 8 }), color(70, 70, 70), pos(0, 50), anchor("center"), area() ]);
+                btn3.add([ text("Mejorar Pico\n(5 Hierro / 5 Oro / 3 Diam.)", {size: 14, align:"center"}), anchor("center") ]);
+                btn3.onClick(() => upgradeTool("pickaxe", "Pico"));
+                btn3.onUpdate(() => { btn3.color = btn3.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+
+                let closeAnvilBtn = anvilUI.add([ rect(30,30), color(255,0,0), pos(195,-170), anchor("center"), area() ]);
+                closeAnvilBtn.add([ text("X", {size: 18}), anchor("center") ]);
+                closeAnvilBtn.onClick(() => toggleAnvilUI());
+                anvilUI.onUpdate(() => { if (isKeyDown("esc")) toggleAnvilUI(); });
+            }
+
+
+            carpentryUI = null;
+            function toggleCarpentryUI() {
+                if (carpentryUI) { destroy(carpentryUI); carpentryUI = null; return; }
+                carpentryUI = add([ rect(400, 350), pos(width()/2, height()/2), anchor("center"), color(40,40,40), fixed(), area(), z(500) ]);
+                carpentryUI.add([ text("MESA CARPINTERO", {size: 24}), pos(0, -140), anchor("center"), color(255,215,0) ]);
+                
+                let btn1 = carpentryUI.add([ rect(300, 50, { radius: 8 }), color(70, 70, 70), pos(0, -50), anchor("center"), area() ]);
+                btn1.add([ text("Silla de Madera\nRequiere: 3 Madera", {size: 16, align: "center"}), anchor("center") ]);
+                btn1.onClick(() => {
+                    if (countItem("wood") >= 3) {
+                        if (addItem("craft", "chair_wood", "Silla M.", 1)) { removeItem("wood", 3); addXP("carpintero", 1); globalUpdateUI(); } 
+                        else add([ text("Inv. Lleno", { size: 24 }), pos(width()/2, height()/2-160), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    } else add([ text("Falta Madera", { size: 24 }), pos(width()/2, height()/2-160), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                });
+                btn1.onUpdate(() => { btn1.color = btn1.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+
+                let btn2 = carpentryUI.add([ rect(300, 50, { radius: 8 }), color(70, 70, 70), pos(0, 20), anchor("center"), area() ]);
+                btn2.add([ text("Mesa de Madera\nRequiere: 5 Madera", {size: 16, align: "center"}), anchor("center") ]);
+                btn2.onClick(() => {
+                    if (countItem("wood") >= 5) {
+                        if (addItem("craft", "table_wood", "Mesa M.", 1)) { removeItem("wood", 5); addXP("carpintero", 2); globalUpdateUI(); } 
+                        else add([ text("Inv. Lleno", { size: 24 }), pos(width()/2, height()/2-160), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                    } else add([ text("Falta Madera", { size: 24 }), pos(width()/2, height()/2-160), anchor("center"), color(255,50,50), opacity(1), lifespan(1), fixed(), z(600) ]);
+                });
+                btn2.onUpdate(() => { btn2.color = btn2.isHovering() ? rgb(100,100,100) : rgb(70,70,70); });
+                
+                let closeCarpBtn = carpentryUI.add([ rect(30,30), color(255,0,0), pos(170,-150), anchor("center"), area() ]);
+                closeCarpBtn.add([ text("X", {size: 18}), anchor("center") ]);
+                closeCarpBtn.onClick(() => toggleCarpentryUI());
+                carpentryUI.onUpdate(() => { if (isKeyDown("esc")) toggleCarpentryUI(); });
+            }
+
+
+            activeSwap = null; 
+
+            hotbarSlots = [];
+            const slotSize = 65;
+            const startX = width() / 2 - (slotSize * 4.5);
+
+            for (let i = 0; i < 9; i++) {
+                let slot = add([
+                    rect(slotSize, slotSize),
+                    pos(startX + i * (slotSize + 5), height() - 80),
+                    color(30, 30, 30),
+                    outline(4, i === activeTool ? rgb(255, 255, 0) : rgb(0, 0, 0)),
+                    fixed(), area(), z(200)
+                ]);
+                
+                slot.add([
+                    text((i+1).toString(), { size: 14 }),
+                    pos(4, 4), color(150,150,150)
+                ]);
+
+                let label = slot.add([
+                    text("", { size: 12, align: "center" }),
+                    anchor("center"), pos(slotSize/2, slotSize/2), color(255,255,255)
+                ]);
+
+                let countText = slot.add([
+                    text("", { size: 14 }), pos(slotSize - 4, slotSize - 4),
+                    anchor("botright"), color(255, 255, 0)
+                ]);
+                
+                slot.onClick(() => {
+                    if (activeSwap) {
+                        if (activeSwap.type === "hotbar") {
+                            let temp = hotbar[activeSwap.idx];
+                            hotbar[activeSwap.idx] = hotbar[i];
+                            hotbar[i] = temp;
+                        } else {
+                            let temp = backpack[activeSwap.idx];
+                            backpack[activeSwap.idx] = hotbar[i];
+                            hotbar[i] = temp;
+                        }
+                        activeSwap = null;
+                        globalUpdateUI();
+                    } else {
+                        activeSwap = { type: "hotbar", idx: i };
+                        globalUpdateUI();
+                    }
+                });
+
+                hotbarSlots.push({ bg: slot, label, count: countText });
+            }
+
+            const btnMochila = add([
+                rect(slotSize, slotSize), pos(startX + 9 * (slotSize + 5) + 20, height() - 80),
+                color(50, 80, 150), outline(2, rgb(255,255,255)), fixed(), area(), z(200)
+            ]);
+            btnMochila.add([ text("Mochila", {size: 14}), anchor("center"), pos(slotSize/2, slotSize/2) ]);
+            btnMochila.onClick(() => {
+                if(backpackLevel > 0) {
+                    toggleBackpackUI();
+                } else {
+                    add([ text("Compra una mochila", { size: 16 }), pos(btnMochila.pos.x, btnMochila.pos.y - 30), color(255,50,50), opacity(1), lifespan(1), fixed(), z(400) ]);
+                }
+            });
+
+            bpUI = null;
+            function toggleBackpackUI() {
+                if(bpUI) { destroy(bpUI); bpUI = null; return; }
+                bpUI = add([ rect(600, 300), pos(width()/2, height()/2), anchor("center"), color(40,40,40), fixed(), area(), z(250) ]);
+                bpUI.add([ text("Mochila (Clic para intercambiar)", {size:20}), pos(0, -130), anchor("center") ]);
+                let closeBpBtn = bpUI.add([ rect(30,30), color(255,0,0), pos(270,-130), anchor("center"), area() ]);
+                closeBpBtn.add([ text("X", {size: 18}), anchor("center") ]);
+                closeBpBtn.onClick(() => toggleBackpackUI());
+                bpUI.onUpdate(() => { if (isKeyDown("esc")) toggleBackpackUI(); });
+                
+                let limit = backpackLevel * 9;
+                for(let i=0; i<limit; i++) {
+                    let rx = -240 + (i%9)*60;
+                    let ry = -80 + Math.floor(i/9)*60;
+                    let s = bpUI.add([ rect(50,50), pos(rx,ry), color(20,20,20), outline(2, rgb(100,100,100)), area() ]);
+                    let item = backpack[i];
+                    if(item) {
+                        s.add([ text(item.name, {size:10}), pos(25,25), anchor("center") ]);
+                        s.add([ text(item.q, {size:12}), pos(45,45), anchor("botright"), color(255,255,0) ]);
+                    }
+                    s.onClick(() => {
+                        if (activeSwap) {
+                            if (activeSwap.type === "hotbar") {
+                                let temp = hotbar[activeSwap.idx];
+                                hotbar[activeSwap.idx] = backpack[i];
+                                backpack[i] = temp;
+                            } else {
+                                let temp = backpack[activeSwap.idx];
+                                backpack[activeSwap.idx] = backpack[i];
+                                backpack[i] = temp;
+                            }
+                            activeSwap = null;
+                            toggleBackpackUI(); toggleBackpackUI(); globalUpdateUI();
+                        } else {
+                            activeSwap = { type: "backpack", idx: i };
+                            s.use(outline(4, rgb(255,0,0)));
+                        }
+                    });
+                }
+            }
+
+            function updateHotbar() {
+                for (let i = 0; i < 9; i++) {
+                    let isSelected = i === activeTool;
+                    let isSwap = activeSwap && activeSwap.type === "hotbar" && activeSwap.idx === i;
+                    hotbarSlots[i].bg.use(outline(4, isSwap ? rgb(255, 0, 0) : (isSelected ? rgb(255, 255, 0) : rgb(0, 0, 0))));
+                    
+                    let item = hotbar[i];
+                    if (item) {
+                        let nameStr = item.name;
+                        if(item.id === "hoe") nameStr = "Azada\n(T)";
+                        hotbarSlots[i].label.text = nameStr;
+                        hotbarSlots[i].count.text = item.cat !== "tool" || item.id === "scissors" ? item.q.toString() : "";
+                    } else {
+                        hotbarSlots[i].label.text = "";
+                        hotbarSlots[i].count.text = "";
+                    }
+                }
+            }
+            updateHotbar();
+            globalUpdateUI = () => {
+                uiMoney.text = "Energía: " + energy + " | Dinero: $" + money;
+                if (uiQuest) uiQuest.text = getQuestText();
+                updateHotbar();
+                if(bpUI) { let old = activeSwap; toggleBackpackUI(); toggleBackpackUI(); activeSwap = old; }
+                if(skillsUI) { toggleSkillsUI(); toggleSkillsUI(); }
+            };
+            
+
+
+        }
+scene("game", () => {
+            addGlobalUI("game");
+            
+
+
+            const lake = add([
+                rect(180, height()), color(30, 144, 255),
+                pos(width() - 180, 0), area(), z(10), "lake"
+            ]);
+
+            if (Math.random() <= 0.05 && !isHighTide) {
+                isHighTide = true;
+                highTideTimer = 180; 
+                add([ text("¡La marea ha subido!", {size: 30}), pos(width()/2, height()/2), anchor("center"), color(30, 144, 255), opacity(1), lifespan(3), fixed(), z(400) ]);
+            } else if (isHighTide && highTideTimer > 0) {
+                lake.width = width() / 2;
+                lake.pos.x = width() / 2;
+            }
+
+            lake.onUpdate(() => {
+                if (isHighTide) {
+                    highTideTimer -= dt();
+                    if (highTideTimer > 0) {
+                        let targetWidth = width() / 2;
+                        let targetX = width() / 2;
+                        lake.width += (targetWidth - lake.width) * dt() * 0.5;
+                        lake.pos.x += (targetX - lake.pos.x) * dt() * 0.5;
+                    } else {
+                        let targetWidth = 180;
+                        let targetX = width() - 180;
+                        lake.width += (targetWidth - lake.width) * dt() * 0.1;
+                        lake.pos.x += (targetX - lake.pos.x) * dt() * 0.1;
+                        if (lake.width < 185) {
+                            isHighTide = false;
+                            lake.width = 180;
+                            lake.pos.x = width() - 180;
+                        }
+                    }
+                }
+            });
+            for (let i = 0; i < 5; i++) {
+                add([
+                    rect(16, 6), color(0, 100, 200),
+                    pos(width() - rand(20, 160), rand(20, height() - 20)),
+                    z(11), "fish_shadow",
+                    { speed: rand(15, 35), dir: rand(1, 2) > 1.5 ? 1 : -1 }
+                ]);
+            }
+            onUpdate("fish_shadow", (f) => {
+                f.pos.y += f.speed * f.dir * dt();
+                if (f.pos.y < 0 || f.pos.y > height()) f.dir *= -1;
+            });
+
+            add([ rect(140, 120), color(101, 67, 33), pos(150, 120), area(), body({ isStatic: true }), anchor("center") ]);
+            add([ rect(160, 40), color(139, 0, 0), pos(150, 60), anchor("center") ]);
+            add([ rect(30, 40), color(0, 0, 0), pos(150, 160), area(), anchor("center"), "house_door" ]);
+
+
+            const assistant = makeAssistant(width() - 250, 150);
+            assistant.add([ text("Asistente", {size: 14}), pos(0, -35), anchor("center"), color(0,0,0) ]);
+
+            onClick("assistant", () => {
+                let p = get("player")[0];
+                if (!p || p.pos.dist(assistant.pos) > 80) {
+                    add([ text("Acércate más", {size:16}), pos(assistant.pos), color(255,0,0), opacity(1), lifespan(1) ]);
+                    return;
+                }
+                
+                if (currentQuest === 0) {
+                    showDialog([
+                        "Asistente:\nTaera, me alegra verte. Tengo noticias muy urgentes y dolorosas...",
+                        "Asistente:\nEl Gran Cacique, tu padre, ha empeorado. Su enfermedad es incurable y está sufriendo demasiado.",
+                        "Taera:\n¡No puede ser! Debe haber alguna forma de salvarlo, la naturaleza siempre tiene respuestas...",
+                        "Asistente:\nEscucha con atención. Eres el elegido para sucederlo, pero primero debes estar preparado.",
+                        "Asistente:\nDebes perfeccionar tus habilidades. Alcanza el Nivel 10 en todas las disciplinas, y el Nivel 20 en Minería.",
+                        "Asistente:\nCuando estés listo, realizaremos el ritual. Le daremos un veneno sagrado al Cacique para que cruce al otro mundo sin dolor.",
+                        "Taera:\n¡¿Envenenarlo?! ¡Me niego rotundamente! Un líder protege la vida, no decide cuándo terminarla.",
+                        "Asistente:\nEs la tradición, Taera. Su dolor es inmenso... no podemos ser egoístas.",
+                        "Taera:\n¡No me importa la tradición si implica matar a mi padre! Encontraré otra manera.",
+                        "Taera:\nMe dedicaré a la Botánica. Aprenderé los secretos de las plantas hasta el Nivel 20 y encontraré una Cura Milagrosa.",
+                        "Asistente:\n...Es una locura, pero tienes el corazón de un verdadero líder. Hazlo, Taera. Pero el tiempo corre."
+                    ], () => {
+                        currentQuest = 1; globalUpdateUI();
+                    });
+                } else if (currentQuest === 1) {
+                    if (skills.botanico.level >= 20) {
+                        showDialog([
+                            "Asistente:\n¡Increíble! Has dominado los secretos de las plantas. Tu conocimiento botánico es de Nivel 20.",
+                            "Taera:\nAhora necesito fabricar la Cura Milagrosa. Usaré el Mortero Botánico.",
+                            "Taera:\nMezclaré 10 Bayas, 5 hojas de Aloe Vera y 2 raíces de Ginseng para destilar su esencia.",
+                            "Asistente:\nPuedes comprar el Mortero en la Tienda si aún no lo tienes. ¡Date prisa!"
+                        ], () => {
+                            currentQuest = 2; globalUpdateUI();
+                        });
+                    } else {
+                        showDialog([
+                            "Asistente:\nVeo que avanzas en tu camino con la Botánica...",
+                            "Asistente:\nPero aún no es suficiente. Debes alcanzar el Nivel 20 para comprender los secretos de la Cura Milagrosa."
+                        ]);
+                    }
+                } else if (currentQuest === 2) {
+                    showDialog([
+                        "Asistente:\n¿Aún no tienes la Cura Milagrosa?",
+                        "Taera:\nNecesito el Mortero Botánico, 10 Bayas y 5 Semillas Mágicas. En eso estoy."
+                    ]);
+                } else if (currentQuest === 3) {
+                    let hasC = false;
+                    for(let i=0; i<9; i++) if(hotbar[i] && hotbar[i].id === "cura") { hasC = true; hotbar[i].q--; if(hotbar[i].q<=0) hotbar[i]=null; break; }
+                    if(!hasC) for(let i=0; i<backpack.length; i++) if(backpack[i] && backpack[i].id === "cura") { hasC = true; backpack[i].q--; if(backpack[i].q<=0) backpack[i]=null; break; }
+                    
+                    if (hasC) {
+                        showDialog([
+                            "Taera:\n¡Lo logré! Aquí tienes la Cura Milagrosa. ¡Dásela de inmediato!",
+                            "Asistente:\n... (Le administra la cura al Cacique) ...",
+                            "Asistente:\n¡Es un milagro de la naturaleza! Su respiración se estabiliza. ¡Se está recuperando!",
+                            "Taera:\nSabía que la vida siempre encuentra un camino.",
+                            "Asistente:\nMe has dado una gran lección, Taera. Ahora, para ser oficialmente el Cacique...",
+                            "Asistente:\nDebes terminar tu entrenamiento. Demuestra tu valía alcanzando Minería Nvl 20 y el resto Nvl 10."
+                        ], () => {
+                            currentQuest = 4; globalUpdateUI();
+                        });
+                    } else {
+                        showDialog([
+                            "Asistente:\nNo llevas la cura contigo. Búscala rápido en tu inventario."
+                        ]);
+                    }
+                } else if (currentQuest === 4) {
+                    let ready = true;
+                    for (let k in skills) {
+                        if (k === "minero" && skills[k].level < 20) ready = false;
+                        if (k !== "minero" && k !== "botanico" && skills[k].level < 10) ready = false;
+                    }
+                    if (ready) {
+                        showDialog([
+                            "Asistente:\nHas dominado todas las disciplinas necesarias, Taera.",
+                            "Asistente:\nHas demostrado ser sabio, fuerte y sobre todo, un líder de corazón noble.",
+                            "Asistente:\nEl Cacique está orgulloso de ti. Estás listo para liderarnos.",
+                            "Taera:\nProtegeré a nuestra tribu con mi vida. Que comience el ritual...",
+                            "Asistente:\nSiento un temblor... ¿Qué está pasando con el lago?"
+                        ], () => {
+                            currentQuest = 5; 
+                            triggerEndGame();
+                        });
+                    } else {
+                        showDialog([
+                            "Asistente:\nAún te falta entrenamiento para ser Cacique.",
+                            "Asistente:\nRecuerda: Minería Nvl 20 y las demás Nvl 10. Revisa tus Skills."
+                        ]);
+                    }
+                }
+            });
+
+            // Random deep thoughts for Taera
+            loop(45, () => {
+                if (currentQuest > 0 && currentQuest < 5 && !isSleeping) {
+                    let p = get("player")[0];
+                    if (p) {
+                        const thoughts = [
+                            "El peso del liderazgo es grande, pero una vida vale más...",
+                            "¿Acaso un buen cacique sacrificaría a los suyos?",
+                            "Cada semilla que planto es una esperanza de vida...",
+                            "La naturaleza tiene la respuesta. La cura existe.",
+                            "Un verdadero líder protege a su pueblo, no elige cuándo mueren.",
+                            "No dejaré que mi primer acto como cacique sea un asesinato."
+                        ];
+                        let thought = thoughts[Math.floor(Math.random() * thoughts.length)];
+                        add([
+                            text(thought, {size: 14, width: 200, align: "center"}),
+                            pos(p.pos.x, p.pos.y - 50),
+                            anchor("bot"),
+                            color(255, 255, 255),
+                            opacity(1),
+                            lifespan(4, { fade: 1 }),
+                            z(500)
+                        ]);
+                    }
+                }
+            });
+            const anvil = add([
+                pos(260, 150), area({ shape: new Rect(vec2(-20, -15), 40, 30) }), body({ isStatic: true }), z(15), "anvil"
+            ]);
+            anvil.add([ rect(20, 20), color(101, 67, 33), anchor("center"), pos(0, 5) ]); // Stump
+            anvil.add([ rect(30, 12), color(80, 80, 80), anchor("center"), pos(0, -10) ]); // Base
+            anvil.add([ rect(10, 8), color(80, 80, 80), anchor("center"), pos(-15, -10) ]); // Horn
+
+            const carpentryTable = add([
+                pos(350, 150), area({ shape: new Rect(vec2(-30, -15), 60, 30) }), body({ isStatic: true }), z(15), "carpentry_table"
+            ]);
+            carpentryTable.add([ rect(6, 20), color(90, 50, 20), anchor("center"), pos(-24, 5) ]); // Left Leg
+            carpentryTable.add([ rect(6, 20), color(90, 50, 20), anchor("center"), pos(24, 5) ]); // Right Leg
+            carpentryTable.add([ rect(60, 12), color(160, 82, 45), anchor("center"), pos(0, -10) ]); // Table top
+
+anvil.onClick(() => {
+                if (inShop || isFishing || bpUI || skillsUI || carpentryUI) return;
+                if (player.pos.dist(anvil.pos) < 60) toggleAnvilUI();
+                else add([ text("Acércate más", {size: 18}), pos(anvil.pos.x, anvil.pos.y-30), anchor("center"), color(255,50,50), opacity(1), lifespan(1), z(400) ]);
+            });
+
+            carpentryTable.onClick(() => {
+                if (inShop || isFishing || bpUI || skillsUI || anvilUI) return;
+                if (player.pos.dist(carpentryTable.pos) < 60) toggleCarpentryUI();
+                else add([ text("Acércate más", {size: 18}), pos(carpentryTable.pos.x, carpentryTable.pos.y-30), anchor("center"), color(255,50,50), opacity(1), lifespan(1), z(400) ]);
+            });
+
+            const anvilDialog = add([
+                rect(120, 30, { radius: 4 }), color(30, 30, 30),
+                pos(260, 100), anchor("center"), z(150)
+            ]);
+            anvilDialog.add([ text("Mesa Herrero", { size: 12, align: "center" }), anchor("center"), color(255, 255, 255) ]);
+            anvilDialog.hidden = true;
+
+            const carpentryDialog = add([
+                rect(130, 30, { radius: 4 }), color(30, 30, 30),
+                pos(350, 100), anchor("center"), z(150)
+            ]);
+            carpentryDialog.add([ text("Mesa Carpintero", { size: 12, align: "center" }), anchor("center"), color(255, 255, 255) ]);
+            carpentryDialog.hidden = true;
+
+            const jungleSign = add([
+                rect(80, 40), color(139, 69, 19),
+                pos(100, height() - 60), area(), anchor("center"), "jungle_sign"
+            ]);
+            jungleSign.add([ text("Selva\nAdentro", { size: 14, align: "center" }), anchor("center"), color(255,255,255) ]);
+            add([ rect(10, 20), color(101, 67, 33), pos(100, height() - 40), anchor("center") ]);
+
+            for (let i = 0; i < 15; i++) {
+                let tx = rand(250, width() - 250);
+                let ty = rand(100, height() - 100);
+                
+                let tree = add([
+                    rect(16, 32), color(139, 69, 19),
+                    pos(tx, ty), anchor("bot"), area(), body({ isStatic: true }), z(30), "tree"
+                ]);
+                tree.add([
+                    circle(24), color(34, 139, 34),
+                    pos(0, -24), anchor("center")
+                ]);
+            }
+
+            for (let i = 0; i < 10; i++) {
+                let wx = rand(250, width() - 250);
+                let wy = rand(100, height() - 100);
+                add([
+                    rect(24, 12), color(160, 82, 45), outline(2, rgb(101, 67, 33)),
+                    pos(wx, wy), anchor("center"), area(), z(15), "wood_log"
+                ]);
+            }
+
+            for (let i = 0; i < 8; i++) {
+                let rx = rand(250, width() - 250);
+                let ry = rand(100, height() - 100);
+                add([ circle(14), color(120, 120, 120), outline(2, rgb(80, 80, 80)), pos(rx, ry), anchor("center"), area(), body({ isStatic: true }), z(15), "rock" ]);
+            }
+
+            for (let i = 0; i < 12; i++) {
+                let bx = rand(250, width() - 250);
+                let by = rand(100, height() - 100);
+                let bush = add([
+                    rect(20, 20, { radius: 10 }), color(34, 139, 34),
+                    pos(bx, by), anchor("center"), area(), body({ isStatic: true }), z(15), "bush"
+                ]);
+                bush.add([ circle(4), color(255, 20, 20), pos(-5, -5) ]);
+                bush.add([ circle(4), color(255, 20, 20), pos(5, 3) ]);
+            }
+
+            const boatColor = boatRepaired ? rgb(139, 69, 19) : rgb(80, 80, 80);
+            const boat = add([
+                polygon([
+                    vec2(0, -70),
+                    vec2(35, -30),
+                    vec2(35, 60),
+                    vec2(-35, 60),
+                    vec2(-35, -30)
+                ]),
+                color(boatColor), outline(4, rgb(40, 20, 10)),
+                pos(width() - 190, height() / 2), area(), body({ isStatic: true }), z(15), "boat"
+            ]);
+            
+            boat.add([ rect(50, 80), color(boatRepaired ? 101 : 50, boatRepaired ? 67 : 50, boatRepaired ? 33 : 50), pos(0, 15), anchor("center") ]);
+            boat.add([ rect(50, 15), color(40, 20, 10), pos(0, -5), anchor("center") ]);
+            boat.add([ rect(50, 15), color(40, 20, 10), pos(0, 35), anchor("center") ]);
+
+            const boatDialog = add([
+                rect(240, 80, { radius: 8 }), color(30, 30, 30),
+                pos(width() - 360, height() / 2), anchor("center"), fixed(), z(150)
+            ]);
+            boatDialog.add([
+                text("Necesito 50 de madera y\n20 clavos para reparar\nel barco e ir río abajo.", { size: 14, align: "center" }),
+                anchor("center"), color(255, 255, 255)
+            ]);
+            boatDialog.hidden = true;
+
+                        const darkness = add([
+                rect(width(), height()), color(0, 0, 50),
+                opacity(isNight ? 0.4 : 0), fixed(), z(190)
+            ]);
+
+            const fogs = [];
+            for (let i = 0; i < 8; i++) {
+                let f = add([
+                    rect(rand(200, 500), rand(40, 100)),
+                    color(200, 200, 220),
+                    pos(rand(-500, width()), rand(0, height())),
+                    opacity(0),
+                    fixed(), z(195),
+                    { speed: rand(15, 35) }
+                ]);
+                fogs.push(f);
+            }
+
+            onUpdate(() => {
+                dayTime += dt();
+                if (dayTime > 300) dayTime = 0; 
+                isNight = dayTime > 150;
+
+                uiTime.text = isNight ? "Hora: NOCHE" : "Hora: DÍA";
+                uiTime.color = isNight ? rgb(100, 100, 255) : rgb(255, 255, 100);
+                
+                if (isNight) {
+                    darkness.opacity = Math.min(0.4, darkness.opacity + dt() * 0.2);
+                    exhaustTimer += dt();
+                    if (exhaustTimer >= 3) {
+                        exhaustTimer = 0; energy -= 1;
+                        globalUpdateUI(); checkPassOut();
+                    }
+                } else {
+                    darkness.opacity = Math.max(0, darkness.opacity - dt() * 0.2);
+                    exhaustTimer = 0;
+                }
+
+                if (!boatRepaired && player.pos.dist(boat.pos) < 120) boatDialog.hidden = false;
+                else boatDialog.hidden = true;
+                if (player.pos.dist(anvil.pos) < 60) anvilDialog.hidden = false;
+                else anvilDialog.hidden = true;
+                if (player.pos.dist(carpentryTable.pos) < 60) carpentryDialog.hidden = false;
+                else carpentryDialog.hidden = true;
+
+                fogs.forEach(f => {
+                    f.pos.x += f.speed * dt();
+                    if (f.pos.x > width()) {
+                        f.pos.x = -500;
+                        f.pos.y = rand(0, height());
+                    }
+                    f.opacity = darkness.opacity * 0.5; 
+                });
+            });
+
+            onKeyPress("t", () => {
+                if (inShop) closeShop();
+                else if (!isFishing && !skillsUI && !anvilUI && !carpentryUI) openShop(false);
+            });
+
+            const player = makePlayer(width() / 2, height() / 2, false);
+
+            const SPEED = 200;
+            isFishing = false;
+
+            onKeyDown("left", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(-SPEED, 0) });
+            onKeyDown("right", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(SPEED, 0) });
+            onKeyDown("up", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(0, -SPEED) });
+            onKeyDown("down", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(0, SPEED) });
+            onKeyDown("a", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(-SPEED, 0) });
+            onKeyDown("d", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(SPEED, 0) });
+            onKeyDown("w", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(0, -SPEED) });
+            onKeyDown("s", () => { if(!inShop && !isFishing && !skillsUI && !anvilUI && !carpentryUI && !bpUI) player.move(0, SPEED) });
+
+            player.onUpdate(() => {
+                if (player.pos.x < 16) player.pos.x = 16;
+                if (player.pos.x > width() - 196) player.pos.x = width() - 196; 
+                if (player.pos.y < 16) player.pos.y = 16;
+                if (player.pos.y > height() - 16) player.pos.y = height() - 16;
+                handlePlayerAnim(player, !inShop && !isFishing && !bpUI && !skillsUI && !anvilUI && !carpentryUI);
+            });
+
+            for(let i=1; i<=9; i++) {
+                onKeyPress(i.toString(), () => { 
+                    if (activeTool === i-1 && hotbar[activeTool] && hotbar[activeTool].id === "hoe") {
+                        activeSoilType = activeSoilType === "normal" ? "sand" : "normal";
+                    }
+                    activeTool = i - 1; globalUpdateUI(); 
+                });
+            }
+
+            onScroll((action) => {
+                if (action.y > 0) activeTool = (activeTool + 1) % 9;
+                if (action.y < 0) activeTool = (activeTool - 1 + 9) % 9;
+                globalUpdateUI();
+            });
+
+            player.onCollide("house_door", () => { go("house"); });
+            player.onCollide("jungle_sign", () => { go("jungle"); });
+
+            let inBoatMenu = false;
+            function openBoatTravel() {
+                if(inBoatMenu) return;
+                inBoatMenu = true;
+                const bMenu = add([
+                    rect(400, 300, { radius: 10 }), color(40, 40, 40),
+                    pos(width()/2, height()/2), anchor("center"), fixed(), z(300), area()
+                ]);
+                bMenu.add([ text("¿A dónde quieres ir?", {size: 20}), pos(0, -100), anchor("center") ]);
+                
+                let btnTribe = bMenu.add([ rect(250, 40, {radius: 5}), color(70,70,70), pos(0, -30), anchor("center"), area() ]);
+                btnTribe.add([ text("Tribu Vecina", {size:16}), anchor("center") ]);
+                btnTribe.onClick(() => { inBoatMenu=false; destroy(bMenu); go("tribe"); });
+                
+                let btnCity = bMenu.add([ rect(250, 40, {radius: 5}), color(70,70,70), pos(0, 30), anchor("center"), area() ]);
+                btnCity.add([ text("Civilización", {size:16}), anchor("center") ]);
+                btnCity.onClick(() => { inBoatMenu=false; destroy(bMenu); go("city"); });
+
+                let btnDeep = bMenu.add([ rect(250, 40, {radius: 5}), color(70,70,70), pos(0, 90), anchor("center"), area() ]);
+                btnDeep.add([ text("Selva Profunda", {size:16}), anchor("center") ]);
+                btnDeep.onClick(() => { inBoatMenu=false; destroy(bMenu); go("deep_jungle"); });
+                
+                let btnClose = bMenu.add([ text("X Cerrar", {size:14}), pos(150, -120), anchor("center"), area() ]);
+                btnClose.onClick(() => { inBoatMenu = false; destroy(bMenu); });
+            }
+
+            onClick("boat", () => {
+                if (boatRepaired && player.pos.dist(boat.pos) < 100 && !inShop && !isFishing) {
+                    openBoatTravel();
+                }
+            });
+
+            onKeyPress("space", () => {
+                if (inShop || isFishing || bpUI || skillsUI || anvilUI || carpentryUI || inBoatMenu) return;
+
+                if (player.pos.dist(boat.pos) < 80) {
+                    if (!boatRepaired) {
+                        if (countItem("wood") >= 50 && countItem("nails") >= 20) {
+                            removeItem("wood", 50);
+                            removeItem("nails", 20);
+                            boatRepaired = true;
+                            boat.use(color(139, 69, 19));
+                            boat.removeAll("text");
+                            boat.add([ text("Barco\nReparado", {size: 16, align:"center"}), color(255,255,255), anchor("center") ]);
+                            add([ text("¡Barco Reparado!", {size:30}), pos(width()/2, height()/2), anchor("center"), color(0,255,0), opacity(1), lifespan(3), fixed(), z(400) ]);
+                        } else {
+                            add([ text("Requiere: 50 Madera y 20 Clavos", {size:18}), pos(boat.pos.x, boat.pos.y-80), anchor("center"), color(255,0,0), opacity(1), lifespan(2), z(400) ]);
+                        }
+                    } else {
+                        openBoatTravel();
+                    }
+                    return;
+                }
+
+                const GRID = 40;
+                let targetX = player.pos.x;
+                let targetY = player.pos.y + 16;
+                let gridX = Math.floor(targetX / GRID) * GRID + (GRID / 2);
+                let gridY = Math.floor(targetY / GRID) * GRID + (GRID / 2);
+                const actPos = vec2(gridX, gridY);
+
+                let item = hotbar[activeTool];
+
+                if (item && item.id === "hoe") {
+                    const soils = get("soil").filter(s => s.pos.dist(actPos) < 25);
+                    if (soils.length === 0 && energy >= 5 && player.pos.x < width() - 180) { 
+                        energy -= 5; globalUpdateUI(); checkPassOut();
+                        let sColor = activeSoilType === "normal" ? color(139, 69, 19) : color(210, 180, 140);
+                        add([
+                            rect(40, 40), sColor,
+                            pos(actPos.x, actPos.y), anchor("center"), area(),
+                            z(10), "soil", { hasPlant: false, isWatered: false, soilType: activeSoilType, hasSpecialFertilizer: false }
+                        ]);
+                    } else if (soils.length > 0 && !soils[0].hasPlant && energy >= 2) {
+                        destroy(soils[0]);
+                        energy -= 2;
+                        globalUpdateUI(); checkPassOut();
+                    }
+                } 
+                else if (item && item.id === "water") {
+                    const soils = get("soil").filter(s => s.pos.dist(actPos) < 25);
+                    if (soils.length > 0 && energy >= 1) {
+                        let soil = soils[0];
+                        if (!soil.isWatered) {
+                            energy -= 1;
+                            soil.isWatered = true;
+                            if (soil.hasSpecialFertilizer) {
+                                soil.use(color(75, 0, 130));
+                            } else {
+                                soil.use(soil.soilType === "normal" ? color(80, 50, 20) : color(180, 150, 110)); 
+                            }
+                            globalUpdateUI(); checkPassOut();
+                        }
+                    }
+                }
+                else if (item && item.cat === "seed") {
+                    if (item.q > 0 && energy >= 2) {
+                        const emptySoils = get("soil").filter(s => s.pos.dist(actPos) < 20 && !s.hasPlant);
+                        if (emptySoils.length > 0) {
+                            let soil = emptySoils[0];
+                            
+                            let reqSoil = item.id === "seed_tomato" ? "normal" : item.id === "seed_cactus" ? "sand" : "normal";
+                            if (soil.soilType !== reqSoil) {
+                                add([ text("Tierra Incorrecta", { size: 16 }), pos(player.pos.x, player.pos.y - 30), anchor("center"), color(255,50,50), opacity(1), lifespan(1) ]);
+                                return;
+                            }
+                            if (item.id === "seed_magic" && !soil.hasSpecialFertilizer) {
+                                add([ text("Requiere Abono Especial", { size: 16 }), pos(player.pos.x, player.pos.y - 30), anchor("center"), color(255,50,50), opacity(1), lifespan(1) ]);
+                                return;
+                            }
+
+                            energy -= 2;
+                            soil.hasPlant = true;
+                            addXP("jardinero", 1);
+                            
+                            if (item.id === "seed_magic") soil.use(color(218, 112, 214)); 
+                            else soil.use(item.id === "seed_tomato" ? color(160, 82, 45) : item.id === "seed_baya" ? color(154, 205, 50) : color(230, 200, 160));
+
+                            item.q--;
+                            if (item.q <= 0) hotbar[activeTool] = null;
+                            globalUpdateUI(); checkPassOut();
+
+                            let cColor = item.id === "seed_tomato" ? color(144, 238, 144) : item.id === "seed_cactus" ? color(46, 139, 87) : item.id === "seed_baya" ? color(154, 205, 50) : color(218, 112, 214);
+                            let gTime = item.id === "seed_tomato" ? 15 : item.id === "seed_cactus" ? 30 : item.id === "seed_baya" ? 20 : 45;
+
+                            const crop = add([
+                                rect(16, 16), cColor,
+                                pos(soil.pos), anchor("center"), area(),
+                                z(20), "crop", { stage: "seed", timer: 0, seedType: item.id, growTime: gTime }
+                            ]);
+
+                            crop.onUpdate(() => {
+                                if (!soil.isWatered) return; 
+
+                                if (crop.stage === "seed") {
+                                    crop.timer += dt();
+                                    if (crop.timer > (crop.growTime / 2)) {
+                                        crop.stage = "growing";
+                                        crop.color = crop.seedType === "seed_tomato" ? rgb(50, 205, 50) : crop.seedType === "seed_cactus" ? rgb(34, 139, 34) : crop.seedType === "seed_baya" ? rgb(107, 142, 35) : rgb(138, 43, 226);
+                                        crop.width = 24; crop.height = 24;
+                                    }
+                                }
+                                else if (crop.stage === "growing") {
+                                    crop.timer += dt();
+                                    if (crop.timer >= crop.growTime) {
+                                        crop.stage = "ready";
+                                        crop.color = crop.seedType === "seed_tomato" ? rgb(255, 69, 0) : crop.seedType === "seed_cactus" ? rgb(255, 105, 180) : crop.seedType === "seed_baya" ? rgb(220, 20, 60) : rgb(255, 215, 0); 
+                                        crop.width = 30; crop.height = 30;
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+                else if (item && item.cat === "fertilizer") {
+                    const soils = get("soil").filter(s => s.pos.dist(actPos) < 20);
+                    if (soils.length > 0) {
+                        let soil = soils[0];
+                        if (item.id === "fert_normal" && item.q > 0) {
+                            if (soil.hasPlant) {
+                                let crop = get("crop").filter(c => c.pos.dist(soil.pos) < 5 && c.stage !== "ready")[0];
+                                if (crop) {
+                                    crop.timer = crop.growTime; 
+                                    item.q--; if(item.q<=0) hotbar[activeTool]=null;
+                                    globalUpdateUI();
+                                }
+                            }
+                        } else if (item.id === "fert_special" && item.q > 0) {
+                            if (!soil.hasSpecialFertilizer && !soil.hasPlant) {
+                                soil.hasSpecialFertilizer = true;
+                                item.q--; if(item.q<=0) hotbar[activeTool]=null;
+                                soil.use(color(148, 0, 211)); 
+                                add([ text("Tierra Mágica", {size: 14}), pos(actPos.x, actPos.y-20), color(255,0,255), opacity(1), lifespan(1) ]);
+                                globalUpdateUI();
+                            }
+                        }
+                    }
+                }
+                else if (item && item.id === "scissors") {
+                    if (item.q > 0) {
+                        const trees = get("tree").filter(t => t.pos.dist(actPos) < 40);
+                        if (trees.length > 0 && energy >= 2) {
+                            destroy(trees[0]);
+                            item.q--; if(item.q<=0) hotbar[activeTool]=null;
+                            energy -= 2;
+                            money += 12; addXP("botanico", 2);
+                            add([ text("+$12 (Poda)", {size:16}), pos(actPos.x, actPos.y-20), color(255,255,0), opacity(1), lifespan(1) ]);
+                            globalUpdateUI(); checkPassOut();
+                        }
+                    }
+                }
+                else if (item && item.id === "rod") {
+                    if (energy >= 5) {
+                        if (player.pos.x > width() - 220) {
+                            energy -= 5;
+                            isFishing = true;
+                            let fishingText = add([ text("Pescando...", {size: 16}), pos(player.pos.x, player.pos.y - 30), color(255,255,255) ]);
+                            
+                            setTimeout(() => {
+                                destroy(fishingText);
+                                isFishing = false;
+                                if (Math.random() > 0.4) {
+                                    addItem("fish", "fish", "Pescado", 1);
+                                    add([ text("+1 Pez", {size:18}), pos(player.pos.x, player.pos.y-30), color(0,255,255), opacity(1), lifespan(2) ]);
+                                    addXP("pescador", 1);
+                                } else {
+                                    add([ text("Nada...", {size:18}), pos(player.pos.x, player.pos.y-30), color(150,150,150), opacity(1), lifespan(2) ]);
+                                }
+                                globalUpdateUI(); checkPassOut();
+                            }, 2000);
+                        } else {
+                            add([ text("Acércate al lago", {size:14}), pos(player.pos.x, player.pos.y-30), color(255,100,100), opacity(1), lifespan(1) ]);
+                        }
+                    }
+                }
+                else if (item && item.cat === "food") {
+                    item.q--; if(item.q <= 0) hotbar[activeTool] = null;
+                    let regen = 20;
+                    energy = Math.min(MAX_ENERGY, energy + regen);
+                    add([ text(`+${regen} Energía`, {size:16}), pos(player.pos.x, player.pos.y-30), color(0,255,0), opacity(1), lifespan(1) ]);
+                    globalUpdateUI();
+                }
+
+                const readyCrops = get("crop").filter(c => c.pos.dist(actPos) < 20 && c.stage === "ready");
+                if (readyCrops.length > 0) {
+                    let crop = readyCrops[0];
+                    let sType = crop.seedType;
+                    destroy(crop);
+                    const soil = get("soil").filter(s => s.pos.dist(crop.pos) < 2)[0];
+                    if (soil) {
+                        soil.hasPlant = false;
+                        soil.isWatered = false; 
+                        soil.hasSpecialFertilizer = false; 
+                        soil.use(soil.soilType === "normal" ? color(139, 69, 19) : color(210, 180, 140)); 
+                    }
+                    
+                    let crName = sType === "seed_tomato" ? "T.Cosech" : sType === "seed_cactus" ? "C.Cosech" : sType === "seed_baya" ? "Baya" : "F.Mágico";
+                    let crId = sType === "seed_baya" ? "baya" : "crop_" + sType.split("_")[1];
+                    let crCat = sType === "seed_baya" ? "food" : "crop";
+                    addItem(crCat, crId, crName, 1);
+                    
+                    addXP("agricultor", 1); addXP("botanico", 1);
+                    addXP("botanico", 1);
+                    globalUpdateUI();
+                }
+            });
+
+            onClick("wood_log", (l) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("axe_") && l.pos.dist(player.pos) < 60) {
+                    if (energy >= 2) {
+                        if(!l.hp) l.hp = 4;
+                        l.hp -= getToolDamage(item.id);
+                        energy -= 2;
+                        add([ text("-" + getToolDamage(item.id), {size:16}), pos(l.pos.x, l.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if(l.hp <= 0) {
+                            destroy(l);
+                            if (addItem("material", "wood", "Madera", 1)) {
+                                add([ text("+1 Madera", {size:16}), pos(l.pos.x, l.pos.y-20), color(160, 82, 45), opacity(1), lifespan(1) ]);
+                                if (Math.random() < 0.20) {
+                                    if (addItem("food", "chontaduro", "Chontaduro", 1)) {
+                                        add([ text("+1 Chontaduro", {size:16}), pos(l.pos.x, l.pos.y-40), color(255, 100, 100), opacity(1), lifespan(1) ]);
+                                    }
+                                }
+                            } else {
+                                add([ text("Inventario Lleno", {size:16}), pos(l.pos.x, l.pos.y-20), color(255, 50, 50), opacity(1), lifespan(1) ]);
+                            }
+                        }
+                        globalUpdateUI(); checkPassOut();
+                    }
+                }
+            });
+
+            onClick("rock", (r) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("pickaxe_") && r.pos.dist(player.pos) < 60) {
+                    if (energy >= 3) {
+                        if(!r.hp) r.hp = 4;
+                        r.hp -= getToolDamage(item.id);
+                        energy -= 3;
+                        add([ text("-" + getToolDamage(item.id), {size:16}), pos(r.pos.x, r.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if(r.hp <= 0) {
+                            destroy(r);
+                            let dropId = "stone"; let dropName = "Piedra"; let dropColor = rgb(100,100,100);
+                            let rnd = Math.random();
+                            if(rnd < 0.02) { dropId = "diamond"; dropName = "Diamante"; dropColor = rgb(0,255,255); }
+                            else if(rnd < 0.10) { dropId = "gold"; dropName = "Oro"; dropColor = rgb(255,215,0); }
+                            else if(rnd < 0.30) { dropId = "iron"; dropName = "Hierro"; dropColor = rgb(200,200,200); }
+                            else if(rnd < 0.60) { dropId = "copper"; dropName = "Cobre"; dropColor = rgb(205,127,50); }
+                            
+                            if (addItem("material", dropId, dropName, 1)) {
+                                add([ text("+1 " + dropName, {size:16}), pos(r.pos.x, r.pos.y-20), color(dropColor), opacity(1), lifespan(1) ]);
+                                addXP("minero", 1);
+                            } else {
+                                add([ text("Inventario Lleno", {size:16}), pos(r.pos.x, r.pos.y-20), color(255, 50, 50), opacity(1), lifespan(1) ]);
+                            }
+                        }
+                        globalUpdateUI(); checkPassOut();
+                    }
+                }
+            });
+
+            onClick("aloe", (a) => {
+                if (player.pos.dist(a.pos) < 80) {
+                    if (energy < 2) { add([ text("Muy cansado", {size:16}), pos(a.pos.x, a.pos.y-20), color(255,0,0), lifespan(1) ]); return; }
+                    if (addItem("material", "aloe", "Aloe Vera", 1)) {
+                        destroy(a); energy -= 2; addXP("botanico", 3); money += 2;
+                        add([ text("+1 Aloe", {size:16}), pos(a.pos.x, a.pos.y-20), color(0,255,0), lifespan(1) ]);
+                        globalUpdateUI(); checkPassOut();
+                    } else add([ text("Inv Lleno", {size:16}), pos(a.pos.x, a.pos.y-20), color(255,0,0), lifespan(1) ]);
+                }
+            });
+            onClick("ginseng", (g) => {
+                if (player.pos.dist(g.pos) < 80) {
+                    if (energy < 2) { add([ text("Muy cansado", {size:16}), pos(g.pos.x, g.pos.y-20), color(255,0,0), lifespan(1) ]); return; }
+                    if (addItem("material", "ginseng", "Ginseng", 1)) {
+                        destroy(g); energy -= 2; addXP("botanico", 4); money += 4;
+                        add([ text("+1 Ginseng", {size:16}), pos(g.pos.x, g.pos.y-20), color(210,180,140), lifespan(1) ]);
+                        globalUpdateUI(); checkPassOut();
+                    } else add([ text("Inv Lleno", {size:16}), pos(g.pos.x, g.pos.y-20), color(255,0,0), lifespan(1) ]);
+                }
+            });
+            onClick("bush", (b) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("axe_") && b.pos.dist(player.pos) < 60) {
+                    if (energy >= 1) {
+                        destroy(b);
+                        energy -= 1;
+                        add([ text("-1", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if (addItem("food", "baya", "Baya", 2)) {
+                            add([ text("+2 Bayas", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 100, 100), opacity(1), lifespan(1) ]);
+                            if (Math.random() < 0.5) {
+                                if (addItem("seed", "seed_baya", "S. Baya", 1)) {
+                                    add([ text("+1 S. Baya", {size:16}), pos(b.pos.x, b.pos.y-40), color(154, 205, 50), opacity(1), lifespan(1) ]);
+                                }
+                            }
+                        } else {
+                            add([ text("Inventario Lleno", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 50, 50), opacity(1), lifespan(1) ]);
+                        }
+                        globalUpdateUI(); checkPassOut();
+                    }
+                }
+            });
+
+            globalUpdateUI();
+        });
+
+        scene("house", (args) => {
+            addGlobalUI("house");
+            add([ rect(width(), height()), color(139, 69, 19) ]);
+
+            // MUEBLES YA COLOCADOS
+            placedFurniture.forEach(f => {
+                add([
+                    rect(f.w, f.h), color(f.c[0], f.c[1], f.c[2]),
+                    pos(f.x, f.y), anchor("center"), rotate(f.rot),
+                    area(),
+                    f.isRug ? z(5) : body({ isStatic: true }),
+                    f.isRug ? "rug" : "solid_house",
+                    f.isChest ? "chest" : "furniture"
+                ]);
+            });
+
+            const bed = add([
+                rect(100, 140), color(178, 34, 34),
+                pos(width()/2, height()/2 - 60), area(), 
+                anchor("center"), "solid_house" // No collision body so player can walk on it, but furniture preview spots it
+            ]);
+            add([
+                rect(80, 30), color(255, 255, 255),
+                pos(width()/2, height()/2 - 110),
+                anchor("center")
+            ]);
+            add([ text("CAMA", { size: 20 }), pos(width()/2, height()/2 - 60), anchor("center"), color(255,255,255) ]);
+
+            add([
+                rect(120, 40), color(0, 0, 0),
+                pos(width()/2, height() - 20), area(), anchor("center"), "exit_door"
+            ]);
+            add([ text("SALIR", { size: 20 }), pos(width()/2, height() - 20), anchor("center"), color(255,255,255) ]);
+
+            const p = makePlayer(width()/2, height() - 80, true);
+
+            const SPEED = 200;
+            let isSleeping = false;
+            
+            // VARIABLES COFRE
+            let inChest = false;
+            let chestParent = null;
+
+            function closeChest() {
+                if (chestParent) { destroy(chestParent); chestParent = null; }
+                inChest = false;
+            }
+
+            function openChest() {
+                if (inChest) return;
+                inChest = true;
+
+                chestParent = add([
+                    rect(600, 400), color(40, 20, 10),
+                    pos(width()/2, height()/2), anchor("center"),
+                    fixed(), z(300), area()
+                ]);
+
+                chestParent.add([ text("--- BÓVEDA DEL COFRE ---", { size: 28 }), pos(0, -160), anchor("center"), color(255,215,0) ]);
+                chestParent.add([ text("Almacenamiento seguro.\nLos objetos aquí NO se perderán si te desmayas.", { size: 16, align: "center" }), pos(0, -110), anchor("center"), color(200,200,200) ]);
+
+                let btn1 = chestParent.add([ rect(450, 50, {radius:8}), color(100,50,20), pos(0, -30), anchor("center"), area() ]);
+                btn1.add([ text("Depositar Todo al Cofre", {size:16}), anchor("center") ]);
+                btn1.onClick(() => {
+                    for(let i=0; i<9; i++) {
+                        if(hotbar[i] && hotbar[i].cat !== "tool") {
+                            let empty = getEmptySlot(globalStorage, 27);
+                            if (empty !== -1) { globalStorage[empty] = hotbar[i]; hotbar[i] = null; }
+                        }
+                    }
+                    for(let i=0; i<27; i++) {
+                        if(backpack[i] && backpack[i].cat !== "tool") {
+                            let empty = getEmptySlot(globalStorage, 27);
+                            if (empty !== -1) { globalStorage[empty] = backpack[i]; backpack[i] = null; }
+                        }
+                    }
+                    add([ text("¡Depositado al máximo de capacidad!", {size:20}), pos(width()/2, height()/2), anchor("center"), color(0,255,0), opacity(1), lifespan(1), z(400) ]);
+                    if(globalUpdateUI) globalUpdateUI();
+                });
+
+                let btn2 = chestParent.add([ rect(450, 50, {radius:8}), color(100,50,20), pos(0, 50), anchor("center"), area() ]);
+                btn2.add([ text("Retirar Todo a mi Inventario", {size:18}), anchor("center") ]);
+                btn2.onClick(() => {
+                    for(let i=0; i<27; i++) {
+                        if(globalStorage[i]) {
+                            if (addItem(globalStorage[i].cat, globalStorage[i].id, globalStorage[i].name, globalStorage[i].q)) {
+                                globalStorage[i] = null;
+                            }
+                        }
+                    }
+                    add([ text("¡Retirado al máximo de capacidad!", {size:20}), pos(width()/2, height()/2), anchor("center"), color(0,255,0), opacity(1), lifespan(1), z(400) ]);
+                    if(globalUpdateUI) globalUpdateUI();
+                });
+
+                let closeBtn = chestParent.add([
+                    rect(350, 45, { radius: 8 }), color(150, 50, 50),
+                    pos(0, 150), anchor("center"), area()
+                ]);
+                closeBtn.add([ text("Cerrar Cofre (ESC)", { size: 18 }), anchor("center") ]);
+                closeBtn.onClick(() => closeChest());
+            }
+
+            // VARIABLES COLOCACIÓN DE MUEBLES
+            let placingFurniture = null;
+            let previewEntity = null;
+
+            globalStartPlacing = (item) => {
+                closeShop();
+                placingFurniture = item;
+                previewEntity = add([
+                    rect(item.w, item.h),
+                    color(item.c[0], item.c[1], item.c[2]),
+                    pos(mousePos()),
+                    anchor("center"),
+                    rotate(0),
+                    opacity(0.7),
+                    z(150),
+                    "preview"
+                ]);
+            };
+
+            onKeyDown("left", () => { if(!isSleeping && !inShop && !inChest) p.move(-SPEED, 0) });
+            onKeyDown("right", () => { if(!isSleeping && !inShop && !inChest) p.move(SPEED, 0) });
+            onKeyDown("up", () => { if(!isSleeping && !inShop && !inChest) p.move(0, -SPEED) });
+            onKeyDown("down", () => { if(!isSleeping && !inShop && !inChest) p.move(0, SPEED) });
+            onKeyDown("a", () => { if(!isSleeping && !inShop && !inChest) p.move(-SPEED, 0) });
+            onKeyDown("d", () => { if(!isSleeping && !inShop && !inChest) p.move(SPEED, 0) });
+            onKeyDown("w", () => { if(!isSleeping && !inShop && !inChest) p.move(0, -SPEED) });
+            onKeyDown("s", () => { if(!isSleeping && !inShop && !inChest) p.move(0, SPEED) });
+
+            p.onUpdate(() => {
+                if (p.pos.x < 16) p.pos.x = 16;
+                if (p.pos.x > width() - 16) p.pos.x = width() - 16;
+                if (p.pos.y < 16) p.pos.y = 16;
+                if (p.pos.y > height() - 16) p.pos.y = height() - 16;
+                handlePlayerAnim(p, !isSleeping && !inShop && !inChest);
+            });
+
+            onUpdate(() => {
+                if (placingFurniture && previewEntity) {
+                    previewEntity.pos = mousePos();
+                    
+                    let overlapping = false;
+                    const solids = get("solid_house");
+                    for (let s of solids) {
+                        if (previewEntity.isColliding(s)) {
+                            overlapping = true; break;
+                        }
+                    }
+                    
+                    if (previewEntity.pos.x < 50 || previewEntity.pos.x > width() - 50 || 
+                        previewEntity.pos.y < 50 || previewEntity.pos.y > height() - 50) {
+                        overlapping = true; // Choca con la pared
+                    }
+
+                    previewEntity.color = overlapping ? rgb(255, 0, 0) : rgb(placingFurniture.c[0], placingFurniture.c[1], placingFurniture.c[2]);
+                    previewEntity.overlapping = overlapping;
+                }
+            });
+
+            p.onCollide("exit_door", () => { if(!isSleeping && !placingFurniture && !inShop && !inChest) go("game") });
+
+            
+
+            const darkness = add([
+                rect(width(), height()), color(0, 0, 50),
+                opacity(isNight ? 0.2 : 0), fixed(), z(190)
+            ]);
+
+            onUpdate(() => {
+                if (isSleeping) return; 
+                dayTime += dt();
+                if (dayTime > 300) dayTime = 0;
+                isNight = dayTime > 150;
+                
+                if (isNight) {
+                    darkness.opacity = Math.min(0.2, darkness.opacity + dt() * 0.1);
+                    exhaustTimer += dt();
+                    if (exhaustTimer >= 3) {
+                        exhaustTimer = 0; energy -= 1; globalUpdateUI(); checkPassOut();
+                    }
+                } else {
+                    darkness.opacity = Math.max(0, darkness.opacity - dt() * 0.1);
+                    exhaustTimer = 0;
+                }
+            });
+
+            if (args?.passedOut) {
+                add([
+                    text("¡Te desmayaste de cansancio!\nAlguien te robó la mitad\nde las cosas de tu inventario.", { size: 24, align: "center" }),
+                    pos(width()/2, height()/2 + 80), anchor("center"),
+                    color(255, 100, 100), opacity(1), lifespan(6, { fade: 1 }), z(200)
+                ]);
+            }
+
+            onKeyPress("t", () => {
+                if (inShop) closeShop();
+                else if (!isSleeping && !inChest && !placingFurniture) openShop(true);
+            });
+
+            onKeyPress("escape", () => {
+                if (inChest) closeChest();
+                if (placingFurniture && previewEntity) {
+                    destroy(previewEntity);
+                    placingFurniture = null;
+                    previewEntity = null;
+                }
+            });
+
+            onKeyPress("left", () => {
+                if (placingFurniture && previewEntity) {
+                    previewEntity.angle -= 90;
+                }
+            });
+            
+            onKeyPress("right", () => {
+                if (placingFurniture && previewEntity) {
+                    previewEntity.angle += 90;
+                }
+            });
+
+            onKeyPress("space", () => {
+                if (inShop || inChest || isSleeping) return;
+                
+                if (placingFurniture && previewEntity) {
+                    if (!previewEntity.overlapping && money >= placingFurniture.price) {
+                        money -= placingFurniture.price;
+                        globalUpdateUI();
+                        
+                        placedFurniture.push({
+                            id: placingFurniture.id,
+                            x: previewEntity.pos.x,
+                            y: previewEntity.pos.y,
+                            rot: previewEntity.angle,
+                            w: placingFurniture.w,
+                            h: placingFurniture.h,
+                            c: placingFurniture.c,
+                            isChest: placingFurniture.id === "chest",
+                            isRug: placingFurniture.id === "rug"
+                        });
+                        
+                        add([
+                            rect(placingFurniture.w, placingFurniture.h),
+                            color(placingFurniture.c[0], placingFurniture.c[1], placingFurniture.c[2]),
+                            pos(previewEntity.pos.x, previewEntity.pos.y),
+                            anchor("center"), rotate(previewEntity.angle), area(),
+                            placingFurniture.id === "rug" ? z(5) : body({ isStatic: true }),
+                            placingFurniture.id === "rug" ? "rug" : "solid_house",
+                            placingFurniture.id === "chest" ? "chest" : "furniture"
+                        ]);
+
+                        destroy(previewEntity);
+                        placingFurniture = null;
+                        previewEntity = null;
+                    } else if (previewEntity.overlapping) {
+                        add([ text("Posición Inválida", {size:16}), pos(mousePos().x, mousePos().y - 40), anchor("center"), color(255,0,0), opacity(1), lifespan(1), z(400) ]);
+                    }
+                    return; // No procesar otra acción
+                }
+                
+                // Interactuar con cofres cercanos
+                const chests = get("chest").filter(c => p.pos.dist(c.pos) < 60);
+                if (chests.length > 0) {
+                    openChest();
+                    return;
+                }
+
+                // Dormir
+                if (p.pos.dist(bed.pos) < 120) {
+                    if (!isNight) {
+                        add([
+                            text("Aún es de día.\nSolo podés dormir de noche.", { size: 20, align: "center" }),
+                            pos(width()/2, height()/2 - 170), anchor("center"),
+                            color(255, 255, 255), opacity(1), lifespan(2, { fade: 0.5 })
+                        ]);
+                        return;
+                    }
+                    
+                    isSleeping = true;
+                    const fader = add([ rect(width(), height()), color(0, 0, 0), opacity(0), fixed(), z(300) ]);
+                    
+                    tween(0, 1, 1.5, (v) => fader.opacity = v);
+                    
+                    setTimeout(() => {
+                        dayTime = 0; isNight = false; energy = MAX_ENERGY; globalUpdateUI();
+                        darkness.opacity = 0;
+                        
+                        p.pos = vec2(width()/2, height() - 80); 
+                        
+                        tween(1, 0, 1.5, (v) => fader.opacity = v);
+                        
+                        setTimeout(() => {
+                            destroy(fader); 
+                            isSleeping = false;
+                            add([ text("¡Nuevo día!", { size: 30 }), pos(width()/2, height()/2 - 150), anchor("center"), color(255, 255, 0), opacity(1), lifespan(2, { fade: 0.5 }) ]);
+                        }, 1500);
+                    }, 1500);
+                }
+            });
+        });
+
+        scene("jungle", () => {
+            addGlobalUI("jungle");
+            add([ rect(width(), height()), color(34, 139, 34), z(0) ]);
+
+            add([
+                rect(300, 250, { radius: 40 }), color(30, 144, 255),
+                pos(width() / 2, height() / 2), anchor("center"), area(), body({ isStatic: true }), z(5)
+            ]);
+
+            const backSign = add([
+                rect(80, 40), color(139, 69, 19),
+                pos(width() / 2, 40), area(), anchor("center"), "back_sign", z(10)
+            ]);
+            backSign.add([ text("Granja", { size: 14, align: "center" }), anchor("center"), color(255,255,255) ]);
+            add([ rect(10, 20), color(101, 67, 33), pos(width() / 2, 60), anchor("center"), z(9) ]);
+
+            const mineEntrance = add([
+                rect(80, 100, { radius: 10 }), color(40, 40, 40),
+                pos(40, height() / 2), area(), body({ isStatic: true }), anchor("left"), "mine_entrance", z(10)
+            ]);
+            mineEntrance.add([ rect(20, 30), color(200, 200, 0), anchor("center"), pos(40, 0) ]);
+            mineEntrance.add([ text("MINA", { size: 14 }), color(255,255,255), anchor("center"), pos(40, -30) ]);
+
+            for (let i = 0; i < 100; i++) {
+                let tx = rand(50, width() - 50);
+                let ty = rand(80, height() - 50);
+                if (Math.abs(tx - width()/2) < 200 && Math.abs(ty - height()/2) < 180) continue; 
+                if (Math.abs(tx - width()/2) < 80 && ty < 120) continue; 
+
+                let r = rand(1, 10);
+                if (r > 6) {
+                    let tree = add([
+                        rect(16, 32), color(101, 67, 33),
+                        pos(tx, ty), anchor("bot"), area(), body({ isStatic: true }), z(30), "tree"
+                    ]);
+                    tree.add([
+                        circle(30), color(0, 100, 0),
+                        pos(0, -30), anchor("center")
+                    ]);
+                } else if (r > 4) {
+                    add([
+                        rect(30, 12), color(101, 67, 33),
+                        pos(tx, ty), area(), body({ isStatic: true }), anchor("center"), z(15), "wood_log"
+                    ]);
+                } else if (r > 2) {
+                    add([
+                        rect(24, 20, { radius: 10 }), color(169, 169, 169),
+                        pos(tx, ty), area(), body({ isStatic: true }), anchor("center"), z(15), "stone_node"
+                    ]);
+                } else {
+                    let bush = add([
+                        rect(20, 20, { radius: 10 }), color(34, 139, 34),
+                        pos(tx, ty), anchor("center"), area(), body({ isStatic: true }), z(15), "bush"
+                    ]);
+                    bush.add([ circle(4), color(255, 20, 20), pos(-5, -5) ]);
+                    bush.add([ circle(4), color(255, 20, 20), pos(5, 3) ]);
+                }
+            }
+
+            for (let i = 0; i < 1; i++) {
+                let sx = rand(50, width() - 50);
+                let sy = rand(80, height() - 50);
+                if (Math.abs(sx - width()/2) < 200 && Math.abs(sy - height()/2) < 180) continue; 
+                
+                let s = add([
+                    rect(24, 6), color(0, 200, 50),
+                    pos(sx, sy), area(), scale(1), anchor("center"), z(20), "snake",
+                    { dir: vec2(rand(-1, 1), rand(-1, 1)).unit(), speed: rand(30, 60), timer: 0 }
+                ]);
+                s.add([ rect(6, 6), color(255, 0, 0), pos(12, 0), anchor("center") ]); 
+            }
+            
+            onUpdate("snake", (s) => {
+                s.timer -= dt();
+                if (s.timer <= 0) {
+                    s.dir = vec2(rand(-1, 1), rand(-1, 1)).unit();
+                    s.timer = rand(1, 3);
+                    if (s.dir.x < 0) s.scale.x = -1; else s.scale.x = 1;
+                }
+                // Movimiento manual para no sobrecargar el sistema de colisiones con move()
+                s.pos.x += s.dir.x * s.speed * dt();
+                s.pos.y += s.dir.y * s.speed * dt();
+                
+                if (s.pos.x < 0 || s.pos.x > width() || s.pos.y < 0 || s.pos.y > height()) {
+                    s.dir = s.dir.scale(-1);
+                    if (s.dir.x < 0) s.scale.x = -1; else s.scale.x = 1;
+                }
+            });
+
+            const p = makePlayer(width()/2, 90, false);
+            const SPEED = 200;
+
+            const uiBar = add([ rect(200, 40), color(0,0,0), opacity(0.6), pos(10, 10), fixed(), z(500) ]);
+
+            onKeyDown("left", () => { p.move(-SPEED, 0) });
+            onKeyDown("right", () => { p.move(SPEED, 0) });
+            onKeyDown("up", () => { p.move(0, -SPEED) });
+            onKeyDown("down", () => { p.move(0, SPEED) });
+            onKeyDown("a", () => { p.move(-SPEED, 0) });
+            onKeyDown("d", () => { p.move(SPEED, 0) });
+            onKeyDown("w", () => { p.move(0, -SPEED) });
+            onKeyDown("s", () => { p.move(0, SPEED) });
+
+            p.onUpdate(() => {
+                if (p.pos.x < 16) p.pos.x = 16;
+                if (p.pos.x > width() - 16) p.pos.x = width() - 16; 
+                if (p.pos.y < 16) p.pos.y = 16;
+                if (p.pos.y > height() - 16) p.pos.y = height() - 16;
+                handlePlayerAnim(p, true);
+            });
+
+            p.onCollide("back_sign", () => { go("game"); });
+
+            function getDir() {
+                if (p.viewUp && !p.viewUp.hidden) return vec2(0, -1);
+                if (p.viewDown && !p.viewDown.hidden) return vec2(0, 1);
+                return vec2(Math.sign(p.scale.x), 0);
+            }
+
+            const activeToolIcon = add([ text("", {size:18}), pos(20, 60), fixed(), z(501) ]);
+            onUpdate(() => {
+                let t = hotbar[activeTool];
+                activeToolIcon.text = t ? `Mano: ${t.name.replace("\n"," ")}` : `Mano vacía`;
+            });
+            for(let i=1; i<=9; i++) {
+                onKeyPress(i.toString(), () => { activeTool = i - 1; });
+            }
+
+            onKeyPress("space", () => {
+                let item = hotbar[activeTool];
+                if (item && item.cat === "food") {
+                    item.q--; if(item.q <= 0) hotbar[activeTool] = null;
+                    let regen = 20;
+                    energy = Math.min(MAX_ENERGY, energy + regen);
+                    add([ text(`+${regen} Energía`, {size:16}), pos(p.pos.x, p.pos.y-30), color(0,255,0), opacity(1), lifespan(1) ]);
+                    if(globalUpdateUI) globalUpdateUI();
+                }
+            });
+
+            onClick("wood_log", (l) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("axe_") && l.pos.dist(p.pos) < 60) {
+                    if (energy >= 2) {
+                        if(!l.hp) l.hp = 4;
+                        l.hp -= getToolDamage(item.id);
+                        energy -= 2;
+                        add([ text("-" + getToolDamage(item.id), {size:16}), pos(l.pos.x, l.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if(l.hp <= 0) {
+                            destroy(l);
+                            if (addItem("material", "wood", "Madera", 1)) {
+                                add([ text("+1 Madera", {size:16}), pos(l.pos.x, l.pos.y-20), color(160, 82, 45), opacity(1), lifespan(1) ]);
+                                if (Math.random() < 0.20) {
+                                    if (addItem("food", "chontaduro", "Chontaduro", 1)) {
+                                        add([ text("+1 Chontaduro", {size:16}), pos(l.pos.x, l.pos.y-40), color(255, 100, 100), opacity(1), lifespan(1) ]);
+                                    }
+                                }
+                                if(globalUpdateUI) globalUpdateUI(); 
+                            }
+                        }
+                        checkPassOut();
+                    }
+                }
+            });
+
+            onClick("stone_node", (r) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("pickaxe_") && r.pos.dist(p.pos) < 60) {
+                    if (energy >= 3) {
+                        if(!r.hp) r.hp = 4;
+                        r.hp -= getToolDamage(item.id);
+                        energy -= 3;
+                        add([ text("-" + getToolDamage(item.id), {size:16}), pos(r.pos.x, r.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if(r.hp <= 0) {
+                            destroy(r);
+                            let dropId = "stone"; let dropName = "Piedra"; let dropColor = rgb(100,100,100);
+                            let rnd = Math.random();
+                            if(rnd < 0.02) { dropId = "diamond"; dropName = "Diamante"; dropColor = rgb(0,255,255); }
+                            else if(rnd < 0.10) { dropId = "gold"; dropName = "Oro"; dropColor = rgb(255,215,0); }
+                            else if(rnd < 0.30) { dropId = "iron"; dropName = "Hierro"; dropColor = rgb(200,200,200); }
+                            else if(rnd < 0.60) { dropId = "copper"; dropName = "Cobre"; dropColor = rgb(205,127,50); }
+                            
+                            if (addItem("material", dropId, dropName, 1)) {
+                                add([ text("+1 " + dropName, {size:16}), pos(r.pos.x, r.pos.y-20), color(dropColor), opacity(1), lifespan(1) ]);
+                                addXP("minero", 1);
+                                if(globalUpdateUI) globalUpdateUI(); 
+                            }
+                        }
+                        checkPassOut();
+                    }
+                }
+            });
+
+            onClick("aloe", (a) => {
+                if (player.pos.dist(a.pos) < 80) {
+                    if (energy < 2) { add([ text("Muy cansado", {size:16}), pos(a.pos.x, a.pos.y-20), color(255,0,0), lifespan(1) ]); return; }
+                    if (addItem("material", "aloe", "Aloe Vera", 1)) {
+                        destroy(a); energy -= 2; addXP("botanico", 3); money += 2;
+                        add([ text("+1 Aloe", {size:16}), pos(a.pos.x, a.pos.y-20), color(0,255,0), lifespan(1) ]);
+                        globalUpdateUI(); checkPassOut();
+                    } else add([ text("Inv Lleno", {size:16}), pos(a.pos.x, a.pos.y-20), color(255,0,0), lifespan(1) ]);
+                }
+            });
+            onClick("ginseng", (g) => {
+                if (player.pos.dist(g.pos) < 80) {
+                    if (energy < 2) { add([ text("Muy cansado", {size:16}), pos(g.pos.x, g.pos.y-20), color(255,0,0), lifespan(1) ]); return; }
+                    if (addItem("material", "ginseng", "Ginseng", 1)) {
+                        destroy(g); energy -= 2; addXP("botanico", 4); money += 4;
+                        add([ text("+1 Ginseng", {size:16}), pos(g.pos.x, g.pos.y-20), color(210,180,140), lifespan(1) ]);
+                        globalUpdateUI(); checkPassOut();
+                    } else add([ text("Inv Lleno", {size:16}), pos(g.pos.x, g.pos.y-20), color(255,0,0), lifespan(1) ]);
+                }
+            });
+            onClick("bush", (b) => {
+                let item = hotbar[activeTool];
+                if (item && item.id.startsWith("axe_") && b.pos.dist(p.pos) < 60) {
+                    if (energy >= 1) {
+                        destroy(b);
+                        energy -= 1;
+                        add([ text("-1", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                        if (addItem("food", "baya", "Baya", 2)) {
+                            add([ text("+2 Bayas", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 100, 100), opacity(1), lifespan(1) ]);
+                            if (Math.random() < 0.5) {
+                                if (addItem("seed", "seed_baya", "S. Baya", 1)) {
+                                    add([ text("+1 S. Baya", {size:16}), pos(b.pos.x, b.pos.y-40), color(154, 205, 50), opacity(1), lifespan(1) ]);
+                                }
+                            }
+                        } else {
+                            add([ text("Inventario Lleno", {size:16}), pos(b.pos.x, b.pos.y-20), color(255, 50, 50), opacity(1), lifespan(1) ]);
+                        }
+                        if(globalUpdateUI) globalUpdateUI(); 
+                        checkPassOut();
+                    }
+                }
+            });
+
+            p.onCollide("mine_entrance", () => {
+                if (skills.minero.level >= 15) {
+                    go("mine_1");
+                } else {
+                    add([ text("Requiere Nivel 15 Minero", {size: 16}), pos(p.pos.x + 30, p.pos.y - 40), color(255,50,50), opacity(1), lifespan(1.5), z(400) ]);
+                }
+            });
+
+            p.onCollide("snake", (s) => {
+                energy -= 20;
+                add([ text("¡Serpiente! -20 Energía", {size:16}), pos(p.pos.x, p.pos.y-30), anchor("center"), color(255, 0, 0), opacity(1), lifespan(1.5), z(400) ]);
+                s.dir = s.dir.scale(-1);
+                if (s.dir.x < 0) s.scale.x = -1; else s.scale.x = 1;
+                if(globalUpdateUI) globalUpdateUI();
+                checkPassOut();
+            });
+
+            const darkness = add([
+                rect(width(), height()), color(0, 0, 50),
+                opacity(isNight ? 0.4 : 0), fixed(), z(190)
+            ]);
+
+            onUpdate(() => {
+                if (isNight) {
+                    darkness.opacity = Math.min(0.4, darkness.opacity + dt() * 0.2);
+                    exhaustTimer += dt();
+                    if (exhaustTimer >= 3) {
+                        exhaustTimer = 0; energy -= 1;
+                        if (globalUpdateUI) globalUpdateUI(); 
+                        checkPassOut();
+                    }
+                } else {
+                    darkness.opacity = Math.max(0, darkness.opacity - dt() * 0.2);
+                    exhaustTimer = 0;
+                }
+            });
+
+            if (globalUpdateUI) globalUpdateUI();
+        });
+
+        function makeMineScene(floor) {
+            return () => {
+                addGlobalUI("mine_" + floor);
+                let bgColor = floor === 1 ? rgb(60, 60, 60) : floor === 2 ? rgb(45, 45, 45) : rgb(30, 30, 30);
+                add([ rect(width(), height()), color(bgColor), z(0) ]);
+
+                const backSign = add([
+                    rect(80, 40), color(139, 69, 19),
+                    pos(width() / 2, 40), area(), anchor("center"), "back_sign", z(10)
+                ]);
+                backSign.add([ text(floor === 1 ? "Selva" : "Piso " + (floor - 1), { size: 14, align: "center" }), anchor("center"), color(255,255,255) ]);
+
+                if (floor < 3) {
+                    const nextSign = add([
+                        rect(80, 40), color(139, 69, 19),
+                        pos(width() / 2, height() - 40), area(), anchor("center"), "next_sign", z(10)
+                    ]);
+                    nextSign.add([ text("Piso " + (floor + 1), { size: 14, align: "center" }), anchor("center"), color(255,255,255) ]);
+                }
+
+                const p = add([
+                    rect(24, 24), color(255, 204, 153),
+                    pos(width() / 2, floor === 1 ? 80 : 80), 
+                    area(), body(), anchor("center"), z(50), "player"
+                ]);
+                player = p;
+
+                let numRocks = 40 + floor * 20;
+                for (let i = 0; i < numRocks; i++) {
+                    let tx = rand(50, width() - 50);
+                    let ty = rand(100, height() - 100);
+                    
+                    if (Math.abs(tx - width()/2) < 80 && ty < 120) continue; 
+                    if (floor < 3 && Math.abs(tx - width()/2) < 80 && ty > height() - 120) continue; 
+
+                    let size = rand(15, 35);
+                    let gray = rand(60, 160);
+                    add([
+                        rect(size, size, { radius: 5 }), color(gray, gray, gray),
+                        pos(tx, ty), area(), body({ isStatic: true }), anchor("center"), z(15), "mine_rock", { hp: Math.floor(size / 5) }
+                    ]);
+                }
+
+                onClick("mine_rock", (r) => {
+                    let item = hotbar[activeTool];
+                    if (item && item.id.startsWith("pickaxe_") && r.pos.dist(p.pos) < 60) {
+                        if (energy >= 3) {
+                            r.hp -= getToolDamage(item.id);
+                            energy -= 3;
+                            add([ text("-" + getToolDamage(item.id), {size:16}), pos(r.pos.x, r.pos.y-20), color(255, 0, 0), opacity(1), lifespan(0.5) ]);
+                            if(r.hp <= 0) {
+                                destroy(r);
+                                let dropId = "stone"; let dropName = "Piedra"; let dropColor = rgb(100,100,100);
+                                let rnd = Math.random();
+                                
+                                let depthBonus = floor * 0.05;
+                                
+                                if(rnd < 0.01 + depthBonus*0.2) { dropId = "iridium"; dropName = "Iridio"; dropColor = rgb(128,0,128); }
+                                else if(rnd < 0.03 + depthBonus*0.3) { dropId = "fossil"; dropName = "Fósil"; dropColor = rgb(210,180,140); }
+                                else if(rnd < 0.06 + depthBonus*0.4) { dropId = "ruby"; dropName = "Rubí"; dropColor = rgb(255,0,0); }
+                                else if(rnd < 0.10 + depthBonus*0.5) { dropId = "emerald"; dropName = "Esmeralda"; dropColor = rgb(0,255,0); }
+                                else if(rnd < 0.15 + depthBonus*0.6) { dropId = "geode"; dropName = "Geoda"; dropColor = rgb(139,69,19); }
+                                else if(rnd < 0.20 + depthBonus) { dropId = "diamond"; dropName = "Diamante"; dropColor = rgb(0,255,255); }
+                                else if(rnd < 0.40 + depthBonus) { dropId = "gold"; dropName = "Oro"; dropColor = rgb(255,215,0); }
+                                else if(rnd < 0.60 + depthBonus) { dropId = "iron"; dropName = "Hierro"; dropColor = rgb(200,200,200); }
+                                else if(rnd < 0.80 + depthBonus) { dropId = "copper"; dropName = "Cobre"; dropColor = rgb(205,127,50); }
+                                
+                                if (addItem("material", dropId, dropName, 1)) {
+                                    add([ text("+1 " + dropName, {size:16}), pos(r.pos.x, r.pos.y-20), color(dropColor), opacity(1), lifespan(1) ]);
+                                    addXP("minero", 2);
+                                    if(globalUpdateUI) globalUpdateUI(); 
+                                } else {
+                                    add([ text("Inventario Lleno", {size:16}), pos(r.pos.x, r.pos.y-20), color(255, 50, 50), opacity(1), lifespan(1) ]);
+                                }
+                            }
+                            checkPassOut();
+                        }
+                    }
+                });
+
+                const SPEED = 200;
+                onKeyDown("left", () => p.move(-SPEED, 0));
+                onKeyDown("right", () => p.move(SPEED, 0));
+                onKeyDown("up", () => p.move(0, -SPEED));
+                onKeyDown("down", () => p.move(0, SPEED));
+                onKeyDown("a", () => p.move(-SPEED, 0));
+                onKeyDown("d", () => p.move(SPEED, 0));
+                onKeyDown("w", () => p.move(0, -SPEED));
+                onKeyDown("s", () => p.move(0, SPEED));
+
+                p.onCollide("back_sign", () => {
+                    if (floor === 1) go("jungle");
+                    else go("mine_" + (floor - 1));
+                });
+                
+                if (floor < 3) {
+                    p.onCollide("next_sign", () => {
+                        go("mine_" + (floor + 1));
+                    });
+                }
+
+                onUpdate(() => {
+                    dayTime += dt();
+                    if (dayTime > 120 && !isNight) {
+                        isNight = true;
+                    }
+                    if (isNight) {
+                        exhaustTimer += dt();
+                        if (exhaustTimer >= 3) {
+                            exhaustTimer = 0; energy -= 1;
+                            if (globalUpdateUI) globalUpdateUI(); 
+                            checkPassOut();
+                        }
+                    }
+                });
+                
+                if (globalUpdateUI) globalUpdateUI();
+            };
+        }
+
+        scene("mine_1", makeMineScene(1));
+        scene("mine_2", makeMineScene(2));
+        scene("mine_3", makeMineScene(3));
+
+        scene("tribe", () => {
+            addGlobalUI("tribe");
+            add([ rect(width(), height()), color(205, 133, 63), z(0) ]);
+            add([ text("Tribu Vecina", {size: 30}), pos(width()/2, 40), anchor("center"), color(255,255,255) ]);
+            
+            const b = add([
+                rect(100, 40), color(139, 69, 19),
+                pos(width()/2, height() - 50), anchor("center"), area(), "return_boat"
+            ]);
+            b.add([ text("Volver", {size:16}), anchor("center") ]);
+
+            const p = add([
+                rect(24, 24), color(255, 204, 153),
+                pos(width() / 2, height() - 120), area(), body(), anchor("center"), z(50), "player"
+            ]);
+            
+            onClick("return_boat", () => { go("game"); });
+            p.onCollide("return_boat", () => { go("game"); });
+
+            const SPEED = 200;
+            onKeyDown("left", () => p.move(-SPEED, 0));
+            onKeyDown("right", () => p.move(SPEED, 0));
+            onKeyDown("up", () => p.move(0, -SPEED));
+            onKeyDown("down", () => p.move(0, SPEED));
+            onKeyDown("a", () => p.move(-SPEED, 0));
+            onKeyDown("d", () => p.move(SPEED, 0));
+            onKeyDown("w", () => p.move(0, -SPEED));
+            onKeyDown("s", () => p.move(0, SPEED));
+            
+            for(let i=0; i<5; i++) {
+                add([ rect(80, 80), color(139, 69, 19), pos(rand(100, width()-100), rand(100, height()-200)), area(), body({isStatic:true}), anchor("center") ]);
+            }
+            if (globalUpdateUI) globalUpdateUI();
+        });
+
+        scene("city", () => {
+            addGlobalUI("city");
+            add([ rect(width(), height()), color(169, 169, 169), z(0) ]);
+            add([ text("Civilización", {size: 30}), pos(width()/2, 40), anchor("center"), color(0,0,0) ]);
+            
+            const b = add([
+                rect(100, 40), color(139, 69, 19),
+                pos(width()/2, height() - 50), anchor("center"), area(), "return_boat"
+            ]);
+            b.add([ text("Volver", {size:16}), anchor("center") ]);
+
+            const p = add([
+                rect(24, 24), color(255, 204, 153),
+                pos(width() / 2, height() - 120), area(), body(), anchor("center"), z(50), "player"
+            ]);
+            
+            onClick("return_boat", () => { go("game"); });
+            p.onCollide("return_boat", () => { go("game"); });
+
+            const SPEED = 200;
+            onKeyDown("left", () => p.move(-SPEED, 0));
+            onKeyDown("right", () => p.move(SPEED, 0));
+            onKeyDown("up", () => p.move(0, -SPEED));
+            onKeyDown("down", () => p.move(0, SPEED));
+            onKeyDown("a", () => p.move(-SPEED, 0));
+            onKeyDown("d", () => p.move(SPEED, 0));
+            onKeyDown("w", () => p.move(0, -SPEED));
+            onKeyDown("s", () => p.move(0, SPEED));
+            
+            for(let i=0; i<4; i++) {
+                add([ rect(120, 150), color(100, 100, 120), pos(rand(100, width()-100), rand(100, height()-200)), area(), body({isStatic:true}), anchor("center") ]);
+            }
+            if (globalUpdateUI) globalUpdateUI();
+        });
+
+        scene("deep_jungle", () => {
+            addGlobalUI("deep_jungle");
+            add([ rect(width(), height()), color(0, 50, 0), z(0) ]);
+            add([ text("Selva Profunda", {size: 30}), pos(width()/2, 40), anchor("center"), color(255,255,255) ]);
+            
+            const b = add([
+                rect(100, 40), color(139, 69, 19),
+                pos(width()/2, height() - 50), anchor("center"), area(), "return_boat"
+            ]);
+            b.add([ text("Volver", {size:16}), anchor("center") ]);
+
+            const p = add([
+                rect(24, 24), color(255, 204, 153),
+                pos(width() / 2, height() - 120), area(), body(), anchor("center"), z(50), "player"
+            ]);
+            
+            onClick("return_boat", () => { go("game"); });
+            p.onCollide("return_boat", () => { go("game"); });
+
+            const SPEED = 200;
+            onKeyDown("left", () => p.move(-SPEED, 0));
+            onKeyDown("right", () => p.move(SPEED, 0));
+            onKeyDown("up", () => p.move(0, -SPEED));
+            onKeyDown("down", () => p.move(0, SPEED));
+            onKeyDown("a", () => p.move(-SPEED, 0));
+            onKeyDown("d", () => p.move(SPEED, 0));
+            onKeyDown("w", () => p.move(0, -SPEED));
+            onKeyDown("s", () => p.move(0, SPEED));
+            
+            for(let i=0; i<30; i++) {
+                let tx = rand(50, width()-50);
+                let ty = rand(100, height()-150);
+                add([ rect(20, 40), color(60, 30, 10), pos(tx, ty), anchor("bot"), area(), body({isStatic:true}) ]);
+                add([ circle(35), color(0, 80, 0), pos(tx, ty-40), anchor("center") ]);
+            }
+            if (globalUpdateUI) globalUpdateUI();
+        });
+
+        go("game");
+    </script>
+</body>
+</html>
