@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RADIX — Sistemas Distribuidos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  @page { size: 1920px 1080px; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'EB Garamond', Georgia, serif;
+    background: #0d0d0d;
+    color: #e8e0d5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .slide {
+    width: 1920px; height: 1080px;
+    page-break-after: always; overflow: hidden;
+    position: relative; display: flex;
+  }
+  .slide::after {
+    content: ''; position: absolute;
+    inset: 20px;
+    border: 1px solid rgba(232,224,213,0.22);
+    pointer-events: none; z-index: 50;
+  }
+
+  .star {
+    position: absolute; width: 22px; height: 22px; z-index: 20;
+  }
+  .star::before, .star::after {
+    content: ''; position: absolute; background: #e8e0d5;
+  }
+  .star::before { width: 1px; height: 100%; left: 50%; transform: translateX(-50%); }
+  .star::after  { width: 100%; height: 1px; top: 50%; transform: translateY(-50%); }
+
+  .img-panel {
+    height: 100%; position: relative; overflow: hidden;
+  }
+  .img-panel img {
+    width: 100%; height: 100%; object-fit: cover;
+    object-position: 50% 30%;
+    transform: scale(1.12);
+    filter: grayscale(100%) contrast(1.25) brightness(0.82);
+  }
+  .panel-label {
+    position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%);
+    font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase;
+    opacity: 0.28; z-index: 15; color: #e8e0d5; white-space: nowrap;
+  }
+
+  .text-panel {
+    height: 100%;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 80px; position: relative;
+  }
+  .text-panel.wide { width: 100%; padding: 64px 90px; }
+
+  .w40  { width: 40%; }
+  .w42  { width: 42%; }
+  .w45  { width: 45%; }
+  .w50  { width: 50%; }
+  .w55  { width: 55%; }
+  .w58  { width: 58%; }
+  .w60  { width: 60%; }
+
+  .tt  { font-size: 130px; font-weight: 800; letter-spacing: 0.01em; line-height: 0.95; text-transform: uppercase; }
+  .tl  { font-size: 88px; font-weight: 700; letter-spacing: 0.02em; line-height: 1; text-transform: uppercase; }
+  .sub { font-size: 30px; font-weight: 400; font-style: italic; letter-spacing: 0.05em; opacity: 0.85; }
+  .bd  { font-size: 24px; line-height: 1.65; }
+  .bd-sm { font-size: 21px; line-height: 1.55; }
+  .bd em   { font-style: italic; }
+  .bd strong, .bd-sm strong { font-weight: 600; }
+
+  .hdr {
+    font-size: 18px; text-transform: uppercase; letter-spacing: 0.3em;
+    opacity: 0.45; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .hdr::after { content: ''; flex: 1; height: 1px; background: rgba(232,224,213,0.18); }
+
+  .top-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between;
+    padding: 32px 48px;
+    font-size: 18px; letter-spacing: 0.15em; text-transform: uppercase;
+    opacity: 0.4; z-index: 20;
+  }
+
+  .div { width: 72px; height: 1px; background: #e8e0d5; margin: 22px 0; opacity: 0.4; }
+
+  .quote {
+    border-left: 2px solid #e8e0d5; padding-left: 28px; margin: 28px 0;
+  }
+  .quote p { font-size: 26px; line-height: 1.5; font-style: italic; opacity: 0.85; }
+  .quote cite { font-size: 20px; margin-top: 12px; display: block; opacity: 0.4; font-style: normal; }
+
+  .tbl { width: 100%; border-collapse: collapse; margin-top: 22px; }
+  .tbl th {
+    text-align: left; font-size: 18px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 10px 18px; border-bottom: 2px solid #e8e0d5;
+  }
+  .tbl td {
+    font-size: 23px; padding: 10px 18px;
+    border-bottom: 1px solid rgba(232,224,213,0.1);
+  }
+
+  .list { list-style: none; margin-top: 14px; }
+  .list li {
+    font-size: 23px; line-height: 1.6; padding: 8px 0 8px 30px; position: relative;
+  }
+  .list li::before { content: '\2014'; position: absolute; left: 0; opacity: 0.3; }
+
+  .cols2 { display: flex; gap: 40px; margin-top: 14px; }
+  .cols2 > div { flex: 1; }
+
+  .gr { display: grid; gap: 8px 32px; margin-top: 16px; }
+  .gr1 { grid-template-columns: repeat(3, 1fr); }
+  .gr2 { grid-template-columns: repeat(2, 1fr); }
+  .ri { font-size: 19px; line-height: 1.4; padding: 4px 0; border-bottom: 1px solid rgba(232,224,213,0.05); }
+  .ri strong { font-weight: 600; }
+  .ri .id { font-weight: 600; font-size: 15px; letter-spacing: 0.1em; opacity: 0.3; display: block; margin-bottom: 1px; }
+  .rh { font-size: 19px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.45; margin-top: 4px; }
+
+  .tg { display: inline-block; padding: 2px 12px; border: 1px solid rgba(232,224,213,0.28); font-size: 16px; letter-spacing: 0.08em; margin: 2px 4px 2px 0; }
+  .tc { border: 1px solid rgba(232,224,213,0.12); padding: 22px; }
+  .tc h3 { font-size: 22px; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .tc p { font-size: 19px; line-height: 1.5; opacity: 0.85; }
+  .tc .tgs { margin-top: 8px; }
+  .tg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+
+  .diagram { display: flex; align-items: center; justify-content: center; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+
+  .fig-box {
+    border: 1px solid rgba(232,224,213,0.12);
+    padding: 24px;
+    background: rgba(232,224,213,0.015);
+  }
+  .fig-box .fig-caption {
+    font-size: 15px; font-style: italic; opacity: 0.4;
+    margin-top: 10px; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── 1. PORTADA ─── -->
+<div class="slide">
+  <div class="top-bar">
+    <span>Junio 2026</span>
+    <span>UNIVERSIDAD NACIONAL EXPERIMENTAL DE GUAYANA</span>
+    <span>Ciudad Guayana</span>
+  </div>
+  <div class="img-panel w45">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Jacob_wrestling_the_angel_2.jpg" alt="">
+    <div class="star" style="top:52px;left:52px;"></div>
+    <div class="star" style="bottom:52px;left:52px;"></div>
+    <div class="panel-label">Gustave Doré · La Lucha de Jacob</div>
+  </div>
+  <div class="text-panel w55" style="padding-left:100px;">
+    <div class="hdr">Sistemas Distribuidos</div>
+    <h1 class="tt">RADIX</h1>
+    <div class="div"></div>
+    <p class="sub" style="font-size:36px;">Red de Aprendizaje y Datos<br>en Infraestructuras Extremas</p>
+    <p class="bd" style="margin-top:40px;opacity:0.5;">Un LMS <em>offline-first</em> sobre servidor de borde<br>para comunidades sin conectividad a internet</p>
+    <div class="star" style="top:72px;right:72px;"></div>
+    <div class="star" style="bottom:72px;right:72px;"></div>
+</div>
+</div>
+
+<!-- ─── 2. INTEGRANTES ─── -->
+<div class="slide">
+  <div class="img-panel w40">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/4/40/La_Pentec%C3%B4te_-_%28estampe%29_%28%C3%89tat_%C3%A9dit%C3%A9_avec_la_lettre%29_-_G._Dor%C3%A9_%3B_Jonnard_-_btv1b10321127s.jpg" alt="" style="transform: scale(1.8); object-position: 50% 35%;">
+    <div class="star" style="top:52px;left:52px;"></div>
+    <div class="star" style="bottom:52px;left:52px;"></div>
+    <div class="panel-label">Gustave Doré · Pentecostés</div>
+  </div>
+  <div class="text-panel w60">
+    <div class="hdr">La Asamblea</div>
+    <h2 class="tl">Integrantes</h2>
+    <div class="div"></div>
+    <table class="tbl">
+      <thead><tr><th>Nombre</th><th>Cédula</th></tr></thead>
+      <tbody>
+        <tr><td>Bravo, Yonkeiner</td><td>30.994.057</td></tr>
+        <tr><td>Hernández, Gabriel</td><td>30.831.045</td></tr>
+        <tr><td>Maita, Jhoanny</td><td>30.694.732</td></tr>
+        <tr><td>Moreno, Roxana</td><td>31.248.475</td></tr>
+        <tr><td>Mundarain, Adrián</td><td>30.932.660</td></tr>
+        <tr><td>Nuñez, Miguel</td><td>30.932.227</td></tr>
+        <tr><td>Rodríguez, Sebastián</td><td>30.366.364</td></tr>
+        <tr><td>Rojas, Tairon</td><td>31.182.204</td></tr>
+        <tr><td>Suárez, Julio</td><td>31.074.002</td></tr>
+      </tbody>
+    </table>
+    <p class="bd" style="margin-top:24px;font-size:19px;opacity:0.38;">Docente: Livia Borjas · Sistemas Distribuidos</p>
+</div>
+</div>
+
+<!-- ─── 3. ¿POR QUÉ RADIX? ─── -->
+<div class="slide">
+  <div class="text-panel w55">
+    <div class="hdr">La Enciclopedia</div>
+    <h2 class="tl">¿Por qué RADIX?</h2>
+    <div class="div"></div>
+    <div class="quote">
+      <p>"La raíz se llama así porque está unida a la tierra, o porque hacia abajo se emiten ramas como si fueran rayos"</p>
+      <cite>Isidoro de Sevilla, <em>Etymologiarum</em> XVII, 6, 1 (a. 620 d. C.)</cite>
+    </div>
+    <p class="bd">El término <strong>Radix</strong> desvía la mirada del centralismo tecnológico — que obliga a depender de la nube urbana — para devolver el foco al origen del problema: el aula local y el estudiante aislado. El microservidor actúa como la raíz anclada al territorio; las antenas emiten ondas invisibles en forma de rayos (<em>radii</em>) para enlazar los dispositivos de los alumnos.</p>
+</div>
+  <div class="img-panel w45">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/5/57/San_Isidoro_de_Sevilla%2C_Bartolom%C3%A9_Esteban_Murillo.jpg" alt="">
+    <div class="star" style="top:52px;right:52px;"></div>
+    <div class="star" style="bottom:52px;right:52px;"></div>
+    <div class="panel-label">Murillo · San Isidoro de Sevilla</div>
+  </div>
+</div>
+
+<!-- ─── 4. SOLUCIÓN ─── -->
+<div class="slide">
+  <div class="img-panel w42">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/6/67/Gustave_Dore_-_Death_on_the_Pale_Horse.png" alt="">
+    <div class="star" style="top:52px;left:52px;"></div>
+    <div class="star" style="bottom:52px;left:52px;"></div>
+    <div class="panel-label">Gustave Doré · La Muerte en el Caballo Pálido</div>
+  </div>
+  <div class="text-panel w58">
+    <div class="hdr">La Respuesta</div>
+    <h2 class="tl">Solución</h2>
+    <div class="div"></div>
+    <p class="bd">Un LMS completo que opera <strong>sin conexión a internet</strong> sobre un servidor de borde de bajo costo. El profesor administra cursos, lecciones, quizzes y la biblioteca multimedia desde la red local; los estudiantes consumen contenido, ganan XP y participan en foros — todo offline.</p>
+    <ul class="list">
+      <li><strong>3 roles con RBAC</strong> — Profesor, Estudiante, Invitado</li>
+      <li><strong>Lecciones en Markdown</strong> con wiki-enlaces <em>[[id]]</em></li>
+      <li><strong>Biblioteca multimedia</strong> — video, audio, imagen, PDF, texto y videojuegos HTML</li>
+      <li><strong>Foro por curso</strong> con hilos, respuestas y likes</li>
+      <li><strong>Gamificación</strong> — XP y medallas por progreso</li>
+      <li><strong>Cola DTN</strong> — store-and-forward para sincronización oportunista</li>
+    </ul>
+</div>
+</div>
+
+<!-- ─── 5. OBJETIVOS ─── -->
+<div class="slide">
+  <div class="text-panel w55">
+    <div class="hdr">El Propósito</div>
+    <h2 class="tl">Objetivos</h2>
+    <div class="div"></div>
+    <p class="bd" style="font-size:26px;font-weight:500;margin-bottom:28px;">Diseñar e implementar un sistema de gestión de aprendizaje distribuido, tolerante a desconexiones prolongadas, que provea educación digital de calidad a comunidades sin infraestructura de conectividad.</p>
+    <div class="cols2">
+      <div>
+        <p style="font-size:20px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.45;">Específicos</p>
+        <ul class="list" style="margin-top:0;">
+          <li>Implementar un LMS offline-first con gestión completa de contenido</li>
+          <li>Diseñar una cola DTN para sincronización oportunista entre nodos</li>
+          <li>Garantizar integridad de datos bajo concurrencia y desconexiones</li>
+          <li>Proveer observabilidad del servidor</li>
+        </ul>
+      </div>
+      <div>
+        <p style="font-size:20px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.45;">Alcance</p>
+        <ul class="list" style="margin-top:0;">
+          <li>Backend REST en Go con inyección de dependencias</li>
+          <li>SPA en React con editor de lecciones y visor multimedia</li>
+          <li>Red de pruebas Docker con múltiples nodos</li>
+          <li>Observabilidad: monitor en tiempo real + logs persistentes</li>
+        </ul>
+      </div>
+    </div>
+</div>
+  <div class="img-panel w45">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Adam_and_Eve_Driven_out_of_Eden.png/1920px-Adam_and_Eve_Driven_out_of_Eden.png" alt="">
+    <div class="star" style="top:52px;right:52px;"></div>
+    <div class="star" style="bottom:52px;right:52px;"></div>
+    <div class="panel-label">Gustave Doré · La Expulsión del Edén</div>
+  </div>
+</div>
+
+<!-- ─── 6. JUSTIFICACIÓN ─── -->
+<div class="slide">
+  <div class="img-panel w42">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Gustave_Dor%C3%A9_-_The_Holy_Bible_-_Plate_I%2C_The_Deluge_%28cropped%29.jpg/1920px-Gustave_Dor%C3%A9_-_The_Holy_Bible_-_Plate_I%2C_The_Deluge_%28cropped%29.jpg" alt="">
+    <div class="star" style="top:52px;left:52px;"></div>
+    <div class="star" style="bottom:52px;left:52px;"></div>
+    <div class="panel-label">Gustave Doré · El Diluvio (detalle)</div>
+  </div>
+  <div class="text-panel w58">
+    <div class="hdr">La Amazonía</div>
+    <h2 class="tl">Justificación</h2>
+    <div class="div"></div>
+    <p class="bd">Sin acceso a actualizaciones, herramientas multimedia o plataformas de seguimiento, las escuelas locales quedan reducidas a <em>islas de desconexión informativa</em>. La <strong>discriminación tecnológica</strong> excluye a las periferias y despoja a la juventud rural de las llaves de la ciencia.</p>
+    <p class="bd" style="margin-top:24px;">Para las comunidades indígenas, las raíces de los árboles ancestrales representan el pilar invisible que sostiene la vida, la memoria y el territorio. RADIX adopta este símbolo como modelo de <strong>autonomía</strong> y respeto a la identidad de los pueblos originarios.</p>
+    <p class="bd" style="margin-top:24px;opacity:0.5;font-size:22px;font-style:italic;">La desconexión no es un error que se tolera: es la condición normal del entorno.</p>
+</div>
+</div>
+
+<!-- ─── 7. TECNOLOGÍAS ─── -->
+<div class="slide">
+  <div class="text-panel wide">
+    <div class="hdr">La Máquina</div>
+    <h2 class="tl">Tecnologías</h2>
+    <div class="div"></div>
+    <div class="tg2">
+      <div class="tc">
+        <h3>Backend</h3>
+        <p>API REST en Go 1.25 + Echo v5. DI con uber/fx, auth bcrypt, sesiones en memoria, logging unificado con zap.</p>
+        <div class="tgs"><span class="tg">Go 1.25</span><span class="tg">Echo v5</span><span class="tg">uber/fx</span><span class="tg">bcrypt</span><span class="tg">zap</span></div>
+      </div>
+      <div class="tc">
+        <h3>Frontend</h3>
+        <p>SPA en React 19 + TypeScript + Vite. TanStack Query, CodeMirror 6, Tailwind CSS con tokens semánticos.</p>
+        <div class="tgs"><span class="tg">React 19</span><span class="tg">TypeScript</span><span class="tg">Vite 6</span><span class="tg">Tailwind</span></div>
+      </div>
+      <div class="tc">
+        <h3>Base de Datos</h3>
+        <p>libSQL/SQLite con sqlc (código Go tipado) y goose (migraciones versionadas). Drivers pure-Go sin CGO.</p>
+        <div class="tgs"><span class="tg">libSQL</span><span class="tg">sqlc</span><span class="tg">goose</span><span class="tg">pure-Go</span></div>
+      </div>
+      <div class="tc">
+        <h3>Despliegue</h3>
+        <p>Contenedores Docker para BD y red de pruebas. Compilación cruzada ARM. Sin dependencias externas en runtime.</p>
+        <div class="tgs"><span class="tg">Docker</span><span class="tg">ARM</span><span class="tg">CGO=0</span></div>
+      </div>
+    </div>
+</div>
+</div>
+
+<!-- ─── 8. CAP + SINCRONIZACIÓN ─── -->
+<div class="slide">
+  <div class="text-panel w50" style="padding-top:52px;padding-bottom:52px;">
+    <div class="hdr">El Consenso</div>
+    <h2 class="tl" style="font-size:72px;">Teorema CAP<br>y Sincronización</h2>
+    <div class="div"></div>
+    <p class="bd-sm">RADIX elige <strong>AP</strong>: disponibilidad y tolerancia a particiones, sacrificando consistencia inmediata por <em>consistencia eventual</em>. Cada nodo de borde opera de forma autónoma; la cola DTN propaga las transacciones cuando hay conectividad.</p>
+    <div class="tg2" style="margin-top:20px;">
+      <div class="tc" style="padding:16px;">
+        <h3 style="font-size:20px;">Cola DTN</h3>
+        <p style="font-size:17px;">Store-and-forward. Pull-based. Idempotente. Reenvío: A→B→C converge sin que A y C se vean.</p>
+      </div>
+      <div class="tc" style="padding:16px;">
+        <h3 style="font-size:20px;">Reloj HLC</h3>
+        <p style="font-size:17px;">Hybrid Logical Clock monótono. Ordena eventos sin depender del reloj de pared de un Pi sin RTC.</p>
+      </div>
+    </div>
+</div>
+  <div class="w50 diagram fig-box" style="margin:36px 36px 36px 0; padding:18px;">
+    <svg viewBox="0 0 680 620" xmlns="http://www.w3.org/2000/svg" font-family="EB Garamond, Georgia, serif">
+      <defs>
+        <marker id="dot" markerWidth="10" markerHeight="10" refX="5" refY="5">
+          <circle cx="5" cy="5" r="4" fill="#e8e0d5"/>
+        </marker>
+      </defs>
+      <path d="M340,30 L64,550 L616,550 Z" stroke="rgba(232,224,213,0.35)" stroke-width="1.2" fill="none"/>
+      <path d="M64,550 L616,550" stroke="#e8e0d5" stroke-width="3.5" marker-end="url(#dot)" marker-start="url(#dot)"/>
+      <g fill="#e8e0d5" text-anchor="middle">
+        <text x="340" y="14" font-size="22" font-weight="700">C</text>
+        <text x="340" y="580" font-size="15" fill="rgba(232,224,213,0.42)">CONSISTENCIA</text>
+        <text x="44" y="554" font-size="22" font-weight="700" text-anchor="end">A</text>
+        <text x="44" y="580" font-size="15" fill="rgba(232,224,213,0.42)" text-anchor="end">DISPONIBILIDAD</text>
+        <text x="636" y="554" font-size="22" font-weight="700" text-anchor="start">P</text>
+        <text x="636" y="580" font-size="15" fill="rgba(232,224,213,0.42)" text-anchor="start">TOL. A PARTICIONES</text>
+      </g>
+      <text x="226" y="244" text-anchor="middle" fill="rgba(232,224,213,0.16)" font-size="26" font-weight="500">CA</text>
+      <text x="454" y="244" text-anchor="middle" fill="rgba(232,224,213,0.16)" font-size="26" font-weight="500">CP</text>
+      <text x="340" y="468" text-anchor="middle" fill="rgba(232,224,213,0.12)" font-size="28" font-weight="500">AP</text>
+      <line x1="204" y1="300" x2="340" y2="550" stroke="rgba(232,224,213,0.08)" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="476" y1="300" x2="340" y2="550" stroke="rgba(232,224,213,0.08)" stroke-width="1" stroke-dasharray="3 3"/>
+      <rect x="280" y="494" width="120" height="40" rx="2" fill="none" stroke="#e8e0d5" stroke-width="1.2"/>
+      <text x="340" y="522" text-anchor="middle" fill="#e8e0d5" font-size="22" font-weight="700" letter-spacing="0.08em">RADIX</text>
+      <g fill="rgba(232,224,213,0.18)">
+        <text x="128" y="160" font-size="14" text-anchor="middle">✗</text>
+        <text x="552" y="160" font-size="14" text-anchor="middle">✗</text>
+        <text x="340" y="380" font-size="18" text-anchor="middle">✓</text>
+      </g>
+    </svg>
+    <div class="fig-caption">Triángulo CAP: RADIX ocupa la región AP — disponible y tolerante a particiones</div>
+  </div>
+</div>
+
+<!-- ─── 9. INFRAESTRUCTURA ─── -->
+<div class="slide" style="flex-direction:column;">
+  <div style="position:absolute; top:44px; left:0; right:0; z-index:20; pointer-events:none;">
+    <div class="hdr" style="padding:0 80px; margin:0;">El Territorio</div>
+    <h2 class="tl" style="padding:0 80px; font-size:72px;">Infraestructura</h2>
+  </div>
+  <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px 60px;">
+    <svg viewBox="0 0 980 330" xmlns="http://www.w3.org/2000/svg" font-family="EB Garamond, Georgia, serif" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="arw" markerWidth="10" markerHeight="10" refX="8.5" refY="3.6" orient="auto">
+          <path d="M0,0 L8.5,3.6 L0,7.2 z" fill="#e8e0d5"/>
+        </marker>
+      </defs>
+      <g stroke="#e8e0d5" fill="none">
+        <g stroke="rgba(232,224,213,0.18)" stroke-dasharray="5 4">
+          <rect x="14" y="146" width="252" height="130" rx="4"/>
+          <rect x="364" y="146" width="252" height="130" rx="4"/>
+          <rect x="714" y="146" width="252" height="130" rx="4"/>
+        </g>
+        <g>
+          <rect x="40" y="174" width="104" height="38" rx="3"/>
+          <rect x="390" y="174" width="104" height="38" rx="3"/>
+          <rect x="740" y="174" width="104" height="38" rx="3"/>
+        </g>
+        <g stroke-width="0.9">
+          <circle cx="182" cy="180" r="10"/><circle cx="226" cy="204" r="10"/><circle cx="186" cy="232" r="10"/>
+          <path d="M144,193 L182,180 M144,193 L226,204 M144,193 L186,232 M182,180 L226,204 M226,204 L186,232"/>
+          <circle cx="532" cy="180" r="10"/><circle cx="576" cy="204" r="10"/><circle cx="536" cy="232" r="10"/>
+          <path d="M494,193 L532,180 M494,193 L576,204 M494,193 L536,232 M532,180 L576,204 M576,204 L536,232"/>
+          <circle cx="882" cy="180" r="10"/><circle cx="926" cy="204" r="10"/><circle cx="886" cy="232" r="10"/>
+          <path d="M844,193 L882,180 M844,193 L926,204 M844,193 L886,232 M882,180 L926,204 M926,204 L886,232"/>
+        </g>
+        <g>
+          <path d="M240,146 L240,76 M212,146 L240,104 M268,146 L240,104"/>
+          <path d="M390,146 L390,76 M362,146 L390,104 M418,146 L390,104"/>
+          <path d="M590,146 L590,76 M562,146 L590,104 M618,146 L590,104"/>
+          <path d="M740,146 L740,76 M712,146 L740,104 M768,146 L740,104"/>
+          <path d="M258,76 L372,76" marker-end="url(#arw)" marker-start="url(#arw)"/>
+          <path d="M608,76 L722,76" marker-end="url(#arw)" marker-start="url(#arw)"/>
+          <path d="M240,76 l18,-10 l0,20 z" fill="#e8e0d5"/>
+          <path d="M390,76 l-18,-10 l0,20 z" fill="#e8e0d5"/>
+          <path d="M590,76 l18,-10 l0,20 z" fill="#e8e0d5"/>
+          <path d="M740,76 l-18,-10 l0,20 z" fill="#e8e0d5"/>
+          <path d="M270,240 L360,240" stroke-dasharray="3 4"/>
+          <path d="M620,240 L710,240" stroke-dasharray="3 4"/>
+        </g>
+      </g>
+      <g fill="#e8e0d5" text-anchor="middle">
+        <text x="92" y="192">Nodo A</text><text x="92" y="206" font-size="12">servidor de borde</text>
+        <text x="442" y="192">Nodo B</text><text x="442" y="206" font-size="12">servidor de borde</text>
+        <text x="792" y="192">Nodo C</text><text x="792" y="206" font-size="12">servidor de borde</text>
+        <text x="204" y="262" font-size="12">malla WiFi interna</text>
+        <text x="554" y="262" font-size="12">malla WiFi interna</text>
+        <text x="904" y="262" font-size="12">malla WiFi interna</text>
+        <text x="140" y="300">Comunidad A</text>
+        <text x="490" y="300">Comunidad B (repetidor)</text>
+        <text x="840" y="300">Comunidad C</text>
+        <text x="315" y="46">WiFi direccional 2,4 GHz</text>
+        <text x="315" y="61" font-size="11.5">15 a 30 km · 10 a 50 Mbps</text>
+        <text x="665" y="46">WiFi direccional 2,4 GHz</text>
+        <text x="665" y="61" font-size="11.5">15 a 30 km · 10 a 50 Mbps</text>
+        <text x="315" y="226" font-size="11">LoRa</text>
+        <text x="315" y="260" font-size="11">telemetría</text>
+        <text x="665" y="226" font-size="11">LoRa</text>
+        <text x="665" y="260" font-size="11">telemetría</text>
+        <text x="222" y="98" font-size="12" text-anchor="end" fill="rgba(232,224,213,0.5)">mástil sobre el dosel</text>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<!-- ─── 10. REQUISITOS FUNCIONALES ─── -->
+<div class="slide">
+  <div class="text-panel wide">
+    <div class="hdr">El Decálogo</div>
+    <h2 class="tl">Requisitos Funcionales</h2>
+    <div class="div"></div>
+    <div class="gr gr1">
+      <div>
+        <p class="rh">Autenticación y Acceso</p>
+        <div class="ri"><span class="id">RF-01</span>Login email/contraseña con bcrypt</div>
+        <div class="ri"><span class="id">RF-02</span>Error 401 genérico</div>
+        <div class="ri"><span class="id">RF-03</span>Acceso invitado sin credenciales</div>
+        <div class="ri"><span class="id">RF-04</span>Token Bearer en cada petición</div>
+        <div class="ri"><span class="id">RF-05</span>RBAC con 3 roles por middleware</div>
+        <div class="ri"><span class="id">RF-06</span>Sesiones persisten entre reinicios</div>
+      </div>
+      <div>
+        <p class="rh">Cursos y Lecciones</p>
+        <div class="ri"><span class="id">RF-08</span>CRUD de cursos (admin)</div>
+        <div class="ri"><span class="id">RF-09</span>CRUD de lecciones en Markdown</div>
+        <div class="ri"><span class="id">RF-10</span>Inscripción de estudiantes</div>
+        <div class="ri"><span class="id">RF-11</span>Editor con highlight [[id]]</div>
+        <div class="ri"><span class="id">RF-12</span>Wiki-enlaces embeben media</div>
+        <div class="ri"><span class="id">RF-13</span>Registro de avance y XP</div>
+      </div>
+      <div>
+        <p class="rh">Evaluación y Biblioteca</p>
+        <div class="ri"><span class="id">RF-15</span>CRUD de quizzes por curso</div>
+        <div class="ri"><span class="id">RF-16</span>Calificación inmediata</div>
+        <div class="ri"><span class="id">RF-17</span>Registro de notas y XP</div>
+        <div class="ri"><span class="id">RF-19</span>Upload de archivos multimedia</div>
+        <div class="ri"><span class="id">RF-20</span>Metadatos con ffprobe</div>
+        <div class="ri"><span class="id">RF-21</span>Preview inline por tipo</div>
+      </div>
+      <div>
+        <p class="rh">Foro y Gamificación</p>
+        <div class="ri"><span class="id">RF-24</span>Foro con hilos y respuestas</div>
+        <div class="ri"><span class="id">RF-25</span>Renderizado con formato</div>
+        <div class="ri"><span class="id">RF-26</span>XP por lecciones y quizzes</div>
+        <div class="ri"><span class="id">RF-27</span>Medallas por progreso</div>
+        <div class="ri"><span class="id">RF-28</span>Dashboard del estudiante</div>
+      </div>
+      <div>
+        <p class="rh">Sincronización DTN</p>
+        <div class="ri"><span class="id">RF-29</span>Cola local de transacciones</div>
+        <div class="ri"><span class="id">RF-30</span>Consistencia eventual</div>
+        <div class="ri"><span class="id">RF-31</span>Monitor de cola + sync manual</div>
+      </div>
+      <div>
+        <p class="rh">Administración</p>
+        <div class="ri"><span class="id">RF-32</span>Monitor en tiempo real</div>
+        <div class="ri"><span class="id">RF-33</span>Live-tail de logs</div>
+        <div class="ri"><span class="id">RF-34</span>Historial filtrable (FTS5)</div>
+        <div class="ri"><span class="id">RF-35</span>Retención configurable</div>
+        <div class="ri"><span class="id">RF-36</span>Seed de datos idempotente</div>
+      </div>
+    </div>
+</div>
+</div>
+
+<!-- ─── 11. REQUISITOS NO FUNCIONALES ─── -->
+<div class="slide">
+  <div class="text-panel wide">
+    <div class="hdr">Las Leyes</div>
+    <h2 class="tl">Requisitos No Funcionales</h2>
+    <div class="div"></div>
+    <div class="gr gr2">
+      <div>
+        <p class="rh">Operación Offline</p>
+        <div class="ri"><span class="id">RNF-01</span><strong>Offline-first.</strong> Sin internet; ninguna operación depende de servicio externo</div>
+        <div class="ri"><span class="id">RNF-02</span><strong>Hardware limitado.</strong> Raspberry Pi: binario único, frontend estático</div>
+        <div class="ri"><span class="id">RNF-03</span><strong>Desconexión prolongada.</strong> Semanas sin red no degradan la operación local</div>
+        <p class="rh" style="margin-top:20px;">Rendimiento</p>
+        <div class="ri"><span class="id">RNF-04</span>Auth en memoria, sin viaje a BD por petición</div>
+        <div class="ri"><span class="id">RNF-05</span>Logging asíncrono; BD lenta nunca añade latencia</div>
+        <div class="ri"><span class="id">RNF-06</span>Operaciones inmediatas en red local</div>
+      </div>
+      <div>
+        <p class="rh">Fiabilidad y Seguridad</p>
+        <div class="ri"><span class="id">RNF-07</span>Integridad ante escritura concurrente</div>
+        <div class="ri"><span class="id">RNF-08</span>Cliente desconectado no aborta transacciones</div>
+        <div class="ri"><span class="id">RNF-09</span>Apagado ordenado: drenar HTTP, persistir sesiones</div>
+        <div class="ri"><span class="id">RNF-11</span>Contraseñas solo como hash bcrypt</div>
+        <div class="ri"><span class="id">RNF-12</span>Error 401 idéntico (no revela cuentas)</div>
+        <div class="ri"><span class="id">RNF-13</span>Todo endpoint exige token y verifica rol</div>
+        <p class="rh" style="margin-top:20px;">Portabilidad y Mantenibilidad</p>
+        <div class="ri"><span class="id">RNF-22</span>Compilación sin CGO; cross-compile trivial a ARM</div>
+        <div class="ri"><span class="id">RNF-23</span>Modo persistencia por variables de entorno</div>
+        <div class="ri"><span class="id">RNF-18</span>DI con uber/fx; módulos con interfaces mínimas</div>
+        <div class="ri"><span class="id">RNF-19</span>SQL tipado con sqlc; migraciones con goose</div>
+      </div>
+    </div>
+</div>
+</div>
+
+</body>
+</html>
