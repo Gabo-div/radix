@@ -75,7 +75,7 @@ RADIX rompe con la dependencia de la nube mediante una arquitectura de computaci
 
 Dentro del área de cobertura escolar, toda la actividad (clases, evaluaciones, consulta de material multimedia, seguimiento del progreso) funciona de forma 100% offline contra el servidor local. Cuando aparece una oportunidad de comunicación con el exterior, sea una lancha que pasa o una ventana satelital corta, el sistema sincroniza lo acumulado. Con esto se garantiza que el derecho a aprender no dependa de un cable de red ni de un satélite.
 
-La decisión de diseño más importante del sistema es asumir la partición de red como condición permanente y no como falla excepcional. De ahí se derivan el resto de las decisiones técnicas: almacenamiento local como fuente primaria de verdad, cola de transacciones pendientes de sincronización, y mecanismos de fusión de datos que toleran actualizaciones concurrentes desde nodos que estuvieron semanas sin verse.
+La decisión de diseño más importante del sistema es asumir la partición de red como condición permanente y no como falla excepcional. De ahí se derivan el resto de las decisiones técnicas: almacenamiento local como fuente primaria de verdad, registro de operaciones reproducibles con versionado por reloj lógico híbrido (HLC) para fusión determinista de datos, y extracción oportunista por HTTP donde cada nodo pide solo lo que le falta.
 
 ## 6. Objetivos
 
@@ -89,7 +89,7 @@ Desplegar una infraestructura de sistemas distribuidos tolerante a condiciones e
 2. Configurar una red en malla (Mesh) local que permita la interacción simultánea de los dispositivos estudiantiles sin consumo de internet.
 3. Desarrollar la plataforma educativa (LMS) que corre en cada nodo: gestión de cursos, lecciones, evaluaciones, biblioteca multimedia y seguimiento del progreso, operando de forma totalmente offline.
 4. Implementar el registro de transacciones DTN que encola la actividad académica local para su sincronización oportunista con el servidor central.
-5. Incorporar algoritmos de replicación de datos libres de conflicto (CRDT) para asegurar la convergencia de la información académica entre nodos cuando ocurran conexiones oportunistas.
+5. Incorporar un sistema de versionado de filas con reloj lógico híbrido (HLC) y un registro de operaciones reproducibles para asegurar la convergencia determinista de la información académica entre nodos cuando ocurran conexiones oportunistas, en sustitución del enfoque original de CRDT, que resultó de mayor complejidad de la que el patrón de escritura del sistema requiere.
 
 ## 7. Justificación
 
@@ -111,9 +111,11 @@ Para soportar las demandas del entorno, el hardware de RADIX se organiza en capa
 | Infraestructura energética | Sistema fotovoltaico autónomo (panel solar 150 W + regulador PWM + batería de ciclo profundo GEL 12 V 100 Ah) | 2 kits (1 por escuela) | Alimentación eléctrica ininterrumpida las 24 horas, sin depender de la red eléctrica pública | 380.00 | 760.00 |
 | Almacenamiento | SSD 512 GB USB 3.0 de alta resistencia (high-endurance) | 4 uds. (2 por escuela) | Almacenamiento persistente del repositorio multimedia y las bases de datos locales | 55.00 | 220.00 |
 | Telecomunicación local | Access points para exteriores de alta ganancia (norma IP67) | 4 uds. (2 por escuela) | Red Mesh Wi-Fi perimetral del área escolar para conexión concurrente de alumnos sin internet | 110.00 | 440.00 |
-| Telecomunicación de diagnóstico | Gateways LoRaWAN de 8 canales + antenas de fibra de vidrio de largo alcance | 2 uds. (1 por escuela) | Canal alterno de telemetría de bajo ancho de banda para alertas de diagnóstico y estado del sistema | 160.00 | 320.00 |
+| Telemetría | Puerta de enlace LoRa de 8 canales con antena de largo alcance, para latido de presencia y alertas de estado | 2 uds. (1 por escuela) | Canal alterno de telemetría de bajo ancho de banda cuando el enlace principal está caído | 160.00 | 320.00 |
+| Enlace entre comunidades | Radios direccionales para exterior en 2,4 GHz con antena integrada de ganancia superior a 20 dBi | 2 pares | Backbone punto a punto entre escuelas para sincronización de datos | 90.00 | 180.00 |
+| Estructura de soporte | Mástil arriostrado para elevar la antena sobre el dosel de la selva, con puesta a tierra y protección contra descargas atmosféricas | 2 uds. | Despeje de la zona de Fresnel para enlaces de largo alcance | 260.00 | 520.00 |
 | Accesorios y conectividad | MicroSD clase 10, cableado estructurado, conectores y herrajes de montaje | Global | Ensamblaje, blindaje contra la humedad y despliegue físico en sitio | 150.00 | 150.00 |
-| **Total** | | | | | **2,430.00** |
+| **Total** | | | | | **3,130.00** |
 
 ### 8.2. Plataforma de software
 
@@ -122,28 +124,32 @@ El software que corre en cada nodo es un LMS (*Learning Management System*) offl
 - **Backend:** servicio REST escrito en Go, un lenguaje compilado de bajo consumo de memoria, con una base de datos SQLite/libSQL embebida en el propio nodo. No hay dependencias externas en tiempo de ejecución: el binario y la base de datos viven en el mismo equipo.
 - **Frontend:** aplicación web de página única (SPA) en React, servida desde el propio nodo. Los estudiantes acceden desde cualquier dispositivo con navegador conectado al Wi-Fi de la escuela, sin instalar nada.
 - **Control de acceso:** tres roles (administrador/profesor, estudiante e invitado) autenticados contra el servidor local mediante sesiones con token.
-- **Sincronización:** una cola de transacciones DTN registra localmente cada evento académico relevante (lecciones completadas, calificaciones, experiencia ganada) a la espera de la próxima ventana de conectividad.
+- **Sincronización:** un registro de operaciones reproducibles anota cada escritura como una operación atómica (tabla, clave, tipo de cambio, versión y fila completa). Los nodos vecinos extraen por HTTP solo las operaciones que les faltan, usando cursores locales. Cada operación es idempotente: su identidad combina nodo de origen, tabla, clave y versión. Los conflictos entre ediciones concurrentes se resuelven por versión de fila, estampada con un reloj lógico híbrido (HLC) que garantiza monotonicidad incluso si el reloj de pared del servidor se atrasa, como ocurre en un equipo sin RTC ni NTP.
+- **Enlace entre comunidades:** inicialmente planteado con radios LoRa para el transporte de datos, el análisis de ancho de banda, tamaño de trama y ciclo de trabajo demostró que LoRa no es viable para el volumen de datos del LMS. Se sustituyó por un backbone de WiFi direccional en 2,4 GHz con antenas de alta ganancia, que ofrece tasas del orden de decenas de Mbps. LoRa se conserva como canal de telemetría para latido de presencia y alertas de estado. El cambio de medio no requirió modificar el código de la aplicación, porque la sincronización ya opera sobre HTTP y es agnóstica al medio físico.
 
 ## 9. Flujo de datos
 
 El ciclo de sincronización de RADIX opera en cuatro pasos, diseñados para funcionar ante la desconexión total:
 
-1. **Captura en el borde (offline).** El alumno se conecta al Wi-Fi Mesh de la escuela e interactúa con el aula digital. Todo el progreso se procesa localmente en el clúster de microservidores, sin usar internet.
-2. **Persistencia inmutable (IPFS).** Las tareas y archivos se guardan en el sistema de archivos distribuido IPFS, que asigna a cada contenido un identificador único derivado del propio contenido (CID). Esto protege la información ante apagones y permite verificar su integridad.
-3. **Fusión sin conflictos (CRDT).** Las notas y asistencias se empaquetan usando estructuras de datos replicadas libres de conflicto. Esto permite que los datos generados en nodos distintos se fusionen matemáticamente más tarde, sin corromperse ni chocar entre sí.
-4. **Transporte oportunista (DTN).** Los datos acumulados esperan en cola hasta que pasa una lancha comunitaria (la "mula de datos") que los absorbe por Wi-Fi, o hasta que se abre una ventana satelital corta, llevando la información al servidor central de los profesores.
+1. **Captura en el borde (offline).** El alumno se conecta a la red Mesh de la escuela e interactúa con el aula digital. Todo el progreso se procesa localmente en el servidor de borde, sin usar internet.
+
+2. **Persistencia local.** Los datos se guardan en la base de datos SQLite/libSQL del nodo y los archivos subidos se almacenan en disco. Una escritura en la base de datos y el registro de su operación correspondiente ocurren en la misma transacción, de modo que un cambio nunca existe sin su operación ni una operación sin su cambio. Cada fila nueva se estampa con un reloj lógico híbrido (HLC) que avanza de forma monótona incluso si el reloj de pared se atrasa, una condición esperable en hardware sin RTC ni acceso a NTP.
+
+3. **Resolución de conflictos por versión.** Cuando dos nodos editaron la misma fila, el sistema compara el par `(hlc, origin_node)`. Gana el de versión mayor; el identificador del nodo solo rompe empates. Esto produce un resultado idéntico en todos los nodos sin importar el orden en que se fusionen. Las tablas de pertenencia (inscripciones, lecciones completadas, *me gusta*), cuyo único conflicto es inserción contra eliminación, se resuelven mediante el registro de operaciones en lugar de versionado de fila.
+
+4. **Transporte oportunista (DTN).** Cada nodo mantiene un registro de operaciones del que los nodos vecinos extraen únicamente lo que les falta, mediante una ruta HTTP de solo lectura autenticada con un secreto compartido. Las operaciones recibidas se almacenan conservando su origen, lo que permite el reenvío en cadena: un nodo intermedio puede pasar a un tercero lo que aprendió del primero, sin que los extremos se comuniquen nunca directamente. Cuando no hay enlace de red, el respaldo completo exportable como archivo comprimido puede transportarse físicamente (sneakernet) en una unidad USB.
 
 ## 10. Estado actual del prototipo
 
-El equipo cuenta con un prototipo funcional del nodo educativo, que implementa el primer eslabón del flujo anterior (la captura en el borde) y la cola de transporte oportunista. El prototipo simula un servidor de borde tipo Raspberry Pi y ya ofrece:
+El equipo cuenta con un prototipo funcional del nodo educativo que implementa el LMS offline completo y la replicación entre nodos. El prototipo simula un servidor de borde tipo Raspberry Pi y ya ofrece:
 
 - Gestión de cursos con lecciones en formato de texto enriquecido, evaluaciones (quizzes) con calificación por curso y un foro de discusión por curso.
-- Biblioteca digital local: el profesor sube archivos (video, audio, imágenes, PDF, documentos) al nodo y puede incrustarlos dentro de las lecciones mediante una sintaxis de enlaces internos.
+- Biblioteca digital local: el profesor sube archivos (video, audio, imágenes, PDF, documentos, videojuegos HTML) al nodo y puede incrustarlos dentro de las lecciones mediante una sintaxis de enlaces internos `[[id]]`.
 - Sistema de progreso y gamificación: los estudiantes acumulan puntos de experiencia (XP) al completar lecciones y evaluaciones, lo que ayuda a sostener la motivación en un entorno sin supervisión constante.
-- Cola de sincronización DTN: cada transacción académica queda registrada localmente, lista para transmitirse en la próxima ventana de conectividad.
-- Panel de monitoreo para el administrador: uso de disco, sesiones activas, estado de la cola DTN y registro histórico de logs del servidor con búsqueda.
+- Sincronización entre nodos: cada escritura se anota como una operación reproducible con versión HLC; los nodos pares extraen solo las operaciones que les faltan, los conflictos se resuelven por versión de fila y los archivos se descargan por separado. La sincronización se ha validado en una red de prueba de tres nodos en contenedores (A → B → C), confirmando que las operaciones se reenvían en cadena.
+- Panel de monitoreo con métricas en tiempo real (disco, sesiones activas, estado de la cola de sincronización) y registro histórico de logs del servidor con búsqueda de texto completo.
 
-Todo lo anterior funciona sin ninguna conexión a internet, contra el servidor local. Quedan como trabajo de las siguientes fases la replicación entre nodos con CRDT, el almacenamiento distribuido con IPFS, el clúster redundante de tres microservidores por escuela y el canal de telemetría LoRaWAN.
+Todo lo anterior funciona sin ninguna conexión a internet, contra el servidor local. Quedan como trabajo de las siguientes fases: el clúster redundante de tres microservidores por escuela, el canal de telemetría LoRaWAN, y el estudio y despliegue del enlace WiFi direccional entre comunidades, cuya viabilidad técnica se ha analizado pero no se ha instalado físicamente. El sistema de logros (medallas) se encuentra en una versión preliminar con umbrales fijos calculados en el cliente, pendiente de un subsistema con respaldo en el servidor.
 
 ## 11. Conclusión
 
@@ -155,10 +161,17 @@ Desde el punto de vista de los sistemas distribuidos, RADIX es un ejercicio apli
 
 ## 12. Referencias
 
+- Tanenbaum, A. y Van Steen, M. (2017). *Distributed Systems: Principles and Paradigms* (3.ª ed.).
+- Coulouris, G., Dollimore, J., Kindberg, T. y Blair, G. (2011). *Distributed Systems: Concepts and Design* (5.ª ed.). Addison-Wesley.
 - Cerf, V. et al. (2007). *Delay-Tolerant Networking Architecture*. RFC 4838, IETF.
+- Fall, K. (2003). "A delay-tolerant network architecture for challenged internets". *Proc. ACM SIGCOMM*, pp. 27-34.
 - Gilbert, S. y Lynch, N. (2002). "Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services". *ACM SIGACT News*, 33(2).
+- Brewer, E. (2012). "CAP twelve years later: How the rules have changed". *Computer*, 45(2), pp. 23-29.
+- Kulkarni, S. S., Demirbas, M., Madappa, D., Avva, B. y Leone, M. (2014). "Logical physical clocks and consistent snapshots in globally distributed databases". Informe técnico, State University of New York at Buffalo.
 - Shapiro, M., Preguiça, N., Baquero, C. y Zawirski, M. (2011). "Conflict-free Replicated Data Types". *Symposium on Self-Stabilizing Systems*, Springer.
 - Benet, J. (2014). *IPFS - Content Addressed, Versioned, P2P File System*. arXiv:1407.3561.
-- Tanenbaum, A. y Van Steen, M. (2017). *Distributed Systems: Principles and Paradigms* (3.ª ed.).
+- Lamport, L. (1978). "Time, clocks, and the ordering of events in a distributed system". *Communications of the ACM*, 21(7), pp. 558-565.
+- IEEE Std 830-1998. *Recommended Practice for Software Requirements Specifications*. IEEE Standards Association.
 - IEEE 802.11s. *Mesh Networking Amendment*. IEEE Standards Association.
+- Semtech Corporation (2015). "LoRa Modulation Basics". Nota de aplicación AN1200.22, rev. 2.
 - Isidoro de Sevilla. *Etymologiarum sive Originum*, libro XVII.
