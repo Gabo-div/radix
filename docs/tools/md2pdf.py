@@ -90,8 +90,10 @@ def render(inner, title, out_pdf, workdir):
     html_file.write_text(
         f'<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'
         f'<title>{title}</title><style>{CSS}</style></head><body>{inner}</body></html>')
-    subprocess.run(["chromium", "--headless", "--disable-gpu", "--no-sandbox",
-                    f"--print-to-pdf={out_pdf}", "--no-pdf-header-footer",
+    chrome = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    subprocess.run([chrome, "--headless", "--disable-gpu", "--no-sandbox",
+                    f"--print-to-pdf={pathlib.Path(out_pdf).resolve()}",
+                    "--no-pdf-header-footer",
                     str(html_file)], check=True, capture_output=True)
 
 

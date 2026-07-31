@@ -77,6 +77,46 @@ Dentro del área de cobertura escolar, toda la actividad (clases, evaluaciones, 
 
 La decisión de diseño más importante del sistema es asumir la partición de red como condición permanente y no como falla excepcional. De ahí se derivan el resto de las decisiones técnicas: almacenamiento local como fuente primaria de verdad, registro de operaciones reproducibles con versionado por reloj lógico híbrido (HLC) para fusión determinista de datos, y extracción oportunista por HTTP donde cada nodo pide solo lo que le falta.
 
+### 5.1. Requisitos funcionales
+
+| ID | Requisito | Prioridad |
+|---|---|---|
+| **RF-01** | Autenticación mediante correo electrónico y contraseña con verificación por hash bcrypt. | Alta |
+| **RF-02** | Acceso como invitado sin credenciales, creando un usuario efímero con rol `guest`. | Media |
+| **RF-03** | Control de acceso basado en roles (RBAC) con tres roles — administrador, estudiante e invitado — aplicado por middleware a todos los endpoints protegidos. | Alta |
+| **RF-04** | Sesiones con token Bearer que persisten a través de reinicios del servidor (snapshot a disco). | Alta |
+| **RF-05** | Gestión completa de cursos: crear, consultar, editar y eliminar. | Alta |
+| **RF-06** | Gestión de lecciones dentro de un curso con contenido en markdown y sintaxis de wiki-enlaces `[[id]]` para embeber recursos. | Alta |
+| **RF-07** | Inscripción y desinscripción de estudiantes en cursos; los estudiantes solo acceden a los cursos en los que están inscritos. | Alta |
+| **RF-08** | Gestión de quizzes con preguntas de opción múltiple, asociados a un curso, con calificación automática al enviar. | Alta |
+| **RF-09** | Registro de progreso del estudiante: lecciones completadas, calificaciones de quizzes y acumulación de puntos de experiencia (XP). | Alta |
+| **RF-10** | Biblioteca multimedia: subida, consulta, edición y eliminación de archivos (video, audio, imagen, PDF, texto, documentos, videojuegos HTML). | Alta |
+| **RF-11** | Vista previa en línea de cada archivo de la biblioteca según su tipo (reproductor, visor, descarga). | Media |
+| **RF-12** | Foro de discusión por curso con hilos y respuestas, mostrando autor y fecha. | Media |
+| **RF-13** | Gamificación: otorgar medallas (logros) según el progreso del estudiante y mostrar un panel con XP, medallas y avance por curso. | Media |
+| **RF-14** | Cola de sincronización DTN: registrar cada transacción académica como una operación reproducible con versión y origen, para su transmisión oportunista a otros nodos. | Alta |
+| **RF-15** | Sincronización entre nodos mediante extracción HTTP de operaciones pendientes, con resolución de conflictos por versión de fila (HLC + nodo de origen). | Alta |
+| **RF-16** | Exportación e importación de la base de datos completa como archivo comprimido (sneakernet). | Media |
+| **RF-17** | Panel de monitoreo del servidor: uso de disco, sesiones activas, estado de la cola de sincronización y logs históricos con búsqueda de texto completo. | Media |
+| **RF-18** | Registro histórico de logs del servidor con niveles de severidad, filtro por fecha y búsqueda de texto completo (FTS5); depuración automática según retención configurable. | Media |
+
+### 5.2. Requisitos no funcionales
+
+| ID | Requisito |
+|---|---|
+| **RNF-01** | **Offline-first.** Toda la funcionalidad principal debe ejecutarse sin conexión a internet, usando exclusivamente recursos de la red local. |
+| **RNF-02** | **Hardware limitado.** El sistema debe operar en un servidor de borde de bajo consumo (Raspberry Pi 4, 8 GB RAM), con backend compilado en un único binario y base de datos embebida. |
+| **RNF-03** | **Tolerancia a desconexión prolongada.** La ausencia de conectividad entre nodos durante días o semanas no debe degradar ninguna función local; la sincronización es estrictamente oportunista. |
+| **RNF-04** | **Consistencia eventual.** Los nodos divergen durante la desconexión y convergen al sincronizarse; no se requiere consistencia fuerte entre nodos en ningún momento. |
+| **RNF-05** | **Resolución de conflictos determinista.** Ante ediciones concurrentes de la misma fila, el sistema resuelve usando el par `(hlc, origin_node)`, produciendo el mismo resultado en todos los nodos sin importar el orden de fusión. |
+| **RNF-06** | **Orden temporal sin NTP.** El reloj lógico híbrido (HLC) avanza de forma monótona incluso si el reloj de pared se atrasa, condición esperable en hardware sin RTC ni acceso a NTP. |
+| **RNF-07** | **Logging asíncrono.** La persistencia de logs en base de datos debe ser por lotes y no bloqueante; una base de datos lenta o caída nunca debe añadir latencia a una petición HTTP. |
+| **RNF-08** | **Apagado ordenado.** Ante SIGINT/SIGTERM, el servidor debe drenar peticiones en curso, persistir sesiones activas y cerrar la base de datos limpiamente. |
+| **RNF-09** | **Resistencia a desconexión del cliente.** La cancelación de una petición (cierre de pestaña, navegación) no debe abortar transacciones de escritura en curso. |
+| **RNF-10** | **Seguridad de credenciales.** Las contraseñas se almacenan exclusivamente como hash bcrypt; los errores de autenticación no revelan si el correo existe en el sistema. |
+| **RNF-11** | **Compilación cruzada.** El backend debe compilar sin CGO, permitiendo generar binarios para ARM desde cualquier plataforma de desarrollo. |
+| **RNF-12** | **Enlace entre comunidades.** La sincronización entre escuelas utiliza un backbone WiFi direccional en 2,4 GHz; LoRaWAN se conserva como canal de telemetría de bajo ancho de banda para latido de presencia y alertas de diagnóstico. |
+
 ## 6. Objetivos
 
 ### 6.1. Objetivo general
