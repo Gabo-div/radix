@@ -27,6 +27,13 @@
     border: 1px solid rgba(232,224,213,0.22);
     pointer-events: none; z-index: 50;
   }
+  .slide.portada::after {
+    border-color: rgba(232,224,213,0.55);
+  }
+  .slide.portada .top-bar { opacity: 0.75; }
+  .slide.portada .hdr { opacity: 0.85; }
+  .slide.portada .sub { opacity: 0.95; }
+  .slide.portada .div { opacity: 0.7; }
 
   .star {
     position: absolute; width: 22px; height: 22px; z-index: 20;
@@ -150,27 +157,26 @@
 <body>
 
 <!-- ─── 1. PORTADA ─── -->
-<div class="slide">
+<div class="slide portada">
+  <div class="img-panel" style="width:100%;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Jacob_wrestling_the_angel_2.jpg" alt="" style="object-position:70% 30%;">
+  </div>
+  <div style="position:absolute; inset:0; background:linear-gradient(to right, rgba(13,13,13,0.9) 0%, rgba(13,13,13,0.55) 40%, rgba(13,13,13,0.2) 75%, rgba(13,13,13,0.35) 100%); z-index:15;"></div>
   <div class="top-bar">
     <span>Junio 2026</span>
     <span>UNIVERSIDAD NACIONAL EXPERIMENTAL DE GUAYANA</span>
     <span>Ciudad Guayana</span>
   </div>
-  <div class="img-panel w45">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Jacob_wrestling_the_angel_2.jpg" alt="">
-    <div class="star" style="top:52px;left:52px;"></div>
-    <div class="star" style="bottom:52px;left:52px;"></div>
-    <div class="panel-label">Gustave Doré · La Lucha de Jacob</div>
-  </div>
-  <div class="text-panel w55" style="padding-left:100px;">
+  <div class="text-panel w60" style="position:absolute; z-index:20; padding-left:110px; background:none;">
+    <img src="uneg.png" alt="" style="width:72px; height:auto; margin-bottom:28px; filter:brightness(0) invert(1) opacity(0.95);">
     <div class="hdr">Sistemas Distribuidos</div>
     <h1 class="tt">RADIX</h1>
     <div class="div"></div>
     <p class="sub" style="font-size:36px;">Red de Aprendizaje y Datos<br>en Infraestructuras Extremas</p>
-    <p class="bd" style="margin-top:40px;opacity:0.5;">Un LMS <em>offline-first</em> sobre servidor de borde<br>para comunidades sin conectividad a internet</p>
+    <p class="bd" style="margin-top:40px;opacity:0.75;">Un LMS <em>offline-first</em> sobre servidor de borde<br>para comunidades sin conectividad a internet</p>
     <div class="star" style="top:72px;right:72px;"></div>
     <div class="star" style="bottom:72px;right:72px;"></div>
-</div>
+  </div>
 </div>
 
 <!-- ─── 2. INTEGRANTES ─── -->
@@ -223,7 +229,25 @@
   </div>
 </div>
 
-<!-- ─── 4. SOLUCIÓN ─── -->
+<!-- ─── 4. PLANTEAMIENTO DEL PROBLEMA ─── -->
+<div class="slide">
+  <div class="text-panel w55">
+    <div class="hdr">El Aislamiento</div>
+    <h2 class="tl">Planteamiento<br>del Problema</h2>
+    <div class="div"></div>
+    <p class="bd">Las comunidades indígenas de la cuenca amazónica enfrentan un <strong>aislamiento geográfico y tecnológico estructural</strong>. El modelo educativo contemporáneo asume la conectividad a internet como requisito obligatorio; sin embargo, en la selva profunda la infraestructura de telecomunicaciones tradicional es económicamente inviable y técnicamente insostenible.</p>
+    <p class="bd" style="margin-top:24px;">El problema no es la falta de internet en sí, sino que el software educativo se diseñó asumiendo que internet <em>siempre está</em>. Las plataformas centralizadas en la nube excluyen automáticamente a quien no cuenta con la infraestructura necesaria, dejando a las escuelas locales como <strong>islas de desconexión informativa</strong>.</p>
+    <p class="bd" style="margin-top:24px;opacity:0.55;font-size:22px;font-style:italic;">"Nel mezzo del cammin di nostra vita, mi ritrovai per una selva oscura." — Dante Alighieri</p>
+  </div>
+  <div class="img-panel w45">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/3/38/Dante_Alighieri_-_La_Divina_Commedia_Canto_I.jpg" alt="">
+    <div class="star" style="top:52px;right:52px;"></div>
+    <div class="star" style="bottom:52px;right:52px;"></div>
+    <div class="panel-label">Gustave Doré · La Selva Oscura</div>
+  </div>
+</div>
+
+<!-- ─── 5. SOLUCIÓN ─── -->
 <div class="slide">
   <div class="img-panel w42">
     <img src="https://upload.wikimedia.org/wikipedia/commons/6/67/Gustave_Dore_-_Death_on_the_Pale_Horse.png" alt="">
@@ -247,7 +271,7 @@
 </div>
 </div>
 
-<!-- ─── 5. OBJETIVOS ─── -->
+<!-- ─── 6. OBJETIVOS ─── -->
 <div class="slide">
   <div class="text-panel w55">
     <div class="hdr">El Propósito</div>
@@ -283,7 +307,7 @@
   </div>
 </div>
 
-<!-- ─── 6. JUSTIFICACIÓN ─── -->
+<!-- ─── 7. JUSTIFICACIÓN ─── -->
 <div class="slide">
   <div class="img-panel w42">
     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Gustave_Dor%C3%A9_-_The_Holy_Bible_-_Plate_I%2C_The_Deluge_%28cropped%29.jpg/1920px-Gustave_Dor%C3%A9_-_The_Holy_Bible_-_Plate_I%2C_The_Deluge_%28cropped%29.jpg" alt="">
@@ -301,7 +325,7 @@
 </div>
 </div>
 
-<!-- ─── 7. TECNOLOGÍAS ─── -->
+<!-- ─── 8. TECNOLOGÍAS ─── -->
 <div class="slide">
   <div class="text-panel wide">
     <div class="hdr">La Máquina</div>
@@ -332,7 +356,7 @@
 </div>
 </div>
 
-<!-- ─── 8. CAP + SINCRONIZACIÓN ─── -->
+<!-- ─── 9. CAP + SINCRONIZACIÓN ─── -->
 <div class="slide">
   <div class="text-panel w50" style="padding-top:52px;padding-bottom:52px;">
     <div class="hdr">El Consenso</div>
@@ -384,7 +408,33 @@
   </div>
 </div>
 
-<!-- ─── 9. INFRAESTRUCTURA ─── -->
+<!-- ─── 10. COSTOS ─── -->
+<div class="slide">
+  <div class="text-panel wide" style="justify-content:center;">
+    <div class="hdr">La Inversión</div>
+    <h2 class="tl">Costos</h2>
+    <div class="div"></div>
+    <p class="bd-sm" style="opacity:0.65;">Presupuesto estimado para un despliegue piloto en dos aldeas: clúster de tres servidores de borde por escuela, energía solar autónoma y enlace inalámbrico entre comunidades.</p>
+    <table class="tbl">
+      <thead><tr><th style="width:26%;">Capa</th><th>Componente</th><th style="width:12%;">Cant.</th><th style="width:15%;">Unit. (USD)</th><th style="width:15%;">Total (USD)</th></tr></thead>
+      <tbody>
+        <tr><td>Infraestructura de borde</td><td>Raspberry Pi 4 (8 GB) en gabinete de disipación pasiva de aluminio</td><td>6</td><td>90.00</td><td>540.00</td></tr>
+        <tr><td>Energía</td><td>Sistema fotovoltaico autónomo: panel solar 150 W + regulador PWM + batería GEL 12 V 100 Ah</td><td>2</td><td>380.00</td><td>760.00</td></tr>
+        <tr><td>Almacenamiento</td><td>SSD 512 GB USB 3.0 de alta resistencia (high-endurance)</td><td>4</td><td>55.00</td><td>220.00</td></tr>
+        <tr><td>Telecom. local</td><td>Access points para exteriores de alta ganancia (IP67)</td><td>4</td><td>110.00</td><td>440.00</td></tr>
+        <tr><td>Telemetría</td><td>Puerta de enlace LoRa de 8 canales con antena de largo alcance</td><td>2</td><td>160.00</td><td>320.00</td></tr>
+        <tr><td>Enlace entre comunidades</td><td>Radios direccionales 2,4 GHz con antena integrada &gt;20 dBi</td><td>2 pares</td><td>90.00</td><td>180.00</td></tr>
+        <tr><td>Estructura de soporte</td><td>Mástil arriostrado sobre el dosel, con puesta a tierra y protección atmosférica</td><td>2</td><td>260.00</td><td>520.00</td></tr>
+        <tr><td>Accesorios y conectividad</td><td>MicroSD, cableado, conectores y herrajes de montaje</td><td>Global</td><td>150.00</td><td>150.00</td></tr>
+        <tr><td colspan="4" style="text-align:right; font-weight:600; border-bottom:none;"><strong>Total</strong></td>
+        <td style="font-weight:600; border-bottom:none;"><strong>3,130.00</strong></td></tr>
+      </tbody>
+    </table>
+    <p class="bd" style="margin-top:28px;font-size:20px;opacity:0.5;">Software libre y de código abierto: cero costo de licencias. El despliegue escala agregando nodos, no agrandando un servidor central.</p>
+  </div>
+</div>
+
+<!-- ─── 11. INFRAESTRUCTURA ─── -->
 <div class="slide" style="flex-direction:column;">
   <div style="position:absolute; top:44px; left:0; right:0; z-index:20; pointer-events:none;">
     <div class="hdr" style="padding:0 80px; margin:0;">El Territorio</div>
@@ -455,7 +505,7 @@
   </div>
 </div>
 
-<!-- ─── 10. REQUISITOS FUNCIONALES ─── -->
+<!-- ─── 12. REQUISITOS FUNCIONALES ─── -->
 <div class="slide">
   <div class="text-panel wide">
     <div class="hdr">El Decálogo</div>
@@ -515,7 +565,7 @@
 </div>
 </div>
 
-<!-- ─── 11. REQUISITOS NO FUNCIONALES ─── -->
+<!-- ─── 13. REQUISITOS NO FUNCIONALES ─── -->
 <div class="slide">
   <div class="text-panel wide">
     <div class="hdr">Las Leyes</div>
@@ -548,6 +598,45 @@
       </div>
     </div>
 </div>
+</div>
+
+<!-- ─── 14. PROTOTIPO (fondo) ─── -->
+<div class="slide">
+  <div class="img-panel" style="width:100%;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/7/74/The_Vision_of_The_Valley_of_The_Dry_Bones.jpg" alt="" style="object-position:50% 35%;">
+    <div class="star" style="top:52px;left:52px;"></div>
+    <div class="star" style="bottom:52px;right:52px;"></div>
+  </div>
+  <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; text-align:center;">
+    <div style="position:absolute; inset:0; background:linear-gradient(to bottom, rgba(13,13,13,0.35), rgba(13,13,13,0.55));"></div>
+    <div class="hdr" style="justify-content:center; position:relative; z-index:2;">Demostración</div>
+    <h2 class="tl" style="font-size:130px; position:relative; z-index:2;">Prototipo</h2>
+    <div class="div" style="margin:24px auto; position:relative; z-index:2;"></div>
+    <p class="sub" style="font-size:28px; position:relative; z-index:2;">Red de pruebas en vivo — dos servidores de borde sincronizando<br>ediciones y cola DTN entre sí</p>
+  </div>
+</div>
+
+<!-- ─── 15. DESPEDIDA ─── -->
+<div class="slide">
+  <div class="img-panel" style="width:100%;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/d/d4/Gustave_Dor%C3%A9_-_L%27Ascension_-_PDUT1438_-_mus%C3%A9e_des_Beaux-Arts_de_la_ville_de_Paris_-_3.jpg" alt="" style="object-position:50% 40%;">
+  </div>
+  <div style="position:absolute; inset:0; background:linear-gradient(to bottom, rgba(13,13,13,0.45), rgba(13,13,13,0.65)); z-index:15;"></div>
+  <div class="star" style="top:52px;left:52px; z-index:20;"></div>
+  <div class="star" style="bottom:52px;right:52px; z-index:20;"></div>
+  <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; text-align:center; padding:0 120px;">
+    <div class="hdr" style="justify-content:center;">Gracias</div>
+    <h2 class="tt" style="font-size:110px;">¿Preguntas?</h2>
+    <div class="div" style="margin:22px auto;"></div>
+    <div style="max-width:760px; text-align:center;">
+      <div class="quote" style="margin:0; border-left:none; padding-left:0; text-align:center;">
+        <p style="font-size:32px;">"Id y encended el fuego."</p>
+        <cite style="margin-top:14px;">Ignacio de Loyola — atribuida, enviando a Francisco Javier a las misiones</cite>
+      </div>
+      <p class="bd" style="font-size:20px; opacity:0.65; margin-top:20px;">La raíz que sostiene la educación donde la conectividad no llega</p>
+    </div>
+    <p class="bd" style="margin-top:44px; font-size:20px; opacity:0.5;">Sistemas Distribuidos · Universidad Nacional Experimental de Guayana · Junio 2026</p>
+  </div>
 </div>
 
 </body>
