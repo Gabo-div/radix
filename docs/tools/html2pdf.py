@@ -40,7 +40,7 @@ def main():
         if re.search(r"<title>.*?</title>", html, re.S):
             src.write_text(re.sub(r"<title>.*?</title>", f"<title>{args.title}</title>", html, count=1, flags=re.S))
 
-    chrome = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    chrome = "chromium"
     subprocess.run([chrome, "--headless", "--disable-gpu", "--no-sandbox",
                     "--virtual-time-budget=10000", "--no-pdf-header-footer",
                     f"--print-to-pdf={out}", src.as_uri()], check=True, capture_output=True)
